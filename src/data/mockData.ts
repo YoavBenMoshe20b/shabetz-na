@@ -1,6 +1,6 @@
 import type {
   Soldier, SchedulePeriod, AuditLog, MockUser, Group, Leave, LeaveRequest,
-  EquipmentRequirements, SoldierHistory, MiluimPeriod, Company,
+  EquipmentRequirements, SoldierHistory, MiluimPeriod, Company, SubUnit,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -39,7 +39,7 @@ export const mockUsers: MockUser[] = [
     password: 'Test@1234', joinedGroupIds: ['g1'],
     operationalRoles: ['קלע', 'חובש'], teamClass: 'כיתה 1',
     soldierProfileId: 's1',
-    companyId: 'co1',
+    companyId: 'co1', subUnitId: 'su-g1-a',
   },
   {
     id: 'u4', name: 'עמית גרין', role: 'soldier',
@@ -61,28 +61,28 @@ export const mockUsers: MockUser[] = [
     phone: '0501112222', email: 'tomer@unit.il', username: 'tomer_az',
     password: 'Test@1234', joinedGroupIds: ['g1'],
     operationalRoles: ['מ״כ'], teamClass: 'כיתה 1',
-    companyId: 'co1',
+    companyId: 'co1', subUnitId: 'su-g1-a',
   },
 ];
 
 export const mockSoldiers: Soldier[] = [
-  { id: 's1', name: 'משה ישראלי',  operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה 1', availability: true,  availabilityNotes: [], currentLoad: 2, userId: 'u3' },
-  { id: 's2', name: 'רוני שמש',    operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה 1', availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
-  { id: 's3', name: 'אורן פרץ',    operationalRoles: ['נגביסט'],          teamClass: 'כיתה 2', availability: true,  availabilityNotes: [], currentLoad: 3 },
-  { id: 's4', name: 'נועם כץ',     operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה 2', availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
-  { id: 's5', name: 'איתי בן דוד', operationalRoles: ['סמ״פ', 'רחפן'],   teamClass: 'מפקדה',  availability: true,  availabilityNotes: [], currentLoad: 1 },
-  { id: 's6', name: 'גל מזרחי',    operationalRoles: ['מאגיסט', 'סמל'],  teamClass: 'כיתה 2', availability: true,  availabilityNotes: [], currentLoad: 2 },
-  { id: 's7', name: 'שי אברהם',    operationalRoles: ['רחפן', 'קלע'],    teamClass: 'כיתה 3', availability: true,  availabilityNotes: [], currentLoad: 1 },
-  { id: 's8', name: 'יניב שלום',   operationalRoles: ['קלע'],             teamClass: 'כיתה 3', availability: true,  availabilityNotes: [{ type: 'location', description: 'לא נמצא בבסיס', startDate: '2024-05-12', endDate: '2024-05-13' }], currentLoad: 0 },
-  { id: 's9', name: 'ניסים דהן',   operationalRoles: ['חובש', 'סמל'],    teamClass: 'כיתה 1', availability: true,  availabilityNotes: [], currentLoad: 2 },
-  { id: 's10', name: 'אלון ברק',   operationalRoles: ['מ״מ', 'מאגיסט'],  teamClass: 'כיתה 3', availability: true,  availabilityNotes: [], currentLoad: 1 },
+  { id: 's1',  name: 'משה ישראלי',  operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה 1', subUnitId: 'su-g1-a',  availability: true,  availabilityNotes: [], currentLoad: 2, userId: 'u3' },
+  { id: 's2',  name: 'רוני שמש',    operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה 1', subUnitId: 'su-g1-a',  availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
+  { id: 's3',  name: 'אורן פרץ',    operationalRoles: ['נגביסט'],          teamClass: 'כיתה 2', subUnitId: 'su-g1-b',  availability: true,  availabilityNotes: [], currentLoad: 3 },
+  { id: 's4',  name: 'נועם כץ',     operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה 2', subUnitId: 'su-g1-b',  availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
+  { id: 's5',  name: 'איתי בן דוד', operationalRoles: ['סמ״פ', 'רחפן'],   teamClass: 'מפקדה',  subUnitId: 'su-g1-hq', availability: true,  availabilityNotes: [], currentLoad: 1 },
+  { id: 's6',  name: 'גל מזרחי',    operationalRoles: ['מאגיסט', 'סמל'],  teamClass: 'כיתה 2', subUnitId: 'su-g1-b',  availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's7',  name: 'שי אברהם',    operationalRoles: ['רחפן', 'קלע'],    teamClass: 'כיתה 3', subUnitId: 'su-g1-c',  availability: true,  availabilityNotes: [], currentLoad: 1 },
+  { id: 's8',  name: 'יניב שלום',   operationalRoles: ['קלע'],             teamClass: 'כיתה 3', subUnitId: 'su-g1-c',  availability: true,  availabilityNotes: [{ type: 'location', description: 'לא נמצא בבסיס', startDate: '2024-05-12', endDate: '2024-05-13' }], currentLoad: 0 },
+  { id: 's9',  name: 'ניסים דהן',   operationalRoles: ['חובש', 'סמל'],    teamClass: 'כיתה 1', subUnitId: 'su-g1-a',  availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's10', name: 'אלון ברק',    operationalRoles: ['מ״מ', 'מאגיסט'],  teamClass: 'כיתה 3', subUnitId: 'su-g1-c',  availability: true,  availabilityNotes: [], currentLoad: 1 },
 ];
 
 // ─── Leaves ──────────────────────────────────────────────────────────────────
 
 export const mockLeaves: Leave[] = [
   {
-    id: 'lv1', scope: 'class', teamClass: 'כיתה 2',
+    id: 'lv1', scope: 'class', teamClass: 'כיתה 2', subUnitId: 'su-g1-b',
     soldierIds: [],
     startDate: '2024-05-16', startTime: '14:00',
     endDate:   '2024-05-18', endTime:   '08:00',
@@ -120,7 +120,8 @@ export const mockLeaves: Leave[] = [
 export const mockLeaveRequests: LeaveRequest[] = [
   {
     id: 'lr1',
-    soldierId: 's1', soldierName: 'משה ישראלי', soldierTeamClass: 'כיתה 1',
+    soldierId: 's1', soldierName: 'משה ישראלי',
+    soldierTeamClass: 'כיתה 1', soldierSubUnitId: 'su-g1-a', soldierSubUnitName: 'כיתה 1',
     startDate: '2024-05-22', startTime: '14:00',
     endDate:   '2024-05-24', endTime:   '08:00',
     reason: 'אירוע משפחתי',
@@ -129,7 +130,8 @@ export const mockLeaveRequests: LeaveRequest[] = [
   },
   {
     id: 'lr2',
-    soldierId: 's3', soldierName: 'אורן פרץ', soldierTeamClass: 'כיתה 2',
+    soldierId: 's3', soldierName: 'אורן פרץ',
+    soldierTeamClass: 'כיתה 2', soldierSubUnitId: 'su-g1-b', soldierSubUnitName: 'כיתה 2',
     startDate: '2024-05-19', startTime: '08:00',
     endDate:   '2024-05-19', endTime:   '18:00',
     reason: 'פגישה רפואית',
@@ -139,7 +141,8 @@ export const mockLeaveRequests: LeaveRequest[] = [
   },
   {
     id: 'lr3',
-    soldierId: 's7', soldierName: 'שי אברהם', soldierTeamClass: 'כיתה 3',
+    soldierId: 's7', soldierName: 'שי אברהם',
+    soldierTeamClass: 'כיתה 3', soldierSubUnitId: 'su-g1-c', soldierSubUnitName: 'כיתה 3',
     startDate: '2024-05-17', startTime: '14:00',
     endDate:   '2024-05-18', endTime:   '20:00',
     reason: 'שיקולים אישיים',
@@ -305,6 +308,7 @@ export const mockGroups: Group[] = [
     companyId: 'co1',
     platoonCommanderUserId: 'u2',
     platoonSergeantUserId: 'u5',
+    subUnitIds: ['su-g1-a', 'su-g1-b', 'su-g1-c', 'su-g1-hq'],
     isSpecialPlatoon: false,
     followsCompanyLeaveRotation: true,
   },
@@ -314,10 +318,30 @@ export const mockGroups: Group[] = [
     availableRoles: ['קלע', 'חובש', 'מ״מ'],
     size: 8,
     companyId: 'co1',
+    subUnitIds: ['su-g2-spr', 'su-g2-msh', 'su-g2-tek'],
     isSpecialPlatoon: true,
     followsCompanyLeaveRotation: false,   // recon platoon: own leave rotation
     minSoldiersOnBase: 4,
   },
+];
+
+// ─── SubUnits / תת-קבוצות ────────────────────────────────────────────────────
+//
+// Sub-unit names are defined per-platoon by the company commander, so two
+// platoons in the same company can have different sub-unit structures
+// (regular platoon: כיתות; special platoon: בעלי תפקיד).
+
+export const mockSubUnits: SubUnit[] = [
+  // מחלקה א׳ (g1) — standard squad layout
+  { id: 'su-g1-a',   platoonId: 'g1', name: 'כיתה 1',  soldierIds: ['s1', 's2', 's9'] },
+  { id: 'su-g1-b',   platoonId: 'g1', name: 'כיתה 2',  soldierIds: ['s3', 's4', 's6'] },
+  { id: 'su-g1-c',   platoonId: 'g1', name: 'כיתה 3',  soldierIds: ['s7', 's8', 's10'] },
+  { id: 'su-g1-hq',  platoonId: 'g1', name: 'מפקדה',   soldierIds: ['s5'] },
+
+  // כיתת סיור (g2) — special platoon, distinct sub-unit structure
+  { id: 'su-g2-spr', platoonId: 'g2', name: 'ספרפס',         soldierIds: [] },
+  { id: 'su-g2-msh', platoonId: 'g2', name: 'משקשק',         soldierIds: [] },
+  { id: 'su-g2-tek', platoonId: 'g2', name: 'חוליה טכנית',  soldierIds: [] },
 ];
 
 // ─── Companies / פלוגות ──────────────────────────────────────────────────────

@@ -2,11 +2,11 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type {
   MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Group, TeamClass,
   MissionType, ReminderSetting, Leave, LeaveRequest, SoldierHistory, MiluimPeriod,
-  ShiftWarning, FairnessScore, Company, CompanySettings,
+  ShiftWarning, FairnessScore, Company, CompanySettings, SubUnit,
 } from '../types';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockGroups, mockLeaves, mockLeaveRequests,
-  mockSoldierHistory, mockMiluimPeriods, mockCompanies,
+  mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSubUnits,
 } from '../data/mockData';
 
 interface AppContextType {
@@ -30,6 +30,10 @@ interface AppContextType {
   setGenerationResult: (periodId: string, warnings: ShiftWarning[], fairness: FairnessScore[]) => void;
   // Company hierarchy
   companies:      Company[];
+  subUnits:       SubUnit[];
+  addSubUnit:     (data: { platoonId: string; name: string }) => SubUnit;
+  removeSubUnit:  (id: string) => void;
+  renameSubUnit:  (id: string, name: string) => void;
   createCompany:  (data: { name: string; unitName?: string; settings: CompanySettings }) => string;     // returns invite code
   inviteOfficer:  (companyId: string, role: 'platoonCommander' | 'platoonSergeant', platoonId?: string) => string; // returns invite code
   inviteSoldier:  (platoonId: string) => string; // returns invite code (= group code)
@@ -74,6 +78,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastFairness,  setLastFairness]  = useState<FairnessScore[]>([]);
   const [lastGeneratedPeriodId, setLastGeneratedPeriodId] = useState<string | null>(null);
   const [companies,     setCompanies]     = useState<Company[]>(mockCompanies);
+  const [subUnits,      setSubUnits]      = useState<SubUnit[]>(mockSubUnits);
+
+  const addSubUnit = (data: { platoonId: string; name: string }): SubUnit => {
+    const newSu: SubUnit = {
+      id: `su-${Date.now()}`,
+      platoonId: data.platoonId,
+      name: data.name,
+      soldierIds: [],
+    };
+    setSubUnits((prev) => [...prev, newSu]);
+    setGroups((prev) => prev.map((g) => g.id === data.platoonId
+      ? { ...g, subUnitIds: [...(g.subUnitIds ?? []), newSu.id] }
+      : g
+    ));
+    return newSu;
+  };
+
+  const removeSubUnit = (id: string) => {
+    setSubUnits((prev) => prev.filter((s) => s.id !== id));
+    setGroups((prev) => prev.map((g) => g.subUnitIds?.includes(id)
+      ? { ...g, subUnitIds: g.subUnitIds.filter((x) => x !== id) }
+      : g
+    ));
+  };
+
+  const renameSubUnit = (id: string, name: string) =>
+    setSubUnits((prev) => prev.map((s) => s.id === id ? { ...s, name } : s));
 
   const setGenerationResult = (periodId: string, warnings: ShiftWarning[], fairness: FairnessScore[]) => {
     setLastGeneratedPeriodId(periodId);
@@ -276,7 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentUser, currentRole, soldiers, periods, auditLogs, groups,
       leaves, leaveRequests, soldierHistory, miluimPeriods, reminders, isOnline, hasEmergency,
       lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
-      companies, createCompany, inviteOfficer, inviteSoldier,
+      companies, subUnits, addSubUnit, removeSubUnit, renameSubUnit,
+      createCompany, inviteOfficer, inviteSoldier,
       login, register, joinGroup, createGroup, logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
@@ -332,6 +364,14 @@ export function useMyPlatoons(): Group[] {
     return groups.filter((g) => g.memberIds.includes(currentUser.id));
   }
   return [];
+}
+
+// SubUnits belonging to a given platoon (organisational layer).
+// Returns [] if the platoon has none defined.
+export function useSubUnitsForPlatoon(platoonId: string | undefined): SubUnit[] {
+  const { subUnits } = useApp();
+  if (!platoonId) return [];
+  return subUnits.filter((s) => s.platoonId === platoonId);
 }
 
 export function useVisiblePeriods() {
