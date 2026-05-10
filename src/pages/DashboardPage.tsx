@@ -4,7 +4,10 @@ import { useApp, useActivePeriod, useApprovableLeaveRequests, useAlertsForCompan
 import Header from '../components/Header';
 import { isPlatoonLeadership, isCompanyLeadership } from '../utils/permissions';
 import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
-import { Card, StatusPill, StatusDot, Section, PageMain, CollapsibleSection } from '../components/ui';
+import {
+  Card, Button, StatusPill, StatusDot, Section, PageMain, CollapsibleSection,
+  PageTitle, HeroTitle, CardTitle, Body, Muted, Hint, Metric,
+} from '../components/ui';
 import type { TimeSlot, MissionType, Soldier } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,46 +106,42 @@ function CompanyCommanderDashboard() {
       <Header title={myCompany?.name ?? 'פלוגה'} />
       <PageMain>
 
+        {/* Greeting — establishes page identity at the top of the scroll */}
+        <div>
+          <PageTitle>{myCompany?.name ?? 'פלוגה'}</PageTitle>
+          {myCompany?.unitName && <Muted className="mt-1">{myCompany.unitName}</Muted>}
+        </div>
+
         {/* ── עכשיו ──────────────────────────────────── */}
         <Section label="עכשיו">
           <Card>
-            <div className="px-4 py-3">
-              <p className="text-sm text-mil-text">
-                <span className="font-bold text-mil-olive">{totalOnBase}</span>
-                <span className="text-mil-ghost mx-1">/</span>
-                <span className="text-mil-text">{totalSoldiers}</span>
-                <span className="mr-1">בבסיס</span>
-                <span className="text-mil-ghost mx-2">·</span>
-                <span className="text-mil-muted">{platoonStats.length} מחלקות</span>
-              </p>
+            <div className="px-5 py-4 flex items-baseline gap-2">
+              <Metric>{totalOnBase}</Metric>
+              <Hint className="self-end pb-1.5">/ {totalSoldiers}</Hint>
+              <Body className="self-end pb-1.5 mr-1">בבסיס</Body>
+              <Muted className="mr-auto">{platoonStats.length} מחלקות</Muted>
             </div>
           </Card>
 
           {platoonStats.length > 0 && (
-            <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="grid grid-cols-2 gap-3 mt-3">
               {platoonStats.map((ps) => (
                 <Card
                   key={ps.platoon.id}
                   variant={ps.status === 'critical' ? 'critical' : 'default'}
-                  className="text-right"
                 >
-                  <div className="px-4 py-3">
-                    <div className="flex items-start justify-between mb-1">
-                      <p className="font-bold text-mil-text text-sm leading-tight">{ps.platoon.name}</p>
+                  <div className="px-4 py-3.5 text-right">
+                    <div className="flex items-start justify-between mb-2">
+                      <CardTitle>{ps.platoon.name}</CardTitle>
                       <StatusDot status={ps.status} />
                     </div>
-                    <p className="text-xs text-mil-muted">
-                      <span className="font-bold text-mil-text">{ps.onBase}</span>
-                      <span className="mx-0.5">/</span>
-                      <span>{ps.total}</span>
+                    <Body>
+                      <span className="font-extrabold text-mil-text">{ps.onBase}</span>
+                      <Hint as="span" className="mx-0.5">/ {ps.total}</Hint>
                       <span className="mr-1">בבסיס</span>
-                    </p>
-                    {ps.atHome > 0 && (
-                      <p className="text-xs text-mil-sand mt-0.5">{ps.atHome} בבית</p>
-                    )}
-                    {ps.platoon.isSpecialPlatoon && (
-                      <p className="text-[10px] text-mil-muted mt-1 tracking-wide">מיוחדת</p>
-                    )}
+                    </Body>
+                    {ps.atHome > 0 && <Hint className="text-mil-sand mt-0.5">{ps.atHome} בבית</Hint>}
+                    {ps.platoon.isSpecialPlatoon && <Hint className="mt-1 tracking-wide">מיוחדת</Hint>}
                   </div>
                 </Card>
               ))}
@@ -154,13 +153,13 @@ function CompanyCommanderDashboard() {
         <Section label="השעות הקרובות בפלוגה">
           {events.length === 0 ? (
             <Card variant="muted">
-              <div className="px-5 py-6 text-center">
-                <p className="text-sm font-bold text-mil-olive-dim">הכל רגוע</p>
-                <p className="text-xs text-mil-muted mt-1">אין שינויים מתוכננים ב-12 השעות הקרובות</p>
+              <div className="px-5 py-8 text-center">
+                <Body className="font-bold text-mil-olive-dim">הכל רגוע</Body>
+                <Muted className="mt-1.5">אין שינויים מתוכננים ב-12 השעות הקרובות</Muted>
               </div>
             </Card>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {events.map((ev) => <TimelineCard key={ev.id} event={ev} onCta={() => ev.ctaHref && navigate(ev.ctaHref)} />)}
             </div>
           )}
@@ -175,25 +174,21 @@ function CompanyCommanderDashboard() {
         >
           {allAlerts.length === 0 ? (
             <Card>
-              <p className="px-4 py-3 text-sm text-mil-muted">אין פעילות לתעד</p>
+              <Body className="px-4 py-3 text-mil-muted">אין פעילות לתעד</Body>
             </Card>
           ) : (
             <div className="space-y-2">
               {allAlerts.slice(0, 8).map((a) => (
                 <Card key={a.id}>
-                  <div className="px-4 py-2.5">
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="px-4 py-3">
+                    <div className="flex items-center gap-2 mb-1.5">
                       {a.status === 'open' && <StatusPill status={a.riskLevel === 'high' ? 'critical' : 'warning'}>פתוח</StatusPill>}
-                      {a.status === 'acknowledged' && <span className="text-[10px] text-mil-muted">נצפה</span>}
-                      {a.status === 'resolved' && <span className="text-[10px] text-mil-success">טופל</span>}
-                      <span className="text-xs text-mil-ghost mr-auto">
-                        {groups.find((g) => g.id === a.platoonId)?.name ?? '—'}
-                      </span>
+                      {a.status === 'acknowledged' && <Hint>נצפה</Hint>}
+                      {a.status === 'resolved' && <Hint className="text-mil-success">טופל</Hint>}
+                      <Hint className="mr-auto">{groups.find((g) => g.id === a.platoonId)?.name ?? '—'}</Hint>
                     </div>
-                    <p className="text-sm text-mil-text leading-snug">{a.description}</p>
-                    {a.suggestedAction && (
-                      <p className="text-xs text-mil-muted mt-1">{a.suggestedAction}</p>
-                    )}
+                    <Body>{a.description}</Body>
+                    {a.suggestedAction && <Muted className="mt-1">{a.suggestedAction}</Muted>}
                   </div>
                 </Card>
               ))}
@@ -205,32 +200,35 @@ function CompanyCommanderDashboard() {
         <Section label="הגדרות פלוגה">
           <Card>
             <div className="divide-y divide-mil-border">
-              <div className="px-4 py-3 flex items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-mil-text">מינימום בבסיס</p>
-                  <p className="text-xs text-mil-muted">{myCompany?.settings.minSoldiersOnBase ?? '—'} חיילים</p>
-                </div>
-                <span className="text-xs text-mil-ghost">בקרוב</span>
-              </div>
-              <div className="px-4 py-3 flex items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-mil-text">מבנה החברה</p>
-                  <p className="text-xs text-mil-muted">{myPlatoons.length} מחלקות · {subUnits.filter((s) => myPlatoons.some((p) => p.id === s.platoonId)).length} תת-קבוצות</p>
-                </div>
-                <span className="text-xs text-mil-ghost">בקרוב</span>
-              </div>
-              <div className="px-4 py-3 flex items-center gap-3">
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-mil-text">משתמשים והרשאות</p>
-                  <p className="text-xs text-mil-muted">ניהול חברי פלוגה</p>
-                </div>
-                <span className="text-xs text-mil-ghost">בקרוב</span>
-              </div>
+              <SettingsRow
+                title="מינימום בבסיס"
+                detail={`${myCompany?.settings.minSoldiersOnBase ?? '—'} חיילים`}
+              />
+              <SettingsRow
+                title="מבנה החברה"
+                detail={`${myPlatoons.length} מחלקות · ${subUnits.filter((s) => myPlatoons.some((p) => p.id === s.platoonId)).length} תת-קבוצות`}
+              />
+              <SettingsRow
+                title="משתמשים והרשאות"
+                detail="ניהול חברי פלוגה"
+              />
             </div>
           </Card>
         </Section>
 
       </PageMain>
+    </div>
+  );
+}
+
+function SettingsRow({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="px-4 py-3.5 flex items-center gap-3">
+      <div className="flex-1">
+        <Body className="font-semibold">{title}</Body>
+        <Muted className="mt-0.5">{detail}</Muted>
+      </div>
+      <Hint>בקרוב</Hint>
     </div>
   );
 }
@@ -299,63 +297,68 @@ function PlatoonCommanderDashboard() {
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title={myPlatoon?.name ?? 'מחלקה'} />
-      <main className="px-4 py-4 pb-28 max-w-xl mx-auto space-y-5">
+      <PageMain>
 
-        {/* ── עכשיו ──────────────────────────────────────── */}
-        <section>
-          <p className="text-xs font-bold tracking-widest text-mil-muted uppercase mb-2 px-1">עכשיו</p>
-          <div className="bg-mil-card border border-mil-border rounded-2xl px-4 py-3">
-            <p className="text-sm text-mil-text">
-              <span className="font-bold text-mil-olive">{onBase}</span> בבסיס
-              <span className="text-mil-ghost mx-2">·</span>
-              <span className="font-bold text-mil-sand">{atHome}</span> בבית
-              <span className="text-mil-ghost mx-2">·</span>
-              <span className="font-bold text-mil-ghost">{unavail}</span> לא זמין
-            </p>
-            {activeMissions.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-mil-border space-y-1.5">
-                {activeMissions.map(({ mt, ts }) => {
-                  const names = ts.assignedSoldierIds
-                    .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
-                    .filter(Boolean) as string[];
-                  return (
-                    <div key={ts.id} className="flex items-center gap-3 text-sm">
-                      <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" />
-                      <span className="font-medium text-mil-text">{mt.name}</span>
-                      <span className="text-mil-olive truncate text-xs mr-auto">
-                        {names.length > 0 ? names.join(' · ') : <span className="text-mil-muted">—</span>}
-                      </span>
-                      <span className="text-xs text-mil-ghost font-mono">{ts.startTime}–{ts.endTime}</span>
-                    </div>
-                  );
-                })}
+        {/* Greeting */}
+        <div>
+          <PageTitle>{myPlatoon?.name ?? 'מחלקה'}</PageTitle>
+          {myPlatoon?.unitName && <Muted className="mt-1">{myPlatoon.unitName}</Muted>}
+        </div>
+
+        {/* ── עכשיו ─────────────────────────────────── */}
+        <Section label="עכשיו">
+          <Card>
+            <div className="px-5 py-4">
+              <div className="flex items-baseline gap-4 flex-wrap">
+                <StatGroup metric={onBase} label="בבסיס" tone="olive" />
+                <StatGroup metric={atHome} label="בבית"   tone="sand"  />
+                <StatGroup metric={unavail} label="לא זמין" tone="ghost" />
               </div>
-            )}
-          </div>
-        </section>
+              {activeMissions.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-mil-border space-y-2">
+                  {activeMissions.map(({ mt, ts }) => {
+                    const names = ts.assignedSoldierIds
+                      .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
+                      .filter(Boolean) as string[];
+                    return (
+                      <div key={ts.id} className="flex items-center gap-3">
+                        <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" />
+                        <Body className="font-semibold">{mt.name}</Body>
+                        <Muted className="truncate mr-auto text-mil-olive-dim">
+                          {names.length > 0 ? names.join(' · ') : '—'}
+                        </Muted>
+                        <Hint className="font-mono">{ts.startTime}–{ts.endTime}</Hint>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+        </Section>
 
-        {/* ── השעות הקרובות ──────────────────────────────── */}
-        <section>
-          <p className="text-xs font-bold tracking-widest text-mil-muted uppercase mb-2 px-1">השעות הקרובות</p>
+        {/* ── השעות הקרובות ──────────────────────────── */}
+        <Section label="השעות הקרובות">
           {events.length === 0 ? (
             <CalmCard />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {events.map((ev) => <TimelineCard key={ev.id} event={ev} onCta={() => ev.ctaHref && navigate(ev.ctaHref)} />)}
             </div>
           )}
-        </section>
+        </Section>
 
-        {/* ── Single primary action ─────────────────────── */}
-        <button
+        {/* ── Single primary action — chunkier, lifted ── */}
+        <Button
+          variant="primary"
+          size="lg"
+          fullWidth
           onClick={() => navigate('/schedule')}
-          className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-4 rounded-2xl text-base transition-colors flex items-center justify-center gap-2"
         >
-          <span className="text-lg">▦</span>
-          <span>הכנס משימות לשיבוץ</span>
-        </button>
+          הכנס משימות לשיבוץ ←
+        </Button>
 
-      </main>
+      </PageMain>
     </div>
   );
 }
@@ -373,19 +376,18 @@ function TimelineCard({ event, onCta }: { event: OpsEvent; onCta: () => void }) 
     'text-mil-muted';
 
   return (
-    <div className="bg-mil-card border border-mil-border rounded-xl flex overflow-hidden">
+    <div className="bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden shadow-card">
       <div className={`w-1 ${edge} flex-shrink-0`} />
-      <div className="flex-1 px-4 py-3">
-        <p className={`text-xs font-bold tracking-wide ${labelTone}`}>{event.whenLabel}</p>
-        <p className="text-sm font-medium text-mil-text mt-0.5 leading-snug">{event.title}</p>
-        {event.detail && <p className="text-xs text-mil-muted mt-1 leading-snug">{event.detail}</p>}
+      <div className="flex-1 px-4 py-3.5">
+        <p className={`text-tiny font-bold tracking-wide ${labelTone}`}>{event.whenLabel}</p>
+        <Body className="font-semibold mt-1">{event.title}</Body>
+        {event.detail && <Muted className="mt-1">{event.detail}</Muted>}
         {event.ctaLabel && (
-          <button
-            onClick={onCta}
-            className="mt-2 text-xs font-bold text-mil-olive hover:text-mil-olive-dim border border-mil-olive/30 rounded-lg px-3 py-1 transition-colors"
-          >
-            {event.ctaLabel} ←
-          </button>
+          <div className="mt-2.5">
+            <Button variant="ghost" size="sm" onClick={onCta}>
+              {event.ctaLabel} ←
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -394,9 +396,24 @@ function TimelineCard({ event, onCta }: { event: OpsEvent; onCta: () => void }) 
 
 function CalmCard() {
   return (
-    <div className="bg-mil-olive-bg border border-mil-olive/20 rounded-2xl px-5 py-6 text-center">
-      <p className="text-sm font-bold text-mil-olive-dim">הכל רגוע</p>
-      <p className="text-xs text-mil-muted mt-1">אין שינויים מתוכננים ב-12 השעות הקרובות</p>
+    <Card variant="muted">
+      <div className="px-5 py-8 text-center">
+        <Body className="font-bold text-mil-olive-dim">הכל רגוע</Body>
+        <Muted className="mt-1.5">אין שינויים מתוכננים ב-12 השעות הקרובות</Muted>
+      </div>
+    </Card>
+  );
+}
+
+function StatGroup({ metric, label, tone }: { metric: number; label: string; tone: 'olive' | 'sand' | 'ghost' }) {
+  const color =
+    tone === 'olive' ? 'text-mil-olive' :
+    tone === 'sand'  ? 'text-mil-sand'  :
+    'text-mil-ghost';
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className={`text-2xl font-extrabold tabular-nums ${color}`}>{metric}</span>
+      <Muted className="font-medium">{label}</Muted>
     </div>
   );
 }
@@ -516,23 +533,26 @@ function SoldierDashboard() {
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="המחלקה שלי" />
-      <main className="px-4 py-4 pb-32 max-w-xl mx-auto space-y-4">
+      <PageMain>
 
         {/* Toast on successful leave-request submit */}
         {leaveSaved && (
-          <div className="bg-mil-success-bg border border-mil-success/40 text-mil-success rounded-xl px-4 py-3 text-sm flex items-center gap-2">
-            <span>✓</span> בקשת היציאה הוגשה למ״מ
-          </div>
+          <Card variant="muted" className="!border-mil-success/40 bg-mil-success-bg">
+            <div className="px-4 py-3 flex items-center gap-2">
+              <span className="text-mil-success font-bold">✓</span>
+              <Body className="text-mil-success">בקשת היציאה הוגשה למ״מ</Body>
+            </div>
+          </Card>
         )}
 
-        {/* Greeting — one line, calm */}
+        {/* Greeting — name dominates, context muted underneath */}
         <div>
-          <h2 className="text-xl font-bold text-mil-text">שלום, {currentUser?.name?.split(' ')[0]}</h2>
-          <p className="text-sm text-mil-muted mt-0.5">
+          <PageTitle>שלום, {currentUser?.name?.split(' ')[0]}</PageTitle>
+          <Muted className="mt-1.5">
             {myGroup?.name}
             {mySubUnitName && ` · ${mySubUnitName}`}
             {myProfile && myProfile.operationalRoles.length > 0 && ` · ${myProfile.operationalRoles.join(', ')}`}
-          </p>
+          </Muted>
         </div>
 
         {/* HERO: my next shift (or fallback if none) */}
@@ -545,35 +565,36 @@ function SoldierDashboard() {
             onSetReminder={(mins) => setReminder({ timeSlotId: myNextShift.ts.id, minutesBefore: mins, enabled: true })}
           />
         ) : (
-          <div className="bg-mil-card border border-mil-border rounded-2xl px-4 py-6 text-center">
-            <p className="text-mil-muted text-sm">אין שיבוץ עתידי</p>
-            <p className="text-xs text-mil-ghost mt-1">תקבל הודעה כשהמ״מ יפרסם סידור חדש</p>
-          </div>
+          <Card variant="muted">
+            <div className="px-5 py-8 text-center">
+              <Body className="text-mil-muted">אין שיבוץ עתידי</Body>
+              <Hint className="mt-1.5">תקבל הודעה כשהמ״מ יפרסם סידור חדש</Hint>
+            </div>
+          </Card>
         )}
 
         {/* Compact "מי על שמירה כרגע" — only if something is running */}
         {activeMissions.length > 0 && (
-          <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-mil-border bg-mil-bg">
-              <span className="text-xs font-bold tracking-widest text-mil-muted">מי על שמירה כרגע</span>
-            </div>
-            <div className="divide-y divide-mil-border">
-              {activeMissions.map(({ mt, ts }) => {
-                const names = ts.assignedSoldierIds
-                  .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
-                  .filter(Boolean) as string[];
-                return (
-                  <div key={ts.id} className="px-4 py-2.5 flex items-center gap-3">
-                    <span className="text-sm font-medium text-mil-text">{mt.name}</span>
-                    <span className="text-xs text-mil-ghost mr-auto">{ts.startTime}–{ts.endTime}</span>
-                    <span className="text-sm text-mil-olive truncate max-w-[55%] text-left">
-                      {names.length > 0 ? names.join(' · ') : <span className="text-mil-muted">—</span>}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <Section label="מי על שמירה כרגע">
+            <Card>
+              <div className="divide-y divide-mil-border">
+                {activeMissions.map(({ mt, ts }) => {
+                  const names = ts.assignedSoldierIds
+                    .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
+                    .filter(Boolean) as string[];
+                  return (
+                    <div key={ts.id} className="px-4 py-3 flex items-center gap-3">
+                      <Body className="font-semibold">{mt.name}</Body>
+                      <Hint className="font-mono mr-auto">{ts.startTime}–{ts.endTime}</Hint>
+                      <Muted className="truncate max-w-[55%] text-left text-mil-olive-dim">
+                        {names.length > 0 ? names.join(' · ') : '—'}
+                      </Muted>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </Section>
         )}
 
         {/* Collapsible: my schedule this week */}
@@ -584,14 +605,14 @@ function SoldierDashboard() {
           onToggle={() => setShowWeek((v) => !v)}
         >
           {myUpcomingShifts.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-mil-muted">אין משמרות מתוכננות</p>
+            <Body className="px-4 py-3 text-mil-muted">אין משמרות מתוכננות</Body>
           ) : (
             <div className="divide-y divide-mil-border">
               {myUpcomingShifts.map(({ mt, ts }) => (
-                <div key={ts.id} className="px-4 py-2.5 flex items-center gap-3">
-                  <span className="text-xs text-mil-ghost w-20 flex-shrink-0">{ts.date}</span>
-                  <span className="text-sm font-medium text-mil-text flex-1 truncate">{mt.name}</span>
-                  <span className="text-xs text-mil-muted font-mono">{ts.startTime}–{ts.endTime}</span>
+                <div key={ts.id} className="px-4 py-3 flex items-center gap-3">
+                  <Hint className="w-20 flex-shrink-0">{ts.date}</Hint>
+                  <Body className="font-semibold flex-1 truncate">{mt.name}</Body>
+                  <Muted className="font-mono">{ts.startTime}–{ts.endTime}</Muted>
                 </div>
               ))}
             </div>
@@ -613,25 +634,26 @@ function SoldierDashboard() {
                 s.availability ? 'bg-mil-success' : 'bg-mil-ghost';
               const subUnit = subUnits.find((su) => su.id === s.subUnitId)?.name ?? s.teamClass;
               return (
-                <div key={s.id} className="px-4 py-2.5 flex items-center gap-3">
+                <div key={s.id} className="px-4 py-3 flex items-center gap-3">
                   <span className={`w-2 h-2 rounded-full ${tone} flex-shrink-0`} />
-                  <span className="text-sm text-mil-text flex-1">{s.name}</span>
-                  <span className="text-xs text-mil-muted">{subUnit}</span>
+                  <Body className="flex-1">{s.name}</Body>
+                  <Muted>{subUnit}</Muted>
                 </div>
               );
             })}
           </div>
         </CollapsibleCard>
 
-      </main>
+      </PageMain>
 
-      {/* FAB — bottom-left for RTL, above bottom nav */}
+      {/* FAB — bottom-left for RTL, above bottom nav. Lifted with shadow-hero
+          so it reads as the persistent action affordance, not a decoration. */}
       <button
         onClick={() => setLeaveOpen(true)}
-        className="fixed bottom-24 left-4 z-20 bg-mil-olive hover:bg-mil-olive-light text-white font-bold px-5 py-3.5 rounded-full shadow-lg flex items-center gap-2 transition-colors"
+        className="fixed bottom-24 left-5 z-20 bg-mil-olive hover:bg-mil-olive-light active:bg-mil-olive-dim text-white font-bold px-5 py-4 rounded-full shadow-hero flex items-center gap-2 transition-all active:scale-95"
       >
-        <span className="text-lg leading-none">+</span>
-        <span className="text-sm">בקשת יציאה</span>
+        <span className="text-xl leading-none">+</span>
+        <span className="text-sm tracking-wide">בקשת יציאה</span>
       </button>
 
       {/* Leave-request modal */}
@@ -724,17 +746,17 @@ function CollapsibleCard({
   title: string; count?: number; open: boolean; onToggle: () => void; children: React.ReactNode;
 }) {
   return (
-    <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+    <Card>
       <button
         onClick={onToggle}
-        className="w-full px-4 py-3 bg-mil-bg flex items-center gap-2 hover:bg-mil-card-hover transition-colors"
+        className="w-full px-4 py-3.5 bg-mil-card-warm hover:bg-mil-card-hover transition-colors flex items-center gap-2 text-right"
       >
-        <span className="text-sm font-bold text-mil-text">{title}</span>
-        {count != null && <span className="text-xs text-mil-ghost">({count})</span>}
+        <CardTitle>{title}</CardTitle>
+        {count != null && <Hint>({count})</Hint>}
         <span className="mr-auto text-mil-ghost">{open ? '▲' : '▼'}</span>
       </button>
-      {open && children}
-    </div>
+      {open && <div className="border-t border-mil-border">{children}</div>}
+    </Card>
   );
 }
 
@@ -755,37 +777,39 @@ function NextShiftCard({
   };
 
   return (
-    <div className="bg-mil-card border-2 border-mil-olive/40 rounded-2xl overflow-hidden">
-      <div className="bg-mil-olive px-4 py-2.5 flex items-center justify-between">
-        <span className="text-xs font-bold tracking-widest text-white">המשמרת הבאה שלך</span>
-        <span className="text-xs text-white/80">{formatRelative(minsTo)}</span>
+    <Card variant="hero">
+      <div className="bg-mil-olive px-5 py-3 flex items-center justify-between">
+        <span className="text-tiny font-bold tracking-wider text-white uppercase">המשמרת הבאה שלך</span>
+        <span className="text-tiny font-bold text-white">{formatRelative(minsTo)}</span>
       </div>
-      <div className="px-4 py-4 space-y-3">
+      <div className="px-5 py-5 space-y-4">
         <div>
-          <p className="text-xl font-bold text-mil-text">{mission.name}</p>
-          <p className="text-sm text-mil-muted mt-0.5">
-            <span className="font-mono">{slot.startTime}–{slot.endTime}</span>
+          <HeroTitle>{mission.name}</HeroTitle>
+          <Muted className="mt-1">
+            <span className="font-mono font-semibold text-mil-text">{slot.startTime}–{slot.endTime}</span>
             <span className="mx-2 text-mil-ghost">·</span>
             <span>{slot.date}</span>
-          </p>
+          </Muted>
         </div>
 
         {teammates.length > 0 && (
-          <div className="bg-mil-bg border border-mil-border rounded-lg px-3 py-2">
-            <p className="text-xs text-mil-muted mb-1">יחד עם:</p>
-            <p className="text-sm text-mil-text font-medium">{teammates.map((s) => s.name).join(' · ')}</p>
-          </div>
+          <Card variant="muted">
+            <div className="px-3 py-2.5">
+              <Hint className="mb-1">יחד עם</Hint>
+              <Body className="font-semibold">{teammates.map((s) => s.name).join(' · ')}</Body>
+            </div>
+          </Card>
         )}
 
         {/* Wake me up */}
-        <div className="border-t border-mil-border pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-bold text-mil-text flex items-center gap-2">
-              <span className="text-mil-warn">🔔</span>
+        <div className="border-t border-mil-border pt-4">
+          <div className="flex items-center justify-between mb-3">
+            <Body className="font-bold flex items-center gap-2">
+              <span className="text-mil-warn text-lg leading-none">●</span>
               תעיר אותי
-            </span>
+            </Body>
             {activeReminder && (
-              <span className="text-xs text-mil-success font-bold">✓ נקבעה תזכורת ({activeReminder} דק׳ לפני)</span>
+              <Hint className="text-mil-success font-bold">✓ {activeReminder} דק׳ לפני</Hint>
             )}
           </div>
           <div className="grid grid-cols-4 gap-2">
@@ -793,10 +817,10 @@ function NextShiftCard({
               <button
                 key={m}
                 onClick={() => handleReminder(m)}
-                className={`py-2 rounded-lg text-xs font-bold transition-colors border ${
+                className={`py-3 rounded-xl text-tiny font-bold transition-all active:scale-95 ${
                   activeReminder === m
-                    ? 'bg-mil-olive border-mil-olive text-white'
-                    : 'bg-mil-bg border-mil-border text-mil-text hover:border-mil-olive hover:bg-mil-olive-bg'
+                    ? 'bg-mil-olive text-white shadow-card-hover'
+                    : 'bg-mil-bg border border-mil-border text-mil-text hover:border-mil-olive hover:bg-mil-olive-bg'
                 }`}
               >
                 {m === 60 ? 'שעה' : `${m} דק׳`}
@@ -805,7 +829,7 @@ function NextShiftCard({
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
