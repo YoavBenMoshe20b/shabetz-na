@@ -1,6 +1,7 @@
 import type {
   Soldier, SchedulePeriod, AuditLog, MockUser, Group, Leave, LeaveRequest,
   EquipmentRequirements, SoldierHistory, MiluimPeriod, Company, SubUnit,
+  CompanyMission, OverrideAlert,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -386,6 +387,64 @@ export const mockSoldierHistory: SoldierHistory[] = [
   { soldierId: 's8',  totalAssignedHours: 24, totalGuardHours: 12, totalKitchenHours: 8,  totalStandbyHours: 0,  totalNightShifts: 1, totalDifficultShifts: 2, difficultShiftScore: 5,   homeLeaveDays: 11, lastAssignmentDate: '2024-05-09', missionTypeCount: { 'שמירת שער צפון': 3,  'מטבח': 2 } },
   { soldierId: 's9',  totalAssignedHours: 72, totalGuardHours: 36, totalKitchenHours: 0,  totalStandbyHours: 24, totalNightShifts: 5, totalDifficultShifts: 7, difficultShiftScore: 20.5,homeLeaveDays: 5,  lastAssignmentDate: '2024-05-12', missionTypeCount: { 'שמירת שער צפון': 9,  'כוננות': 4, 'חמ״ל': 2 } },
   { soldierId: 's10', totalAssignedHours: 40, totalGuardHours: 0,  totalKitchenHours: 0,  totalStandbyHours: 0,  totalNightShifts: 2, totalDifficultShifts: 3, difficultShiftScore: 8.5, homeLeaveDays: 8,  lastAssignmentDate: '2024-05-11', missionTypeCount: { 'חמ״ל': 5, 'שמירת שער צפון': 4 } },
+];
+
+// ─── Company-level missions ───────────────────────────────────────────────────
+
+export const mockCompanyMissions: CompanyMission[] = [
+  {
+    id: 'cm1',
+    companyId: 'co1',
+    name: 'שמירת היקף בסיס',
+    description: 'שמירה היקפית רציפה. סבב יומי בין מחלקה א׳ למחלקת סיור.',
+    durationHours: 24,
+    assignedPlatoonIds: ['g1', 'g2'],
+    rotation: 'platoon-rotates-daily',
+    requirements: [
+      { id: 'rq1', kind: 'role', role: 'קלע', count: 4 },
+      { id: 'rq2', kind: 'role', role: 'חובש', count: 1 },
+      { id: 'rq3', kind: 'freeText', note: 'ניסיון בתצפיות לילה' },
+    ],
+    createdByUserId: 'u1',
+    createdAt: '2024-05-01T08:00:00',
+  },
+  {
+    id: 'cm2',
+    companyId: 'co1',
+    name: 'סיור גזרה',
+    description: 'סיור פעיל בגזרה הצפונית, 4 שעות בכל סבב.',
+    durationHours: 4,
+    assignedPlatoonIds: ['g2'],
+    rotation: 'fixed-platoon',
+    requirements: [
+      { id: 'rq4', kind: 'role', role: 'רחפן', count: 1 },
+      { id: 'rq5', kind: 'role', role: 'נגביסט', count: 1 },
+    ],
+    createdByUserId: 'u1',
+    createdAt: '2024-05-04T10:30:00',
+  },
+];
+
+// ─── Operational override alerts ──────────────────────────────────────────────
+// Seeded with one example so the company commander Home renders realistic
+// content out-of-the-box. New alerts are appended at runtime by the
+// override-detection plumbing in AppContext / SchedulePage.
+
+export const mockOverrideAlerts: OverrideAlert[] = [
+  {
+    id: 'al-ov1',
+    companyId: 'co1',
+    platoonId: 'g1',
+    kind: 'manualSlotEdit',
+    description: 'דוד לוי החליף ידנית את משה ישראלי באורן פרץ במשמרת 12:00–16:00',
+    actorUserId: 'u2', actorName: 'דוד לוי',
+    timestamp: '2024-05-12T11:32:00',
+    status: 'acknowledged',
+    acknowledgedByUserId: 'u1',
+    acknowledgedAt: '2024-05-12T11:45:00',
+    manpowerImpact: { currentOnBase: 9, requiredMin: 8, belowMin: false },
+    riskLevel: 'low',
+  },
 ];
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────

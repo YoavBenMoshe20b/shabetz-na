@@ -328,6 +328,94 @@ export interface Group {
   minSoldiersOnBase?: number;               // platoon-level override
 }
 
+// ─── Company-level missions ──────────────────────────────────────────────────
+//
+// CompanyMission is created at the company tier (only by companyCommander
+// or deputyCompanyCommander) and is then assigned to one or more platoons.
+// Distinct from MissionType, which is internal to a SchedulePeriod and
+// owned by the platoon commander. A CompanyMission expresses intent
+// ("חפ״ק must staff a guard at gate north") plus a rotation rule between
+// the platoons that share responsibility. Each assigned platoon translates
+// its share of the company mission into MissionTypes inside its own period.
+
+export type CompanyMissionRotation = 'platoon-rotates-daily' | 'platoon-rotates-weekly' | 'fixed-platoon';
+
+export type RequirementKind =
+  | 'role'        // structured: a specific OperationalRole / soldier capability
+  | 'freeText';   // free-form note ("ניסיון בתצפיות לילה")
+
+export interface MissionRequirement {
+  id: string;
+  kind: RequirementKind;
+  // For kind === 'role':
+  role?: OperationalRole;       // e.g. 'רחפן' / 'נהג' / 'נגביסט' / 'חובש'
+  count?: number;               // how many of that role
+  // For kind === 'freeText':
+  note?: string;
+}
+
+export interface CompanyMission {
+  id: string;
+  companyId: string;
+  name: string;
+  description?: string;          // free-text note
+  durationHours?: number;        // default mission length per shift
+  startDate?: string;            // optional window
+  endDate?: string;
+  assignedPlatoonIds: string[];  // platoons sharing this mission
+  rotation: CompanyMissionRotation;
+  requirements: MissionRequirement[];
+  createdByUserId: string;
+  createdAt: string;
+}
+
+// ─── Operational override alerts ─────────────────────────────────────────────
+//
+// Generated whenever a platoon-level action causes (or would cause) a
+// deviation from configured operational requirements: dropping below
+// minimum manpower, force-assigning outside engine recommendation,
+// pulling a soldier off shift early, etc.
+//
+// The action ALWAYS succeeds — operational flexibility is preserved.
+// The alert is the upward signal so company leadership sees the picture.
+
+export type OverrideAlertKind =
+  | 'manualSlotEdit'        // commander manually changed a slot's assignment
+  | 'belowMinManpower'      // platoon dropped below required minimum on base
+  | 'soldierSentHome'       // commander marked soldier unavailable / sent home immediately
+  | 'extraSoldiersAssigned' // commander assigned more than the recommended number
+  | 'requirementUnmet';     // a CompanyMission requirement is no longer satisfied
+
+export type OverrideAlertStatus = 'open' | 'acknowledged' | 'resolved';
+
+export interface OverrideAlert {
+  id: string;
+  companyId: string;
+  platoonId: string;
+  kind: OverrideAlertKind;
+  description: string;            // human-readable summary
+  actorUserId: string;            // who performed the action
+  actorName: string;
+  timestamp: string;              // ISO
+  status: OverrideAlertStatus;
+  acknowledgedByUserId?: string;
+  acknowledgedAt?: string;
+  resolvedByUserId?: string;
+  resolvedAt?: string;
+  manpowerImpact?: {
+    currentOnBase: number;
+    requiredMin: number;
+    belowMin: boolean;
+  };
+
+  // ── Future-ready risk fields (optional; not surfaced in UI yet) ──
+  riskLevel?: 'low' | 'medium' | 'high';
+  affectedMissionIds?: string[];
+  affectedSoldierIds?: string[];
+  requiresImmediateAttention?: boolean;
+  suggestedAction?: string;
+}
+
 // ─── Miluim period (the overall reserve duty window) ─────────────────────────
 
 export interface MiluimPeriod {

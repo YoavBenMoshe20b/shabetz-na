@@ -61,6 +61,7 @@ export default function SchedulePage() {
   const {
     soldiers, leaves, updatePeriod, addPeriod, addAuditLog, currentUser, currentRole,
     soldierHistory, lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
+    groups, recordOverrideAlert,
   } = useApp();
   const visiblePeriods = useVisiblePeriods();
   const isManager = isPlatoonLeadership(currentRole);
@@ -128,37 +129,92 @@ export default function SchedulePage() {
   };
 
   // ── Manual override actions ───────────────────────────────────────────────────
+  // Per spec: these MUST NOT block. The action always succeeds; an override
+  // alert is recorded upward so company leadership has visibility.
+
+  const platoonOfCurrentPeriod = (): string | undefined => {
+    // Heuristic for now: the period belongs to the user's commanded platoon
+    // if they have one, otherwise to the first platoon they're a member of.
+    if (currentUser?.commandedPlatoonId) return currentUser.commandedPlatoonId;
+    return groups.find((g) => g.memberIds.includes(currentUser?.id ?? ''))?.id;
+  };
 
   const handleAssign = (missionId: string, slotId: string, soldierId: string) => {
     if (!period) return;
+    const mt = period.missionTypes.find((m) => m.id === missionId);
+    const ts = mt?.timeSlots.find((s) => s.id === slotId);
+    const wouldExceedRecommended = mt && ts && ts.assignedSoldierIds.length >= mt.recommendedSoldiers;
+
     updatePeriod({
       ...period,
-      missionTypes: period.missionTypes.map((mt) => mt.id !== missionId ? mt : ({
-        ...mt,
-        timeSlots: mt.timeSlots.map((ts) => ts.id !== slotId ? ts : ({
-          ...ts,
-          assignedSoldierIds: ts.assignedSoldierIds.includes(soldierId)
-            ? ts.assignedSoldierIds
-            : [...ts.assignedSoldierIds, soldierId],
+      missionTypes: period.missionTypes.map((m) => m.id !== missionId ? m : ({
+        ...m,
+        timeSlots: m.timeSlots.map((s) => s.id !== slotId ? s : ({
+          ...s,
+          assignedSoldierIds: s.assignedSoldierIds.includes(soldierId)
+            ? s.assignedSoldierIds
+            : [...s.assignedSoldierIds, soldierId],
           status: 'filled',
         })),
       })),
     });
     addAuditLog({ actorName: currentUser!.name, actorRole: currentRole, action: 'שיבץ ידנית', target: soldiers.find((s) => s.id === soldierId)?.name ?? soldierId });
+
+    // Upward alert: extra soldier or off-engine manual edit.
+    const platoonId = platoonOfCurrentPeriod();
+    if (currentUser && platoonId && mt) {
+      const soldierName = soldiers.find((s) => s.id === soldierId)?.name ?? soldierId;
+      recordOverrideAlert({
+        companyId:   currentUser.companyId ?? '',
+        platoonId,
+        kind:        wouldExceedRecommended ? 'extraSoldiersAssigned' : 'manualSlotEdit',
+        description: wouldExceedRecommended
+          ? `${currentUser.name} שיבץ חייל נוסף מעבר למומלץ ב-"${mt.name}" (${ts?.date} ${ts?.startTime}). חייל: ${soldierName}.`
+          : `${currentUser.name} שיבץ ידנית את ${soldierName} ב-"${mt.name}" (${ts?.date} ${ts?.startTime}).`,
+        actorUserId: currentUser.id,
+        actorName:   currentUser.name,
+        affectedMissionIds: [missionId],
+        affectedSoldierIds: [soldierId],
+        riskLevel: wouldExceedRecommended ? 'low' : 'low',
+      });
+    }
   };
 
   const handleUnassign = (missionId: string, slotId: string, soldierId: string) => {
     if (!period) return;
+    const mt = period.missionTypes.find((m) => m.id === missionId);
+    const ts = mt?.timeSlots.find((s) => s.id === slotId);
+    const willDropBelowMin = mt && ts && (ts.assignedSoldierIds.length - 1) < mt.minSoldiers;
+
     updatePeriod({
       ...period,
-      missionTypes: period.missionTypes.map((mt) => mt.id !== missionId ? mt : ({
-        ...mt,
-        timeSlots: mt.timeSlots.map((ts) => ts.id !== slotId ? ts : ({
-          ...ts,
-          assignedSoldierIds: ts.assignedSoldierIds.filter((id) => id !== soldierId),
+      missionTypes: period.missionTypes.map((m) => m.id !== missionId ? m : ({
+        ...m,
+        timeSlots: m.timeSlots.map((s) => s.id !== slotId ? s : ({
+          ...s,
+          assignedSoldierIds: s.assignedSoldierIds.filter((id) => id !== soldierId),
         })),
       })),
     });
+
+    // Upward alert: dropping below minimum manpower is operationally significant.
+    const platoonId = platoonOfCurrentPeriod();
+    if (currentUser && platoonId && mt && willDropBelowMin) {
+      const soldierName = soldiers.find((s) => s.id === soldierId)?.name ?? soldierId;
+      recordOverrideAlert({
+        companyId:   currentUser.companyId ?? '',
+        platoonId,
+        kind:        'belowMinManpower',
+        description: `${currentUser.name} הסיר את ${soldierName} מ-"${mt.name}" — המשמרת מתחת למינימום (${ts!.assignedSoldierIds.length - 1}/${mt.minSoldiers}).`,
+        actorUserId: currentUser.id,
+        actorName:   currentUser.name,
+        affectedMissionIds: [missionId],
+        affectedSoldierIds: [soldierId],
+        riskLevel: 'medium',
+        requiresImmediateAttention: true,
+        suggestedAction: 'שקול שיבוץ חייל נוסף או הקטנת דרישת המינימום למשימה זו.',
+      });
+    }
   };
 
   const handleRegenerateSlot = (missionId: string, slotId: string) => {

@@ -3,11 +3,12 @@ import type {
   MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Group,
   MissionType, ReminderSetting, Leave, LeaveRequest, SoldierHistory, MiluimPeriod,
   ShiftWarning, FairnessScore, Company, CompanySettings, SubUnit,
+  CompanyMission, OverrideAlert,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockGroups, mockLeaves, mockLeaveRequests,
-  mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSubUnits,
+  mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSubUnits, mockCompanyMissions, mockOverrideAlerts,
 } from '../data/mockData';
 
 interface AppContextType {
@@ -38,6 +39,17 @@ interface AppContextType {
   createCompany:  (data: { name: string; unitName?: string; settings: CompanySettings }) => string;     // returns invite code
   inviteOfficer:  (companyId: string, role: 'platoonCommander' | 'platoonSergeant', platoonId?: string) => string; // returns invite code
   inviteSoldier:  (platoonId: string) => string; // returns invite code (= group code)
+
+  // Company-level missions (created by company commander only)
+  companyMissions:    CompanyMission[];
+  addCompanyMission:  (data: Omit<CompanyMission, 'id' | 'createdAt'>) => CompanyMission;
+  removeCompanyMission: (id: string) => void;
+
+  // Operational override alerts
+  overrideAlerts:      OverrideAlert[];
+  recordOverrideAlert: (data: Omit<OverrideAlert, 'id' | 'timestamp' | 'status'>) => OverrideAlert;
+  acknowledgeAlert:    (id: string, byUserId: string) => void;
+  resolveAlert:        (id: string, byUserId: string) => void;
 
   login:          (identifier: string, password: string) => MockUser | null;
   register:       (data: { name: string; email: string; username: string; password: string }) => { user: MockUser | null; error?: string };
@@ -106,6 +118,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const renameSubUnit = (id: string, name: string) =>
     setSubUnits((prev) => prev.map((s) => s.id === id ? { ...s, name } : s));
+
+  // ── Company missions (company-tier capability — gated by canCreateCompanyMission) ──
+  const [companyMissions, setCompanyMissions] = useState<CompanyMission[]>(mockCompanyMissions);
+
+  const addCompanyMission = (data: Omit<CompanyMission, 'id' | 'createdAt'>): CompanyMission => {
+    const cm: CompanyMission = {
+      ...data,
+      id: `cm-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    setCompanyMissions((prev) => [...prev, cm]);
+    return cm;
+  };
+
+  const removeCompanyMission = (id: string) =>
+    setCompanyMissions((prev) => prev.filter((m) => m.id !== id));
+
+  // ── Override alerts (escalation upward to company commander) ──
+  // The action that triggers the alert always succeeds first; recording the
+  // alert is purely the upward signal. Calling code MUST NOT block on this.
+  const [overrideAlerts, setOverrideAlerts] = useState<OverrideAlert[]>(mockOverrideAlerts);
+
+  const recordOverrideAlert = (data: Omit<OverrideAlert, 'id' | 'timestamp' | 'status'>): OverrideAlert => {
+    const alert: OverrideAlert = {
+      ...data,
+      id: `al-ov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: new Date().toISOString(),
+      status: 'open',
+    };
+    setOverrideAlerts((prev) => [alert, ...prev]);
+    return alert;
+  };
+
+  const acknowledgeAlert = (id: string, byUserId: string) =>
+    setOverrideAlerts((prev) => prev.map((a) => a.id === id
+      ? { ...a, status: 'acknowledged', acknowledgedByUserId: byUserId, acknowledgedAt: new Date().toISOString() }
+      : a
+    ));
+
+  const resolveAlert = (id: string, byUserId: string) =>
+    setOverrideAlerts((prev) => prev.map((a) => a.id === id
+      ? { ...a, status: 'resolved', resolvedByUserId: byUserId, resolvedAt: new Date().toISOString() }
+      : a
+    ));
 
   const setGenerationResult = (periodId: string, warnings: ShiftWarning[], fairness: FairnessScore[]) => {
     setLastGeneratedPeriodId(periodId);
@@ -317,6 +373,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
       companies, subUnits, addSubUnit, removeSubUnit, renameSubUnit,
       createCompany, inviteOfficer, inviteSoldier,
+      companyMissions, addCompanyMission, removeCompanyMission,
+      overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
       login, register, joinGroup, createGroup, logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
@@ -380,6 +438,29 @@ export function useSubUnitsForPlatoon(platoonId: string | undefined): SubUnit[] 
   const { subUnits } = useApp();
   if (!platoonId) return [];
   return subUnits.filter((s) => s.platoonId === platoonId);
+}
+
+// Override alerts visible to company leadership. A company commander sees
+// alerts from every platoon in their company. A platoon commander sees
+// alerts that originated in their own platoon (so they know what their
+// own actions logged upward). Soldiers see nothing here.
+export function useAlertsForCompany(): OverrideAlert[] {
+  const { currentUser, currentRole, overrideAlerts, groups } = useApp();
+  if (!currentUser) return [];
+  // Company-tier sees every alert in their company.
+  if (currentRole === 'companyCommander' || currentRole === 'deputyCompanyCommander' || currentRole === 'owner') {
+    return overrideAlerts.filter((a) => a.companyId === currentUser.companyId);
+  }
+  // Platoon-tier sees only alerts originating from their commanded platoon.
+  if (currentUser.commandedPlatoonId) {
+    return overrideAlerts.filter((a) => a.platoonId === currentUser.commandedPlatoonId);
+  }
+  // Legacy fallback for platoon-role users without commandedPlatoonId.
+  if (currentRole === 'platoonCommander' || currentRole === 'platoonSergeant' || currentRole === 'manager') {
+    const myPlatoonIds = groups.filter((g) => g.memberIds.includes(currentUser.id)).map((g) => g.id);
+    return overrideAlerts.filter((a) => myPlatoonIds.includes(a.platoonId));
+  }
+  return [];
 }
 
 // Leave requests THIS user can approve/reject. Empty for a pure company
