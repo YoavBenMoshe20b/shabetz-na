@@ -18,7 +18,7 @@ function isNight(start: string) {
 }
 
 export default function ReportPage() {
-  const { soldiers, leaves, leaveRequests, approveLeaveRequest, rejectLeaveRequest, currentUser } = useApp();
+  const { soldiers, leaves, leaveRequests, subUnits, approveLeaveRequest, rejectLeaveRequest, currentUser } = useApp();
   const activePeriod = useActivePeriod();
 
   const today = new Date().toISOString().slice(0, 10);
@@ -45,7 +45,7 @@ export default function ReportPage() {
     leaves.forEach((lv) => {
       if (date < lv.startDate || date > lv.endDate) return;
       if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
-      else if (lv.scope === 'class') soldiers.filter((s) => s.teamClass === lv.teamClass).forEach((s) => ids.add(s.id));
+      else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => ids.add(s.id));
       else soldiers.forEach((s) => ids.add(s.id));
     });
     return soldiers.filter((s) => ids.has(s.id));
@@ -63,13 +63,13 @@ export default function ReportPage() {
 
   const nightSlots = activeSlotsToday.filter(({ ts }) => isNight(ts.startTime));
 
-  // Breakdown by team class
-  const byClass = ['כיתה 1', 'כיתה 2', 'כיתה 3', 'מפקדה', 'אחר'].map((cls) => {
-    const clsSoldiers  = soldiers.filter((s) => s.teamClass === cls);
-    const clsOnLeave   = soldiersOnLeave.filter((s) => s.teamClass === cls).length;
-    const clsUnavail   = unavailableSoldiers.filter((s) => s.teamClass === cls).length;
-    const clsOnBase    = clsSoldiers.length - clsOnLeave - clsUnavail;
-    return { cls, total: clsSoldiers.length, onBase: clsOnBase, onLeave: clsOnLeave, unavail: clsUnavail };
+  // Breakdown by sub-unit (organisational layer)
+  const byClass = subUnits.map((su) => {
+    const clsSoldiers = soldiers.filter((s) => s.subUnitId === su.id);
+    const clsOnLeave  = soldiersOnLeave.filter((s) => s.subUnitId === su.id).length;
+    const clsUnavail  = unavailableSoldiers.filter((s) => s.subUnitId === su.id).length;
+    const clsOnBase   = clsSoldiers.length - clsOnLeave - clsUnavail;
+    return { cls: su.name, total: clsSoldiers.length, onBase: clsOnBase, onLeave: clsOnLeave, unavail: clsUnavail };
   }).filter((x) => x.total > 0);
 
   const handleApprove = (id: string) => {

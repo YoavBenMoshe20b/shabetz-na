@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type {
-  MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Group, TeamClass,
+  MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Group,
   MissionType, ReminderSetting, Leave, LeaveRequest, SoldierHistory, MiluimPeriod,
   ShiftWarning, FairnessScore, Company, CompanySettings, SubUnit,
 } from '../types';
@@ -40,7 +40,7 @@ interface AppContextType {
 
   login:          (identifier: string, password: string) => MockUser | null;
   register:       (data: { name: string; email: string; username: string; password: string }) => { user: MockUser | null; error?: string };
-  joinGroup:      (code: string, role: string, teamClass: TeamClass, pendingLeaves: Array<{ startDate: string; startTime: string; endDate: string; endTime: string; reason: string }>) => boolean;
+  joinGroup:      (code: string, role: string, subUnitId: string, pendingLeaves: Array<{ startDate: string; startTime: string; endDate: string; endTime: string; reason: string }>) => boolean;
   createGroup:    (data: { name: string; unitName?: string; availableRoles: string[]; commanderName: string; sergeantName: string; size?: number; enemyConfusion?: boolean; confusionMinutes?: number }) => string;
   logout:         () => void;
   switchRole:     (role: UserRole) => void; // dev/test only
@@ -147,7 +147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       password: data.password,
       joinedGroupIds: [],
       operationalRoles: [],
-      teamClass: 'אחר',
+      teamClass: '',
     };
     setUsers((prev) => [...prev, newUser]);
     setCurrentUser(newUser);
@@ -158,27 +158,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const joinGroup = (
     code: string,
     role: string,
-    teamClass: TeamClass,
+    subUnitId: string,
     pendingLeaves: Array<{ startDate: string; startTime: string; endDate: string; endTime: string; reason: string }>,
   ): boolean => {
     const group = groups.find((g) => g.code === code.toUpperCase());
     if (!group || !currentUser) return false;
+    const subUnit = subUnits.find((s) => s.id === subUnitId);
+    const subUnitName = subUnit?.name ?? '';
     const soldierRecord: Soldier = {
       id: `s-${Date.now()}`,
       name: currentUser.name,
       operationalRoles: (role ? [role] : []) as import('../types').OperationalRole[],
-      teamClass,
+      teamClass: subUnitName,         // legacy display field
+      subUnitId,
       availability: true,
       availabilityNotes: [],
       currentLoad: 0,
       userId: currentUser.id,
     };
     setSoldiers((prev) => [...prev, soldierRecord]);
+    setSubUnits((prev) => prev.map((s) => s.id === subUnitId ? { ...s, soldierIds: [...s.soldierIds, soldierRecord.id] } : s));
     setGroups((prev) => prev.map((g) => g.id === group.id ? { ...g, memberIds: [...g.memberIds, currentUser.id] } : g));
     setCurrentUser((prev) => prev ? {
       ...prev,
       joinedGroupIds: [...prev.joinedGroupIds, group.id],
-      teamClass,
+      teamClass: subUnitName,
+      subUnitId,
       soldierProfileId: soldierRecord.id,
     } : prev);
     pendingLeaves.forEach((lv) => {
@@ -187,7 +192,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: `lr-${Date.now()}-${Math.random()}`,
         soldierId: soldierRecord.id,
         soldierName: currentUser.name,
-        soldierTeamClass: teamClass,
+        soldierTeamClass: subUnitName,
+        soldierSubUnitId: subUnitId,
+        soldierSubUnitName: subUnitName,
         status: 'pending',
         submittedAt: new Date().toISOString(),
       }]);

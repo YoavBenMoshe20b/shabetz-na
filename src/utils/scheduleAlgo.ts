@@ -149,19 +149,28 @@ function isSoldierOnLeave(soldier: Soldier, leaves: Leave[], slot: TimeSlot): bo
     const lvEnd   = `${lv.endDate}T${lv.endTime}`;
     if (slotStart >= lvEnd || slotEnd <= lvStart) return false;
     if (lv.scope === 'individual') return lv.soldierIds.includes(soldier.id);
-    if (lv.scope === 'class')      return soldier.teamClass === lv.teamClass;
+    if (lv.scope === 'subUnit')    return soldier.subUnitId === lv.subUnitId;
     if (lv.scope === 'machlaka')   return true;
     return false;
   });
 }
 
+// Sub-unit / class-mixing constraint. Reads sub-unit id (preferred) and falls
+// back to legacy teamClass when migration data is incomplete.
 function classMixingOk(soldier: Soldier, mt: MissionType, alreadyAssigned: Soldier[]): boolean {
+  const soldierKey = (s: Soldier) => s.subUnitId ?? s.teamClass;
+
   if (mt.classMixing === 'specific') {
-    if (!mt.allowedClasses || mt.allowedClasses.length === 0) return true;
-    return mt.allowedClasses.includes(soldier.teamClass);
+    if (mt.allowedSubUnitIds && mt.allowedSubUnitIds.length > 0) {
+      return soldier.subUnitId ? mt.allowedSubUnitIds.includes(soldier.subUnitId) : false;
+    }
+    if (mt.allowedClasses && mt.allowedClasses.length > 0) {
+      return mt.allowedClasses.includes(soldier.teamClass);
+    }
+    return true;
   }
   if (mt.classMixing === 'no-mix' && alreadyAssigned.length > 0) {
-    return alreadyAssigned.every((s) => s.teamClass === soldier.teamClass);
+    return alreadyAssigned.every((s) => soldierKey(s) === soldierKey(soldier));
   }
   return true;
 }
@@ -412,23 +421,29 @@ function collectWarnings(
 
       // Class violation
       if (mt.classMixing === 'no-mix' && assignedSoldiers.length > 1) {
-        const classes = new Set(assignedSoldiers.map((s) => s.teamClass));
-        if (classes.size > 1) {
+        const subUnits = new Set(assignedSoldiers.map((s) => s.subUnitId ?? s.teamClass));
+        if (subUnits.size > 1) {
           out.push({
             type: 'classViolation', severity: 'warning', managerOnly: true,
-            message: `${mt.name} — ערבוב כיתות אסור (${[...classes].join(', ')})`,
+            message: `${mt.name} — ערבוב תת-קבוצות אסור (${[...subUnits].join(', ')})`,
             missionId: mt.id, timeSlotIds: [slot.id],
           });
         }
       }
-      if (mt.classMixing === 'specific' && mt.allowedClasses && mt.allowedClasses.length > 0) {
-        const violators = assignedSoldiers.filter((s) => !mt.allowedClasses!.includes(s.teamClass));
-        if (violators.length > 0) {
-          out.push({
-            type: 'classViolation', severity: 'warning', managerOnly: true,
-            message: `${mt.name} — חיילים מחוץ לכיתות המותרות: ${violators.map((s) => s.name).join(', ')}`,
-            missionId: mt.id, timeSlotIds: [slot.id], soldierIds: violators.map((s) => s.id),
+      if (mt.classMixing === 'specific') {
+        const allowList = mt.allowedSubUnitIds ?? mt.allowedClasses ?? [];
+        if (allowList.length > 0) {
+          const violators = assignedSoldiers.filter((s) => {
+            const key = mt.allowedSubUnitIds ? s.subUnitId : s.teamClass;
+            return !allowList.includes(key ?? '');
           });
+          if (violators.length > 0) {
+            out.push({
+              type: 'classViolation', severity: 'warning', managerOnly: true,
+              message: `${mt.name} — חיילים מחוץ לתת-קבוצות המותרות: ${violators.map((s) => s.name).join(', ')}`,
+              missionId: mt.id, timeSlotIds: [slot.id], soldierIds: violators.map((s) => s.id),
+            });
+          }
         }
       }
 

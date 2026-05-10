@@ -15,7 +15,11 @@ export type OperationalRole =
   | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'מ״כ'
   | 'חובש' | 'נגביסט' | 'קלע' | 'מאגיסט' | 'רחפן';
 
-export type TeamClass = 'כיתה 1' | 'כיתה 2' | 'כיתה 3' | 'מפקדה' | 'אחר';
+// @deprecated — sub-unit structure is now per-platoon and free-form via SubUnit.
+// Kept as a `string` alias so legacy annotations still compile during migration.
+// Display code should resolve a soldier's sub-unit name through the SubUnit
+// entity instead of reading teamClass directly.
+export type TeamClass = string;
 
 // Availability notes (NO medical classification — manager controls availability)
 export type AvailabilityNoteType = 'location' | 'leave' | 'other';
@@ -42,7 +46,9 @@ export interface Soldier {
 
 // ─── Leaves / יציאות ─────────────────────────────────────────────────────────
 
-export type LeaveScope = 'individual' | 'class' | 'machlaka';
+// 'subUnit' replaces the legacy 'class' scope; both denote a leave that
+// applies to everyone in a given organisational sub-unit.
+export type LeaveScope = 'individual' | 'subUnit' | 'machlaka';
 
 export interface Leave {
   id: string;

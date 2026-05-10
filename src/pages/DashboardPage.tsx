@@ -44,7 +44,7 @@ function ManagerDashboard() {
   leaves.forEach((lv) => {
     if (today < lv.startDate || today > lv.endDate) return;
     if (lv.scope === 'individual') lv.soldierIds.forEach((id) => onLeaveIds.add(id));
-    else if (lv.scope === 'class') soldiers.filter((s) => s.teamClass === lv.teamClass).forEach((s) => onLeaveIds.add(s.id));
+    else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => onLeaveIds.add(s.id));
     else soldiers.forEach((s) => onLeaveIds.add(s.id));
   });
   const onBase = soldiers.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
@@ -234,7 +234,7 @@ function SoldierDashboard() {
     leaves.forEach((lv) => {
       if (scheduleDate < lv.startDate || scheduleDate > lv.endDate) return;
       if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
-      else if (lv.scope === 'class') soldiers.filter((s) => s.teamClass === lv.teamClass).forEach((s) => ids.add(s.id));
+      else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => ids.add(s.id));
       else soldiers.forEach((s) => ids.add(s.id));
     });
     return ids;

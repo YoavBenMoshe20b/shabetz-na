@@ -82,7 +82,7 @@ export const mockSoldiers: Soldier[] = [
 
 export const mockLeaves: Leave[] = [
   {
-    id: 'lv1', scope: 'class', teamClass: 'כיתה 2', subUnitId: 'su-g1-b',
+    id: 'lv1', scope: 'subUnit', teamClass: 'כיתה 2', subUnitId: 'su-g1-b',
     soldierIds: [],
     startDate: '2024-05-16', startTime: '14:00',
     endDate:   '2024-05-18', endTime:   '08:00',

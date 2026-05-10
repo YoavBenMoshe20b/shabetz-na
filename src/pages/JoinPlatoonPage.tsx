@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import type { TeamClass } from '../types';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -11,10 +10,8 @@ interface PendingLeave {
   reason: string;
 }
 
-const TEAM_CLASSES: TeamClass[] = ['כיתה 1', 'כיתה 2', 'כיתה 3', 'מפקדה', 'אחר'];
-
 export default function JoinPlatoonPage() {
-  const { groups, joinGroup } = useApp();
+  const { groups, subUnits, joinGroup } = useApp();
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>(1);
@@ -22,7 +19,12 @@ export default function JoinPlatoonPage() {
   const [codeError, setCodeError] = useState('');
   const [foundGroup, setFoundGroup] = useState<typeof groups[0] | null>(null);
   const [selectedRole, setSelectedRole] = useState('');
-  const [selectedClass, setSelectedClass] = useState<TeamClass>('כיתה 1');
+  const [selectedSubUnitId, setSelectedSubUnitId] = useState<string>('');
+
+  // Sub-units defined for the platoon being joined. The company commander
+  // configured these per-platoon, so a recon platoon will offer different
+  // names than a regular platoon (e.g. ספרפס vs כיתה 1).
+  const platoonSubUnits = foundGroup ? subUnits.filter((s) => s.platoonId === foundGroup.id) : [];
   const [hasLeaves, setHasLeaves] = useState<boolean | null>(null);
   const [pendingLeaves, setPendingLeaves] = useState<PendingLeave[]>([]);
   const [newLeave, setNewLeave] = useState<PendingLeave>({ startDate: '', startTime: '14:00', endDate: '', endTime: '08:00', reason: '' });
@@ -31,6 +33,9 @@ export default function JoinPlatoonPage() {
     const g = groups.find((g) => g.code === code.trim().toUpperCase());
     if (!g) { setCodeError('קוד לא נמצא. נסה שוב.'); return; }
     setFoundGroup(g);
+    // Default-select the first sub-unit so step 2 has a sane initial choice
+    const first = subUnits.find((s) => s.platoonId === g.id);
+    if (first) setSelectedSubUnitId(first.id);
     setCodeError('');
     setStep(2);
   };
@@ -44,7 +49,7 @@ export default function JoinPlatoonPage() {
   const handleFinish = () => {
     if (!foundGroup) return;
     const leavesToSubmit = hasLeaves ? pendingLeaves : [];
-    joinGroup(foundGroup.code, selectedRole, selectedClass, leavesToSubmit);
+    joinGroup(foundGroup.code, selectedRole, selectedSubUnitId, leavesToSubmit);
     setStep(4);
   };
 
@@ -128,24 +133,30 @@ export default function JoinPlatoonPage() {
                 </div>
               </div>
 
-              {/* Class */}
+              {/* Sub-unit */}
               <div>
-                <label className="block text-sm font-bold text-mil-text mb-3">איזה כיתה אתה?</label>
-                <div className="flex flex-wrap gap-2">
-                  {TEAM_CLASSES.map((cls) => (
-                    <button
-                      key={cls}
-                      onClick={() => setSelectedClass(cls)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                        selectedClass === cls
-                          ? 'bg-mil-olive border-mil-olive text-white'
-                          : 'bg-mil-bg border-mil-border text-mil-text hover:border-mil-olive/50'
-                      }`}
-                    >
-                      {cls}
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-sm font-bold text-mil-text mb-3">לאיזו תת-קבוצה אתה משתייך?</label>
+                {platoonSubUnits.length === 0 ? (
+                  <p className="text-xs text-mil-muted bg-mil-warn-bg border border-mil-warn-border rounded-lg px-3 py-2">
+                    מ״מ המחלקה לא הגדיר עדיין תת-קבוצות. תוכל לבחור מאוחר יותר.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {platoonSubUnits.map((su) => (
+                      <button
+                        key={su.id}
+                        onClick={() => setSelectedSubUnitId(su.id)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                          selectedSubUnitId === su.id
+                            ? 'bg-mil-olive border-mil-olive text-white'
+                            : 'bg-mil-bg border-mil-border text-mil-text hover:border-mil-olive/50'
+                        }`}
+                      >
+                        {su.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

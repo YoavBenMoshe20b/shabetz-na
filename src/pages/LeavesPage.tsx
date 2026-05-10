@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, useMyPlatoons } from '../context/AppContext';
 import Header from '../components/Header';
 import { isPlatoonLeadership } from '../utils/permissions';
-import type { LeaveScope, TeamClass } from '../types';
-
-const TEAMS: TeamClass[] = ['כיתה 1', 'כיתה 2', 'כיתה 3', 'מפקדה', 'אחר'];
+import type { LeaveScope } from '../types';
 
 const scopeLabel: Record<LeaveScope, string> = {
   individual: 'יחיד',
-  class:      'כיתה',
+  subUnit:    'תת-קבוצה',
   machlaka:   'מחלקה',
 };
 
@@ -21,23 +19,32 @@ const reqStatusStyle = {
 
 export default function LeavesPage() {
   const {
-    leaves, soldiers, addLeave, removeLeave, addAuditLog,
+    leaves, soldiers, subUnits, addLeave, removeLeave, addAuditLog,
     currentUser, currentRole,
     leaveRequests, approveLeaveRequest, rejectLeaveRequest,
   } = useApp();
+  const myPlatoons = useMyPlatoons();
+
+  // Sub-units the current manager can issue leaves against:
+  // company commander → all sub-units in the company; platoon leader →
+  // sub-units of their platoon only.
+  const visibleSubUnits = subUnits.filter((s) =>
+    myPlatoons.some((p) => p.id === s.platoonId)
+  );
+  const subUnitNameOf = (id?: string) => subUnits.find((s) => s.id === id)?.name ?? '—';
 
   const isManager = isPlatoonLeadership(currentRole);
   const [tab, setTab] = useState<'leaves' | 'requests'>('leaves');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    scope:       'individual' as LeaveScope,
-    soldierIds:  [] as string[],
-    teamClass:   'כיתה 1' as TeamClass,
-    startDate:   '',
-    startTime:   '14:00',
-    endDate:     '',
-    endTime:     '08:00',
-    note:        '',
+    scope:      'individual' as LeaveScope,
+    soldierIds: [] as string[],
+    subUnitId:  visibleSubUnits[0]?.id ?? '',
+    startDate:  '',
+    startTime:  '14:00',
+    endDate:    '',
+    endTime:    '08:00',
+    note:       '',
   });
   const [saved, setSaved] = useState(false);
 
@@ -53,16 +60,18 @@ export default function LeavesPage() {
 
   const leaveDescription = () => {
     if (form.scope === 'individual') return form.soldierIds.map(getSoldierName).join(', ');
-    if (form.scope === 'class')      return `כיתה: ${form.teamClass}`;
+    if (form.scope === 'subUnit')    return `תת-קבוצה: ${subUnitNameOf(form.subUnitId)}`;
     return 'כל המחלקה';
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const subUnit = subUnits.find((s) => s.id === form.subUnitId);
     addLeave({
       scope:         form.scope,
       soldierIds:    form.soldierIds,
-      teamClass:     form.scope === 'class' ? form.teamClass : undefined,
+      subUnitId:     form.scope === 'subUnit' ? form.subUnitId : undefined,
+      teamClass:     form.scope === 'subUnit' ? subUnit?.name : undefined,
       startDate:     form.startDate,
       startTime:     form.startTime,
       endDate:       form.endDate,
@@ -74,7 +83,7 @@ export default function LeavesPage() {
     addAuditLog({ actorName: currentUser!.name, actorRole: currentRole, action: 'הגדיר יציאה', target: leaveDescription() });
     setSaved(true);
     setShowForm(false);
-    setForm({ scope: 'individual', soldierIds: [], teamClass: 'כיתה 1', startDate: '', startTime: '14:00', endDate: '', endTime: '08:00', note: '' });
+    setForm({ scope: 'individual', soldierIds: [], subUnitId: visibleSubUnits[0]?.id ?? '', startDate: '', startTime: '14:00', endDate: '', endTime: '08:00', note: '' });
     setTimeout(() => setSaved(false), 3000);
   };
 
@@ -134,7 +143,7 @@ export default function LeavesPage() {
                   <div>
                     <label className="block text-xs text-mil-muted mb-2">סוג יציאה</label>
                     <div className="flex gap-2">
-                      {(['individual', 'class', 'machlaka'] as LeaveScope[]).map((s) => (
+                      {(['individual', 'subUnit', 'machlaka'] as LeaveScope[]).map((s) => (
                         <button
                           key={s}
                           type="button"
@@ -174,11 +183,12 @@ export default function LeavesPage() {
                     </div>
                   )}
 
-                  {form.scope === 'class' && (
+                  {form.scope === 'subUnit' && (
                     <div>
-                      <label className="block text-xs text-mil-muted mb-1.5">כיתה</label>
-                      <select className={inp} value={form.teamClass} onChange={(e) => setForm((f) => ({ ...f, teamClass: e.target.value as TeamClass }))}>
-                        {TEAMS.map((t) => <option key={t}>{t}</option>)}
+                      <label className="block text-xs text-mil-muted mb-1.5">תת-קבוצה</label>
+                      <select className={inp} value={form.subUnitId} onChange={(e) => setForm((f) => ({ ...f, subUnitId: e.target.value }))}>
+                        {visibleSubUnits.length === 0 && <option value="">— אין תת-קבוצות במחלקתך —</option>}
+                        {visibleSubUnits.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </div>
                   )}
@@ -230,8 +240,8 @@ export default function LeavesPage() {
               {leaves.map((lv) => {
                 const who = lv.scope === 'individual'
                   ? lv.soldierIds.map(getSoldierName).join(', ')
-                  : lv.scope === 'class'
-                  ? `כיתה: ${lv.teamClass}`
+                  : lv.scope === 'subUnit'
+                  ? `תת-קבוצה: ${subUnitNameOf(lv.subUnitId)}`
                   : 'כל המחלקה';
 
                 return (

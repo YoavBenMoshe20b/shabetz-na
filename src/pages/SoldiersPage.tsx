@@ -1,21 +1,26 @@
 import { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, useMyPlatoons } from '../context/AppContext';
 import Header from '../components/Header';
 import { isPlatoonLeadership } from '../utils/permissions';
-import type { TeamClass } from '../types';
-
-const TEAMS: Array<TeamClass | 'הכל'> = ['הכל', 'כיתה 1', 'כיתה 2', 'כיתה 3', 'מפקדה', 'אחר'];
 
 export default function SoldiersPage() {
-  const { soldiers, currentRole, updateSoldierAvailability } = useApp();
-  const [teamFilter, setTeamFilter] = useState<TeamClass | 'הכל'>('הכל');
+  const { soldiers, subUnits, currentRole, updateSoldierAvailability } = useApp();
+  const myPlatoons = useMyPlatoons();
+  const visibleSubUnits = subUnits.filter((s) =>
+    myPlatoons.length === 0 ? true : myPlatoons.some((p) => p.id === s.platoonId)
+  );
+
+  const [subUnitFilter, setSubUnitFilter] = useState<'all' | string>('all');  // 'all' or a SubUnit id
   const [availFilter, setAvailFilter] = useState<'all' | 'available' | 'unavailable'>('all');
 
   const filtered = soldiers.filter((s) => {
-    const teamOk  = teamFilter === 'הכל' || s.teamClass === teamFilter;
-    const availOk = availFilter === 'all' || (availFilter === 'available' ? s.availability : !s.availability);
-    return teamOk && availOk;
+    const subUnitOk = subUnitFilter === 'all' || s.subUnitId === subUnitFilter;
+    const availOk   = availFilter === 'all' || (availFilter === 'available' ? s.availability : !s.availability);
+    return subUnitOk && availOk;
   });
+
+  const subUnitDisplayName = (s: { subUnitId?: string; teamClass: string }) =>
+    subUnits.find((su) => su.id === s.subUnitId)?.name ?? s.teamClass;
 
   const isManager = isPlatoonLeadership(currentRole);
 
@@ -41,17 +46,27 @@ export default function SoldiersPage() {
             </button>
           ))}
           <div className="w-px bg-mil-border mx-1 flex-shrink-0" />
-          {TEAMS.map((t) => (
+          <button
+            onClick={() => setSubUnitFilter('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-colors ${
+              subUnitFilter === 'all'
+                ? 'bg-mil-olive-bg border-mil-olive/50 text-mil-olive'
+                : 'bg-mil-card border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
+            }`}
+          >
+            הכל
+          </button>
+          {visibleSubUnits.map((su) => (
             <button
-              key={t}
-              onClick={() => setTeamFilter(t)}
+              key={su.id}
+              onClick={() => setSubUnitFilter(su.id)}
               className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-colors ${
-                teamFilter === t
+                subUnitFilter === su.id
                   ? 'bg-mil-olive-bg border-mil-olive/50 text-mil-olive'
                   : 'bg-mil-card border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
               }`}
             >
-              {t}
+              {su.name}
             </button>
           ))}
         </div>
@@ -64,7 +79,7 @@ export default function SoldiersPage() {
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <p className="font-bold text-mil-text">{s.name}</p>
-                  <p className="text-xs text-mil-muted">{s.teamClass}</p>
+                  <p className="text-xs text-mil-muted">{subUnitDisplayName(s)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   {isManager ? (
