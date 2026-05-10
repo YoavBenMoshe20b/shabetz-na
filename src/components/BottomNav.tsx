@@ -14,20 +14,18 @@ export default function BottomNav() {
   type NavItem = { to: string; label: string; icon: string; emergency?: boolean; badge?: number };
 
   const managerItems: NavItem[] = [
-    { to: '/dashboard', label: 'מצב',    icon: '◈' },
-    { to: '/schedule',  label: 'שיבוץ',  icon: '▦' },
-    { to: '/report',    label: 'דוח',    icon: '◧' },
+    { to: '/dashboard', label: 'בית',    icon: '◈' },
+    { to: '/schedule',  label: 'סידור',  icon: '▦' },
     { to: '/soldiers',  label: 'חיילים', icon: '◉' },
     { to: '/leaves',    label: 'יציאות', icon: '⊖', badge: pendingRequests },
     ...(canTriggerEmergency(currentRole) ? [{ to: '/emergency', label: 'בלת״מ', icon: hasEmergency ? '⚠' : '⚡', emergency: true }] : []),
   ];
 
+  // Soldiers see only Home + Profile per the simplification spec — schedule
+  // and roster are folded into Home as expandable sections, not nav targets.
   const soldierItems: NavItem[] = [
-    { to: '/dashboard', label: 'מצב',      icon: '◈' },
-    { to: '/schedule',  label: 'שיבוץ',    icon: '▦' },
-    { to: '/soldiers',  label: 'חיילים',   icon: '◉' },
-    { to: '/groups',    label: 'קבוצות',   icon: '◎' },
-    { to: '/profile',   label: 'פרופיל',   icon: '○' },
+    { to: '/dashboard', label: 'בית',    icon: '◈' },
+    { to: '/profile',   label: 'פרופיל', icon: '○' },
   ];
 
   const items = isManager ? managerItems : soldierItems;

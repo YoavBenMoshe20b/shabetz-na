@@ -174,11 +174,18 @@ function ManagerDashboard() {
 // ─── Soldier Dashboard ────────────────────────────────────────────────────────
 
 function SoldierDashboard() {
-  const { soldiers, leaves, currentUser, groups, setReminder } = useApp();
+  const { soldiers, leaves, currentUser, groups, subUnits, setReminder, addLeaveRequest } = useApp();
   const activePeriod = useActivePeriod();
   const myGroup = groups.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
 
   const myProfile = soldiers.find((s) => s.id === currentUser?.soldierProfileId || s.userId === currentUser?.id);
+  const mySubUnitName = subUnits.find((s) => s.id === myProfile?.subUnitId)?.name ?? myProfile?.teamClass ?? '';
+
+  // Collapsibles + modal state
+  const [showWeek,    setShowWeek]    = useState(false);
+  const [showRoster,  setShowRoster]  = useState(false);
+  const [leaveOpen,   setLeaveOpen]   = useState(false);
+  const [leaveSaved,  setLeaveSaved]  = useState(false);
 
   // Current wall-clock time (in minutes since midnight of "today")
   const now = new Date();
@@ -240,48 +247,66 @@ function SoldierDashboard() {
     return ids;
   }, [leaves, soldiers, scheduleDate]);
 
+  // My upcoming shifts in the published period (sorted, all of them, not just next)
+  const myUpcomingShifts = useMemo(() => {
+    if (!activePeriod || !myProfile) return [];
+    const out: Array<{ mt: MissionType; ts: TimeSlot }> = [];
+    activePeriod.missionTypes.forEach((mt) => {
+      mt.timeSlots
+        .filter((ts) => ts.assignedSoldierIds.includes(myProfile.id))
+        .forEach((ts) => out.push({ mt, ts }));
+    });
+    out.sort((a, b) =>
+      a.ts.date === b.ts.date
+        ? a.ts.startTime.localeCompare(b.ts.startTime)
+        : a.ts.date.localeCompare(b.ts.date),
+    );
+    return out;
+  }, [activePeriod, myProfile]);
+
+  const submitLeaveRequest = (data: { startDate: string; startTime: string; endDate: string; endTime: string; reason: string }) => {
+    if (!myProfile) return;
+    addLeaveRequest({
+      soldierId:           myProfile.id,
+      soldierName:         myProfile.name,
+      soldierTeamClass:    myProfile.teamClass,
+      soldierSubUnitId:    myProfile.subUnitId,
+      soldierSubUnitName:  mySubUnitName || undefined,
+      startDate: data.startDate,
+      startTime: data.startTime,
+      endDate:   data.endDate,
+      endTime:   data.endTime,
+      reason:    data.reason,
+    });
+    setLeaveOpen(false);
+    setLeaveSaved(true);
+    setTimeout(() => setLeaveSaved(false), 3500);
+  };
+
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="המחלקה שלי" />
-      <main className="px-4 py-4 pb-28 max-w-xl mx-auto space-y-4">
+      <main className="px-4 py-4 pb-32 max-w-xl mx-auto space-y-4">
 
-        {/* Greeting */}
-        <div className="bg-mil-olive-bg border border-mil-olive/30 rounded-2xl px-4 py-3">
-          <h2 className="text-lg font-bold text-mil-text">שלום, {currentUser?.name?.split(' ')[0]}!</h2>
-          <p className="text-xs text-mil-muted mt-0.5">
+        {/* Toast on successful leave-request submit */}
+        {leaveSaved && (
+          <div className="bg-mil-success-bg border border-mil-success/40 text-mil-success rounded-xl px-4 py-3 text-sm flex items-center gap-2">
+            <span>✓</span> בקשת היציאה הוגשה למ״מ
+          </div>
+        )}
+
+        {/* Greeting — one line, calm */}
+        <div>
+          <h2 className="text-xl font-bold text-mil-text">שלום, {currentUser?.name?.split(' ')[0]}</h2>
+          <p className="text-sm text-mil-muted mt-0.5">
             {myGroup?.name}
-            {myProfile && ` · ${myProfile.teamClass}`}
+            {mySubUnitName && ` · ${mySubUnitName}`}
             {myProfile && myProfile.operationalRoles.length > 0 && ` · ${myProfile.operationalRoles.join(', ')}`}
           </p>
         </div>
 
-        {/* Current ops status */}
-        <div>
-          <h3 className="text-xs font-bold tracking-widest text-mil-muted uppercase mt-2 px-1 mb-2">מצב כרגע</h3>
-          {activeMissions.length === 0 ? (
-            <div className="bg-mil-card border border-mil-border rounded-xl px-4 py-6 text-center text-sm text-mil-muted">
-              אין משימות פעילות כרגע
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {activeMissions.map(({ mt, ts }) => {
-                const names = ts.assignedSoldierIds.map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0] ?? '').filter(Boolean);
-                return (
-                  <div key={ts.id} className="bg-mil-card border border-mil-border rounded-xl p-3">
-                    <p className="text-sm font-bold text-mil-text">{mt.name}</p>
-                    <p className="text-xs text-mil-ghost mt-0.5">{ts.startTime}–{ts.endTime}</p>
-                    <p className="text-xs text-mil-olive mt-1.5 leading-tight">
-                      {names.length > 0 ? names.join(', ') : <span className="text-mil-muted">—</span>}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* My next shift + Wake me up */}
-        {myNextShift && (
+        {/* HERO: my next shift (or fallback if none) */}
+        {myNextShift ? (
           <NextShiftCard
             mission={myNextShift.mt}
             slot={myNextShift.ts}
@@ -289,34 +314,196 @@ function SoldierDashboard() {
             teammates={teammates}
             onSetReminder={(mins) => setReminder({ timeSlotId: myNextShift.ts.id, minutesBefore: mins, enabled: true })}
           />
+        ) : (
+          <div className="bg-mil-card border border-mil-border rounded-2xl px-4 py-6 text-center">
+            <p className="text-mil-muted text-sm">אין שיבוץ עתידי</p>
+            <p className="text-xs text-mil-ghost mt-1">תקבל הודעה כשהמ״מ יפרסם סידור חדש</p>
+          </div>
         )}
 
-        {/* All soldiers */}
-        <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
-          <div className="bg-mil-surface px-4 py-2.5 border-b border-mil-border flex items-center justify-between">
-            <span className="text-xs font-bold tracking-widest text-mil-text-inv/80">חיילי המחלקה</span>
-            <span className="text-xs text-mil-text-inv/60">{soldiers.length}</span>
+        {/* Compact "מי על שמירה כרגע" — only if something is running */}
+        {activeMissions.length > 0 && (
+          <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-mil-border bg-mil-bg">
+              <span className="text-xs font-bold tracking-widest text-mil-muted">מי על שמירה כרגע</span>
+            </div>
+            <div className="divide-y divide-mil-border">
+              {activeMissions.map(({ mt, ts }) => {
+                const names = ts.assignedSoldierIds
+                  .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
+                  .filter(Boolean) as string[];
+                return (
+                  <div key={ts.id} className="px-4 py-2.5 flex items-center gap-3">
+                    <span className="text-sm font-medium text-mil-text">{mt.name}</span>
+                    <span className="text-xs text-mil-ghost mr-auto">{ts.startTime}–{ts.endTime}</span>
+                    <span className="text-sm text-mil-olive truncate max-w-[55%] text-left">
+                      {names.length > 0 ? names.join(' · ') : <span className="text-mil-muted">—</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="divide-y divide-mil-border max-h-72 overflow-y-auto">
+        )}
+
+        {/* Collapsible: my schedule this week */}
+        <CollapsibleCard
+          title="הסידור שלי השבוע"
+          count={myUpcomingShifts.length}
+          open={showWeek}
+          onToggle={() => setShowWeek((v) => !v)}
+        >
+          {myUpcomingShifts.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-mil-muted">אין משמרות מתוכננות</p>
+          ) : (
+            <div className="divide-y divide-mil-border">
+              {myUpcomingShifts.map(({ mt, ts }) => (
+                <div key={ts.id} className="px-4 py-2.5 flex items-center gap-3">
+                  <span className="text-xs text-mil-ghost w-20 flex-shrink-0">{ts.date}</span>
+                  <span className="text-sm font-medium text-mil-text flex-1 truncate">{mt.name}</span>
+                  <span className="text-xs text-mil-muted font-mono">{ts.startTime}–{ts.endTime}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CollapsibleCard>
+
+        {/* Collapsible: roster — read-only, status dots */}
+        <CollapsibleCard
+          title="צוות המחלקה"
+          count={soldiers.length}
+          open={showRoster}
+          onToggle={() => setShowRoster((v) => !v)}
+        >
+          <div className="divide-y divide-mil-border max-h-80 overflow-y-auto">
             {soldiers.map((s) => {
               const onLeave = onLeaveSoldierIds.has(s.id);
-              const status = onLeave ? 'home' : (s.availability ? 'base' : 'unavail');
-              const tone = status === 'base' ? 'bg-mil-success' : status === 'home' ? 'bg-mil-sand' : 'bg-mil-ghost';
-              const label = status === 'base' ? 'בבסיס' : status === 'home' ? 'בבית' : 'לא זמין';
+              const tone =
+                onLeave ? 'bg-mil-sand' :
+                s.availability ? 'bg-mil-success' : 'bg-mil-ghost';
+              const subUnit = subUnits.find((su) => su.id === s.subUnitId)?.name ?? s.teamClass;
               return (
                 <div key={s.id} className="px-4 py-2.5 flex items-center gap-3">
                   <span className={`w-2 h-2 rounded-full ${tone} flex-shrink-0`} />
                   <span className="text-sm text-mil-text flex-1">{s.name}</span>
-                  <span className="text-xs text-mil-muted">{s.teamClass}</span>
-                  {s.operationalRoles[0] && <span className="text-xs text-mil-olive bg-mil-olive-bg border border-mil-olive/30 px-1.5 py-0.5 rounded">{s.operationalRoles[0]}</span>}
-                  <span className="text-xs text-mil-ghost w-12 text-left">{label}</span>
+                  <span className="text-xs text-mil-muted">{subUnit}</span>
                 </div>
               );
             })}
           </div>
-        </div>
+        </CollapsibleCard>
 
       </main>
+
+      {/* FAB — bottom-left for RTL, above bottom nav */}
+      <button
+        onClick={() => setLeaveOpen(true)}
+        className="fixed bottom-24 left-4 z-20 bg-mil-olive hover:bg-mil-olive-light text-white font-bold px-5 py-3.5 rounded-full shadow-lg flex items-center gap-2 transition-colors"
+      >
+        <span className="text-lg leading-none">+</span>
+        <span className="text-sm">בקשת יציאה</span>
+      </button>
+
+      {/* Leave-request modal */}
+      {leaveOpen && (
+        <LeaveRequestModal
+          onClose={() => setLeaveOpen(false)}
+          onSubmit={submitLeaveRequest}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Soldier-side leave request modal ────────────────────────────────────────
+
+function LeaveRequestModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (data: { startDate: string; startTime: string; endDate: string; endTime: string; reason: string }) => void;
+}) {
+  const [form, setForm] = useState({
+    startDate: '', startTime: '14:00',
+    endDate:   '', endTime:   '08:00',
+    reason:    '',
+  });
+  const canSubmit = form.startDate && form.endDate && form.reason.trim().length > 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
+      <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl">
+        <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3">
+          <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
+          <h2 className="text-white font-bold flex-1">בקשת יציאה</h2>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <p className="text-sm text-mil-muted">הבקשה תישלח למ״מ לאישור.</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-mil-muted mb-1.5">יציאה — תאריך</label>
+              <input type="date" className={modalInp} value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-mil-muted mb-1.5">שעה</label>
+              <input type="time" className={modalInp} value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-mil-muted mb-1.5">חזרה — תאריך</label>
+              <input type="date" className={modalInp} value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-mil-muted mb-1.5">שעה</label>
+              <input type="time" className={modalInp} value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-mil-muted mb-1.5">סיבה</label>
+            <textarea
+              className={`${modalInp} resize-none`}
+              rows={3}
+              value={form.reason}
+              onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
+              placeholder="אירוע משפחתי / פגישה רפואית..."
+            />
+          </div>
+
+          <button
+            onClick={() => canSubmit && onSubmit(form)}
+            disabled={!canSubmit}
+            className="w-full bg-mil-olive hover:bg-mil-olive-light disabled:opacity-40 text-white font-bold py-4 rounded-xl text-base transition-colors"
+          >
+            שלח בקשה
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const modalInp = 'w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-base';
+
+// ─── CollapsibleCard — reused for "my week" and roster ───────────────────────
+
+function CollapsibleCard({
+  title, count, open, onToggle, children,
+}: {
+  title: string; count?: number; open: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-3 bg-mil-bg flex items-center gap-2 hover:bg-mil-card-hover transition-colors"
+      >
+        <span className="text-sm font-bold text-mil-text">{title}</span>
+        {count != null && <span className="text-xs text-mil-ghost">({count})</span>}
+        <span className="mr-auto text-mil-ghost">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && children}
     </div>
   );
 }
