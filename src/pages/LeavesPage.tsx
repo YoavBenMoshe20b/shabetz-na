@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useApp, useMyPlatoons } from '../context/AppContext';
+import { useApp, useMyPlatoons, useApprovableLeaveRequests } from '../context/AppContext';
 import Header from '../components/Header';
 import { isPlatoonLeadership } from '../utils/permissions';
 import type { LeaveScope } from '../types';
@@ -21,9 +21,14 @@ export default function LeavesPage() {
   const {
     leaves, soldiers, subUnits, addLeave, removeLeave, addAuditLog,
     currentUser, currentRole,
-    leaveRequests, approveLeaveRequest, rejectLeaveRequest,
+    approveLeaveRequest, rejectLeaveRequest,
   } = useApp();
   const myPlatoons = useMyPlatoons();
+  // Scoped queue: only the requests the current user is actually allowed to act on.
+  // For a pure company commander this is empty (per spec — they don't see other
+  // platoons' leave queues). For the חפ״ק dual-role case, only their commanded
+  // platoon's requests appear.
+  const approvableRequests = useApprovableLeaveRequests();
 
   // Sub-units the current manager can issue leaves against:
   // company commander → all sub-units in the company; platoon leader →
@@ -48,7 +53,7 @@ export default function LeavesPage() {
   });
   const [saved, setSaved] = useState(false);
 
-  const pendingCount = leaveRequests.filter((r) => r.status === 'pending').length;
+  const pendingCount = approvableRequests.filter((r) => r.status === 'pending').length;
 
   const toggleSoldier = (id: string) =>
     setForm((f) => ({
@@ -286,14 +291,14 @@ export default function LeavesPage() {
         {/* ── REQUESTS TAB (manager only) ────────────────────────── */}
         {isManager && tab === 'requests' && (
           <div className="space-y-2">
-            <p className="text-xs text-mil-muted px-1">{leaveRequests.length} בקשות · {pendingCount} ממתינות</p>
-            {leaveRequests.length === 0 && (
+            <p className="text-xs text-mil-muted px-1">{approvableRequests.length} בקשות · {pendingCount} ממתינות</p>
+            {approvableRequests.length === 0 && (
               <div className="text-center py-10 text-mil-ghost">
                 <p className="text-4xl mb-3">⊖</p>
                 <p>אין בקשות יציאה</p>
               </div>
             )}
-            {[...leaveRequests].sort((a, b) => {
+            {[...approvableRequests].sort((a, b) => {
               if (a.status === 'pending' && b.status !== 'pending') return -1;
               if (b.status === 'pending' && a.status !== 'pending') return 1;
               return b.submittedAt.localeCompare(a.submittedAt);

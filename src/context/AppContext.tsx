@@ -4,6 +4,7 @@ import type {
   MissionType, ReminderSetting, Leave, LeaveRequest, SoldierHistory, MiluimPeriod,
   ShiftWarning, FairnessScore, Company, CompanySettings, SubUnit,
 } from '../types';
+import { canApproveLeaveFor } from '../utils/permissions';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockGroups, mockLeaves, mockLeaveRequests,
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSubUnits,
@@ -379,6 +380,15 @@ export function useSubUnitsForPlatoon(platoonId: string | undefined): SubUnit[] 
   const { subUnits } = useApp();
   if (!platoonId) return [];
   return subUnits.filter((s) => s.platoonId === platoonId);
+}
+
+// Leave requests THIS user can approve/reject. Empty for a pure company
+// commander (no commanded platoon); scoped to the user's commanded platoon
+// for platoon leadership and for the חפ״ק dual-role case.
+export function useApprovableLeaveRequests(): LeaveRequest[] {
+  const { currentUser, leaveRequests, soldiers, groups } = useApp();
+  if (!currentUser) return [];
+  return leaveRequests.filter((req) => canApproveLeaveFor(currentUser, req, soldiers, groups));
 }
 
 export function useVisiblePeriods() {

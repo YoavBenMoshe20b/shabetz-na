@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useApp, useApprovableLeaveRequests } from '../context/AppContext';
 import { canTriggerEmergency, isPlatoonLeadership } from '../utils/permissions';
 
 const base    = 'flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 text-xs transition-colors border-t-2';
@@ -7,9 +7,11 @@ const active  = 'text-mil-sand border-mil-sand';
 const inactive = 'text-mil-ghost border-transparent hover:text-mil-text-inv';
 
 export default function BottomNav() {
-  const { currentRole, hasEmergency, leaveRequests } = useApp();
+  const { currentRole, hasEmergency } = useApp();
   const isManager = isPlatoonLeadership(currentRole);
-  const pendingRequests = leaveRequests.filter((r) => r.status === 'pending').length;
+  // Badge counts only the leave requests this specific user can approve —
+  // never a base-wide count.
+  const pendingRequests = useApprovableLeaveRequests().filter((r) => r.status === 'pending').length;
 
   type NavItem = { to: string; label: string; icon: string; emergency?: boolean; badge?: number };
 

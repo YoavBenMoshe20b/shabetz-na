@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp, useActivePeriod } from '../context/AppContext';
+import { useApp, useActivePeriod, useApprovableLeaveRequests } from '../context/AppContext';
 import Header from '../components/Header';
 import { isPlatoonLeadership } from '../utils/permissions';
 import type { TimeSlot, MissionType, Soldier } from '../types';
@@ -32,7 +32,11 @@ export default function DashboardPage() {
 // ─── Manager Dashboard ────────────────────────────────────────────────────────
 
 function ManagerDashboard() {
-  const { soldiers, leaves, leaveRequests, miluimPeriods, groups, currentUser, approveLeaveRequest, rejectLeaveRequest } = useApp();
+  const { soldiers, leaves, miluimPeriods, groups, currentUser, approveLeaveRequest, rejectLeaveRequest } = useApp();
+  // Scoped: only requests this user is allowed to act on. A pure company
+  // commander sees an empty queue here (per spec); a חפ״ק dual-role user
+  // sees only their commanded platoon's requests.
+  const approvableRequests = useApprovableLeaveRequests();
   const navigate = useNavigate();
   const activePeriod = useActivePeriod();
 
@@ -50,7 +54,7 @@ function ManagerDashboard() {
   const onBase = soldiers.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
   const atHome = onLeaveIds.size;
   const unavailable = soldiers.filter((s) => !s.availability && !onLeaveIds.has(s.id)).length;
-  const pendingRequests = leaveRequests.filter((r) => r.status === 'pending');
+  const pendingRequests = approvableRequests.filter((r) => r.status === 'pending');
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">

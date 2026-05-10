@@ -102,21 +102,44 @@ export function canManagePlatoon(user: MockUser, platoon: Group): boolean {
   return false;
 }
 
-/** Can this user approve / reject the given leave request? */
+/**
+ * Can this user approve / reject the given leave request?
+ *
+ * Only the commander/sergeant of the SAME PLATOON the soldier belongs to.
+ * Company commanders do NOT auto-approve other platoons' leaves — per spec,
+ * each platoon is a closed approval scope. The exception (חפ״ק case) is
+ * handled by the same predicate: a company commander who also leads חפ״ק
+ * has `commandedPlatoonId === g_chapack`, so this returns true for that
+ * platoon and false for siblings.
+ */
 export function canApproveLeaveFor(
   user: MockUser,
   request: LeaveRequest,
   soldiers: Soldier[],
   platoons: Group[],
 ): boolean {
-  if (isCompanyLeadership(user.role)) return true;
-  // Find the soldier's platoon
   const soldier = soldiers.find((s) => s.id === request.soldierId);
   if (!soldier) return false;
   const platoon = platoons.find((g) => g.memberIds.includes(soldier.userId ?? ''));
   if (!platoon) return false;
-  return canManagePlatoon(user, platoon);
+
+  // Primary: explicit command-chain link.
+  if (user.commandedPlatoonId === platoon.id) return true;
+
+  // Legacy fallback for mock users without commandedPlatoonId set yet.
+  // ONLY platoon-level roles fall through here — a pure company commander
+  // (no commandedPlatoonId) deliberately does not.
+  const isPlatoonRole =
+    user.role === 'platoonCommander' ||
+    user.role === 'platoonSergeant'  ||
+    user.role === 'manager';
+  if (isPlatoonRole && platoon.memberIds.includes(user.id)) return true;
+
+  return false;
 }
+
+/** Only company-level leadership can create company-wide missions (assigned to one or more platoons). */
+export const canCreateCompanyMission = (role: UserRole): boolean => isCompanyLeadership(role);
 
 /** Soldier-side guard: does this soldier see this slot at all? Only published. */
 export function canSoldierSeeSchedule(user: MockUser): boolean {
