@@ -233,7 +233,37 @@ export interface SoldierHistory {
   missionTypeCount: Record<string, number>;  // missionTypeName → assignment count
 }
 
-// ─── Groups / מחלקה ──────────────────────────────────────────────────────────
+// ─── Company / פלוגה ─────────────────────────────────────────────────────────
+
+export type MissionRotationStrategy = 'platoon-based' | 'squad-based';
+
+export interface CompanyHomePeriod {
+  id: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+}
+
+export interface CompanySettings {
+  rotationStrategy: MissionRotationStrategy;
+  minSoldiersOnBase: number;
+  specialPlatoonsFollowLeaveRotation: boolean;
+  companyHomePeriods: CompanyHomePeriod[];   // periods when whole company is home
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  unitName?: string;             // gdoud / brigade
+  commanderUserId: string;       // מ״פ / סמ״פ owner
+  deputyCommanderUserId?: string;
+  platoonIds: string[];
+  inviteCode: string;
+  settings: CompanySettings;
+  createdAt: string;
+}
+
+// ─── Groups / מחלקה (platoon — child of Company) ─────────────────────────────
 
 export interface Group {
   id: string;
@@ -245,10 +275,19 @@ export interface Group {
   platoonCommander?: string;
   platoonSergeant?: string;
   scheduleManagers?: string[];
-  availableRoles: string[];       // roles defined by creator (freeform)
-  size?: number;                  // expected platoon headcount
+  availableRoles: string[];
+  size?: number;
   enemyConfusion?: boolean;
   confusionMinutes?: number;
+
+  // Company hierarchy (added in refactor)
+  companyId?: string;                       // parent company
+  platoonCommanderUserId?: string;          // user id of מ״מ
+  platoonSergeantUserId?: string;           // user id of סמל
+  squadCommanderUserIds?: Partial<Record<TeamClass, string>>;  // class → user id of מ״כ
+  isSpecialPlatoon?: boolean;               // different mission rules
+  followsCompanyLeaveRotation?: boolean;    // default: true
+  minSoldiersOnBase?: number;               // platoon-level override
 }
 
 // ─── Miluim period (the overall reserve duty window) ─────────────────────────
@@ -284,5 +323,10 @@ export interface MockUser {
   joinedGroupIds: string[];
   operationalRoles: OperationalRole[];
   teamClass: TeamClass;
-  soldierProfileId?: string;  // links to Soldier record
+  soldierProfileId?: string;          // links to Soldier record
+
+  // Company-hierarchy scope (added in refactor)
+  companyId?: string;                 // company this user belongs to
+  commandedPlatoonId?: string;        // when role = platoonCommander / platoonSergeant
+  commandedSquadClass?: TeamClass;    // when role = squadCommander
 }
