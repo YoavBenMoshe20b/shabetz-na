@@ -55,11 +55,13 @@ export const mockUsers: MockUser[] = [
     companyId: 'co1', commandedPlatoonId: 'g1',
   },
   {
-    id: 'u6', name: 'תומר אזולאי', role: 'squadCommander',
+    // u6 was previously squadCommander. SubUnit leadership is now soldier
+    // metadata (operationalRoles), not a permission role.
+    id: 'u6', name: 'תומר אזולאי', role: 'soldier',
     phone: '0501112222', email: 'tomer@unit.il', username: 'tomer_az',
     password: 'Test@1234', joinedGroupIds: ['g1'],
     operationalRoles: ['מ״כ'], teamClass: 'כיתה 1',
-    companyId: 'co1', commandedPlatoonId: 'g1', commandedSquadClass: 'כיתה 1',
+    companyId: 'co1',
   },
 ];
 
@@ -303,7 +305,6 @@ export const mockGroups: Group[] = [
     companyId: 'co1',
     platoonCommanderUserId: 'u2',
     platoonSergeantUserId: 'u5',
-    squadCommanderUserIds: { 'כיתה 1': 'u6' },
     isSpecialPlatoon: false,
     followsCompanyLeaveRotation: true,
   },

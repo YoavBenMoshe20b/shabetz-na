@@ -12,24 +12,29 @@
 //
 // Command hierarchy (highest first):
 //
-//   companyCommander  >  platoonCommander  ≈  platoonSergeant
-//                                    >  squadCommander  >  soldier
+//   companyCommander  ≈  deputyCompanyCommander
+//                          >  platoonCommander  ≈  platoonSergeant
+//                                                 >  soldier
 //
-// Legacy 'owner' is treated as companyCommander, legacy 'manager' as
-// platoonCommander, so old mock users keep working until migration.
+// Sub-units (formerly "squads/classes") are organisational only — they
+// grant no permission of their own. A soldier who leads a sub-unit is
+// just a soldier with that fact recorded in their operationalRoles.
+//
+// Legacy 'owner' ≈ companyCommander, legacy 'manager' ≈ platoonCommander
+// so old mock users still resolve correctly.
 
-import type { UserRole, MockUser, Group, LeaveRequest, TeamClass, Soldier } from '../types';
+import type { UserRole, MockUser, Group, LeaveRequest, Soldier } from '../types';
 
 // ─── Role hierarchy ──────────────────────────────────────────────────────────
 
 const RANK: Record<UserRole, number> = {
-  companyCommander: 4,
-  owner:            4,   // legacy alias
-  platoonCommander: 3,
-  platoonSergeant:  3,
-  manager:          3,   // legacy alias
-  squadCommander:   2,
-  soldier:          1,
+  companyCommander:       4,
+  deputyCompanyCommander: 4,
+  owner:                  4,   // legacy alias
+  platoonCommander:       3,
+  platoonSergeant:        3,
+  manager:                3,   // legacy alias
+  soldier:                1,
 };
 
 export const roleRank = (role: UserRole): number => RANK[role] ?? 0;
@@ -37,8 +42,10 @@ export const roleRank = (role: UserRole): number => RANK[role] ?? 0;
 export const roleAtLeast = (role: UserRole, min: UserRole): boolean =>
   roleRank(role) >= roleRank(min);
 
+// Any officer = platoon leadership or above. Sub-unit leaders are NOT
+// officers in the permission sense (they're soldiers organisationally).
 export const isOfficer = (role: UserRole): boolean =>
-  roleAtLeast(role, 'squadCommander');
+  roleAtLeast(role, 'platoonSergeant');
 
 export const isPlatoonLeadership = (role: UserRole): boolean =>
   roleAtLeast(role, 'platoonCommander');
@@ -47,13 +54,13 @@ export const isCompanyLeadership = (role: UserRole): boolean =>
   roleAtLeast(role, 'companyCommander');
 
 export const roleLabel = (role: UserRole): string => ({
-  companyCommander: 'מ״פ',
-  platoonCommander: 'מ״מ',
-  platoonSergeant:  'סמל',
-  squadCommander:   'מ״כ',
-  soldier:          'חייל',
-  owner:            'בעלים',
-  manager:          'מנהל',
+  companyCommander:       'מ״פ',
+  deputyCompanyCommander: 'סמ״פ',
+  platoonCommander:       'מ״מ',
+  platoonSergeant:        'סמל',
+  soldier:                'חייל',
+  owner:                  'בעלים',
+  manager:                'מנהל',
 }[role]);
 
 // ─── Role-only helpers (legacy API kept for existing call sites) ─────────────
@@ -95,15 +102,6 @@ export function canManagePlatoon(user: MockUser, platoon: Group): boolean {
   return false;
 }
 
-/** Can this user manage the given squad (class within a platoon)? */
-export function canManageSquad(user: MockUser, platoon: Group, squad: TeamClass): boolean {
-  if (canManagePlatoon(user, platoon)) return true;
-  if (user.role === 'squadCommander') {
-    return user.commandedPlatoonId === platoon.id && user.commandedSquadClass === squad;
-  }
-  return false;
-}
-
 /** Can this user approve / reject the given leave request? */
 export function canApproveLeaveFor(
   user: MockUser,
@@ -125,9 +123,7 @@ export function canSoldierSeeSchedule(user: MockUser): boolean {
   return user.role === 'soldier' || isOfficer(user.role);
 }
 
-/** Manual-override on slots: any officer level (squadCommander or above) for their scope. */
+/** Manual-override on slots: anyone who can manage the platoon. */
 export function canManuallyOverride(user: MockUser, platoon: Group): boolean {
-  return canManagePlatoon(user, platoon) || (
-    user.role === 'squadCommander' && user.commandedPlatoonId === platoon.id
-  );
+  return canManagePlatoon(user, platoon);
 }

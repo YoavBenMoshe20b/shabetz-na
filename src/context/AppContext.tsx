@@ -313,14 +313,14 @@ export function useMyCompany() {
 }
 
 // Platoons the current user has authority over.
-// company commander → all platoons in his company
-// platoon commander/sergeant → his commanded platoon
-// squad commander / soldier → empty (they don't manage platoons)
+// companyCommander / deputyCompanyCommander → all platoons in their company
+// platoonCommander / platoonSergeant         → their commanded platoon
+// soldier                                    → empty (no management scope)
 export function useMyPlatoons(): Group[] {
   const { currentUser, currentRole, groups } = useApp();
   const company = useMyCompany();
   if (!currentUser) return [];
-  if (currentRole === 'companyCommander' || currentRole === 'owner') {
+  if (currentRole === 'companyCommander' || currentRole === 'deputyCompanyCommander' || currentRole === 'owner') {
     if (!company) return [];
     return groups.filter((g) => company.platoonIds.includes(g.id) || g.companyId === company.id);
   }
@@ -328,7 +328,7 @@ export function useMyPlatoons(): Group[] {
     if (currentUser.commandedPlatoonId) {
       return groups.filter((g) => g.id === currentUser.commandedPlatoonId);
     }
-    // Legacy: any platoon the user is a member of
+    // Legacy fallback: any platoon the user is a member of
     return groups.filter((g) => g.memberIds.includes(currentUser.id));
   }
   return [];

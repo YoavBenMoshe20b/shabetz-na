@@ -1,13 +1,15 @@
-// Command-chain roles. Legacy 'owner'/'manager' kept for compat; new code
-// should prefer the explicit company/platoon/squad roles.
+// Command-chain roles. Legacy 'owner'/'manager' kept for compat.
+// SubUnits are organisational, NOT a permission layer — there is no
+// squadCommander role. A soldier who leads a sub-unit is just a soldier
+// with that fact recorded in their operationalRoles metadata.
 export type UserRole =
-  | 'companyCommander'   // מ״פ / סמ״פ — owns the company
-  | 'platoonCommander'   // מ״מ — runs one platoon
-  | 'platoonSergeant'    // סמל — runs one platoon (peer of platoonCommander)
-  | 'squadCommander'     // מ״כ — runs one squad/class within a platoon
-  | 'soldier'            // regular soldier
-  | 'owner'              // [legacy] ≈ companyCommander
-  | 'manager';           // [legacy] ≈ platoonCommander
+  | 'companyCommander'         // מ״פ — owns the company
+  | 'deputyCompanyCommander'   // סמ״פ — full company powers, peer of company commander
+  | 'platoonCommander'         // מ״מ — runs one platoon
+  | 'platoonSergeant'          // סמל — runs one platoon (peer of platoonCommander)
+  | 'soldier'                  // regular soldier
+  | 'owner'                    // [legacy] ≈ companyCommander
+  | 'manager';                 // [legacy] ≈ platoonCommander
 
 export type OperationalRole =
   | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'מ״כ'
@@ -29,8 +31,9 @@ export interface Soldier {
   id: string;
   name: string;
   operationalRoles: OperationalRole[];
-  teamClass: TeamClass;
-  availability: boolean;   // manager-controlled toggle
+  teamClass: TeamClass;          // @deprecated — use subUnitId
+  subUnitId?: string;            // organisational sub-unit (preferred)
+  availability: boolean;         // manager-controlled toggle
   availabilityNotes: AvailabilityNote[];
   currentLoad: number;
   phone?: string;
@@ -45,7 +48,8 @@ export interface Leave {
   id: string;
   scope: LeaveScope;
   soldierIds: string[];
-  teamClass?: TeamClass;
+  teamClass?: TeamClass;          // @deprecated — use subUnitId
+  subUnitId?: string;             // organisational sub-unit (preferred)
   startDate: string;
   startTime: string;
   endDate: string;
@@ -62,7 +66,9 @@ export interface LeaveRequest {
   id: string;
   soldierId: string;
   soldierName: string;
-  soldierTeamClass: TeamClass;
+  soldierTeamClass: TeamClass;     // @deprecated — use soldierSubUnitId
+  soldierSubUnitId?: string;
+  soldierSubUnitName?: string;     // snapshot for display (sub-units can be renamed)
   startDate: string;
   startTime: string;
   endDate: string;
@@ -142,8 +148,9 @@ export interface MissionType {
 
   // Mixing policies
   soldierMixing: SoldierMixingPolicy;
-  classMixing: ClassMixingPolicy;
-  allowedClasses?: TeamClass[];        // when classMixing === 'specific'
+  classMixing: ClassMixingPolicy;        // @deprecated — interpret as subUnitMixing
+  allowedClasses?: TeamClass[];          // @deprecated — use allowedSubUnitIds
+  allowedSubUnitIds?: string[];          // when classMixing === 'specific'
 
   // Equipment
   hasEquipment: boolean;
@@ -272,6 +279,22 @@ export interface Company {
   createdAt: string;
 }
 
+// ─── SubUnits / תת-קבוצות (organisational — NOT a permission role) ──────────
+//
+// A platoon is composed of one or more SubUnits whose names are defined
+// per-platoon by the company commander. Examples:
+//   "מחלקה 1"       → ["כיתה א", "כיתה ב", "כיתה ג"]
+//   "מחלקה מיוחדת"  → ["ספרפס", "משקשק", "חוליה טכנית"]
+// SubUnit grants no permissions on its own. If a soldier leads a sub-unit
+// that fact lives in operationalRoles ('מ״כ' etc.), not in UserRole.
+
+export interface SubUnit {
+  id:         string;
+  name:       string;        // free-text Hebrew/English label
+  platoonId:  string;        // parent Group id
+  soldierIds: string[];      // members of this sub-unit
+}
+
 // ─── Groups / מחלקה (platoon — child of Company) ─────────────────────────────
 
 export interface Group {
@@ -293,7 +316,7 @@ export interface Group {
   companyId?: string;                       // parent company
   platoonCommanderUserId?: string;          // user id of מ״מ
   platoonSergeantUserId?: string;           // user id of סמל
-  squadCommanderUserIds?: Partial<Record<TeamClass, string>>;  // class → user id of מ״כ
+  subUnitIds?: string[];                    // child SubUnit ids
   isSpecialPlatoon?: boolean;               // different mission rules
   followsCompanyLeaveRotation?: boolean;    // default: true
   minSoldiersOnBase?: number;               // platoon-level override
@@ -337,5 +360,5 @@ export interface MockUser {
   // Company-hierarchy scope (added in refactor)
   companyId?: string;                 // company this user belongs to
   commandedPlatoonId?: string;        // when role = platoonCommander / platoonSergeant
-  commandedSquadClass?: TeamClass;    // when role = squadCommander
+  subUnitId?: string;                 // organisational sub-unit (preferred over teamClass)
 }
