@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import RoleBadge from './RoleBadge';
+import { roleLabel } from '../utils/permissions';
 import type { UserRole } from '../types';
 
 export default function Header({ title }: { title: string }) {
@@ -45,7 +46,7 @@ export default function Header({ title }: { title: string }) {
                       currentRole === r ? 'text-mil-olive-light font-bold' : 'text-mil-text'
                     }`}
                   >
-                    {{ owner: 'בעל קבוצה', manager: 'מנהל', soldier: 'חייל רגיל' }[r]}
+                    {roleLabel(r)}
                   </button>
                 ))}
                 <hr className="my-2 border-mil-border" />

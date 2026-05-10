@@ -8,6 +8,7 @@ import {
   validateUsername,
 } from '../services/authService';
 import { mockUsers } from '../data/mockData';
+import { roleLabel } from '../utils/permissions';
 
 type Mode = 'login' | 'register';
 
@@ -278,9 +279,7 @@ export default function LoginPage() {
                 <span className="text-mil-text">{u.name}</span>
                 <span className="font-mono text-mil-ghost">{u.username}</span>
                 <span className="text-mil-olive-dim">
-                  {u.joinedGroupIds.length === 0
-                    ? 'חדש'
-                    : { owner: 'בעלים', manager: 'מנהל', soldier: 'חייל' }[u.role]}
+                  {u.joinedGroupIds.length === 0 ? 'חדש' : roleLabel(u.role)}
                 </span>
               </button>
             ))}

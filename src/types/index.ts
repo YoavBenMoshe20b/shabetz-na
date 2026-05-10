@@ -1,4 +1,13 @@
-export type UserRole = 'owner' | 'manager' | 'soldier';
+// Command-chain roles. Legacy 'owner'/'manager' kept for compat; new code
+// should prefer the explicit company/platoon/squad roles.
+export type UserRole =
+  | 'companyCommander'   // מ״פ / סמ״פ — owns the company
+  | 'platoonCommander'   // מ״מ — runs one platoon
+  | 'platoonSergeant'    // סמל — runs one platoon (peer of platoonCommander)
+  | 'squadCommander'     // מ״כ — runs one squad/class within a platoon
+  | 'soldier'            // regular soldier
+  | 'owner'              // [legacy] ≈ companyCommander
+  | 'manager';           // [legacy] ≈ platoonCommander
 
 export type OperationalRole =
   | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל'
