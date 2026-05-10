@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp, useVisiblePeriods } from '../context/AppContext';
 import Header from '../components/Header';
-import { canPublishSchedule, canRecalculate, canViewManagerNotes } from '../utils/permissions';
+import { canPublishSchedule, canRecalculate, canViewManagerNotes, isPlatoonLeadership } from '../utils/permissions';
 import { generateSchedule, generateTimeSlots, regenerateSlot } from '../utils/scheduleAlgo';
 import type {
   MissionCategory, OperationalRole, MissionType, SchedulePeriod, TimeSlot,
@@ -63,7 +63,7 @@ export default function SchedulePage() {
     soldierHistory, lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
   } = useApp();
   const visiblePeriods = useVisiblePeriods();
-  const isManager = currentRole === 'owner' || currentRole === 'manager';
+  const isManager = isPlatoonLeadership(currentRole);
   const myProfile = soldiers.find((s) => s.id === currentUser?.soldierProfileId);
 
   const [selectedId, setSelectedId] = useState(visiblePeriods[0]?.id ?? '');

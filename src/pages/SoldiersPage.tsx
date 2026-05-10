@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import Header from '../components/Header';
+import { isPlatoonLeadership } from '../utils/permissions';
 import type { TeamClass } from '../types';
 
 const TEAMS: Array<TeamClass | 'הכל'> = ['הכל', 'כיתה 1', 'כיתה 2', 'כיתה 3', 'מפקדה', 'אחר'];
@@ -16,7 +17,7 @@ export default function SoldiersPage() {
     return teamOk && availOk;
   });
 
-  const isManager = currentRole === 'owner' || currentRole === 'manager';
+  const isManager = isPlatoonLeadership(currentRole);
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">

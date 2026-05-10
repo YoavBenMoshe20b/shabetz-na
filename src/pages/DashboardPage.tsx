@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, useActivePeriod } from '../context/AppContext';
 import Header from '../components/Header';
+import { isPlatoonLeadership } from '../utils/permissions';
 import type { TimeSlot, MissionType, Soldier } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ const formatRelative = (mins: number): string => {
 
 export default function DashboardPage() {
   const { currentRole } = useApp();
-  const isManager = currentRole === 'owner' || currentRole === 'manager';
+  const isManager = isPlatoonLeadership(currentRole);
   return isManager ? <ManagerDashboard /> : <SoldierDashboard />;
 }
 
