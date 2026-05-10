@@ -4,7 +4,20 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Segoe UI', 'Arial', 'sans-serif'],
+        sans: ['Heebo', 'Segoe UI', 'Arial', 'sans-serif'],
+      },
+      fontSize: {
+        // Tighter scale tuned for Hebrew rendering + operational UIs
+        'xxs':    ['0.6875rem', { lineHeight: '1rem' }],         // 11/16 — metadata
+        'tiny':   ['0.75rem',   { lineHeight: '1.1rem' }],        // 12/18 — labels
+        'metric': ['2.25rem',   { lineHeight: '2.5rem', letterSpacing: '-0.02em' }], // 36 — big numbers
+        'hero':   ['1.75rem',   { lineHeight: '2rem',   letterSpacing: '-0.01em' }], // 28 — hero titles
+      },
+      boxShadow: {
+        // Soft warm shadows (warm olive tint, not gray)
+        'card':       '0 1px 2px 0 rgba(74, 112, 40, 0.04)',
+        'card-hover': '0 2px 8px -1px rgba(74, 112, 40, 0.08)',
+        'hero':       '0 4px 16px -4px rgba(74, 112, 40, 0.12), 0 2px 4px -1px rgba(74, 112, 40, 0.06)',
       },
       colors: {
         mil: {

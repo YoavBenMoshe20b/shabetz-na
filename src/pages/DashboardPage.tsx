@@ -153,7 +153,7 @@ function CompanyCommanderDashboard() {
         {/* ── השעות הקרובות בפלוגה ───────────────── */}
         <Section label="השעות הקרובות בפלוגה">
           {events.length === 0 ? (
-            <Card variant="soft">
+            <Card variant="muted">
               <div className="px-5 py-6 text-center">
                 <p className="text-sm font-bold text-mil-olive-dim">הכל רגוע</p>
                 <p className="text-xs text-mil-muted mt-1">אין שינויים מתוכננים ב-12 השעות הקרובות</p>

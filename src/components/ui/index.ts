@@ -7,3 +7,8 @@ export { Button }                                from './Button';
 export { StatusPill, StatusDot }                 from './StatusPill';
 export { Section, PageMain, CollapsibleSection } from './Section';
 export { EmergencyBanner }                       from './EmergencyBanner';
+export {
+  PageTitle, HeroTitle, SectionLabel, CardTitle,
+  Body, Muted, Hint, Metric,
+} from './Text';
+export { layout } from './tokens';

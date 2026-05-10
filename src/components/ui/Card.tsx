@@ -1,22 +1,23 @@
-// Card primitive — single source of truth for the surface containers
-// used across operational screens. New code should reach for this
-// instead of writing `bg-mil-card border border-mil-border ...` inline.
+// Card primitive — single source of truth for the surface containers.
+// Variants are arranged by VISUAL WEIGHT (calm → heavy) so the eye
+// scans the screen in the intended order:
+//
+//   muted     calmest, no border, just a soft tint — purely informational
+//   default   the everyday card — white, 1 px subtle border
+//   hero      the one primary card per screen — olive 2 px border + soft shadow
+//   highlight needs attention (warning state) — warm sand tint + border
+//   critical  live operational issue — alert tint, prominent border, shadow
 
 import type { ReactNode } from 'react';
 
-type CardVariant =
-  | 'default'    // white, light border — the everyday card
-  | 'soft'       // olive-tinted background, subtle border — calm/informational
-  | 'hero'       // olive 2-px border + white — the hero card on a screen
-  | 'highlight'  // sand-tinted, warning ambience — attention-needed cards
-  | 'critical';  // red-tinted — only for live operational issues
+type CardVariant = 'muted' | 'default' | 'hero' | 'highlight' | 'critical';
 
-const VARIANT_CLASSES: Record<CardVariant, string> = {
-  default:   'bg-mil-card border border-mil-border',
-  soft:      'bg-mil-olive-bg border border-mil-olive/20',
-  hero:      'bg-mil-card border-2 border-mil-olive/40',
-  highlight: 'bg-mil-warn-bg border border-mil-warn-border',
-  critical:  'bg-mil-alert-bg border-2 border-mil-alert/60',
+const VARIANT: Record<CardVariant, string> = {
+  muted:     'bg-mil-card-warm border border-transparent',
+  default:   'bg-mil-card border border-mil-border shadow-card',
+  hero:      'bg-mil-card border-2 border-mil-olive/40 shadow-hero',
+  highlight: 'bg-mil-warn-bg border border-mil-warn-border shadow-card',
+  critical:  'bg-mil-alert-bg border-2 border-mil-alert/50 shadow-card',
 };
 
 interface CardProps {
@@ -27,13 +28,16 @@ interface CardProps {
 }
 
 export function Card({ children, variant = 'default', className = '', onClick }: CardProps) {
-  const Tag = onClick ? 'button' : 'div';
-  return (
-    <Tag
-      onClick={onClick}
-      className={`rounded-2xl overflow-hidden ${VARIANT_CLASSES[variant]} ${onClick ? 'text-right hover:border-mil-olive/50 transition-colors cursor-pointer' : ''} ${className}`}
-    >
-      {children}
-    </Tag>
-  );
+  const base = `rounded-2xl overflow-hidden ${VARIANT[variant]}`;
+  const interactive = onClick
+    ? 'text-right hover:shadow-card-hover hover:border-mil-olive/40 active:scale-[0.99] transition-all cursor-pointer'
+    : '';
+  if (onClick) {
+    return (
+      <button onClick={onClick} className={`${base} ${interactive} w-full ${className}`}>
+        {children}
+      </button>
+    );
+  }
+  return <div className={`${base} ${className}`}>{children}</div>;
 }

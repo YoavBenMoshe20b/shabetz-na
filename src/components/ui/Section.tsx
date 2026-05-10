@@ -27,9 +27,10 @@ export function Section({ label, action, children, className = '' }: SectionProp
 
 // Page-level main container. Centralised mobile-first padding +
 // bottom-nav-clearing space + spacing rhythm between sections.
+// Tokens come from ./tokens.ts so adjustments happen in one place.
 export function PageMain({ children }: { children: ReactNode }) {
   return (
-    <main className="px-4 py-4 pb-28 max-w-xl mx-auto space-y-5">
+    <main className="px-5 py-5 pb-32 max-w-xl mx-auto space-y-6">
       {children}
     </main>
   );
