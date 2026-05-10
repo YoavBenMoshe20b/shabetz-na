@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp, useActivePeriod, useApprovableLeaveRequests } from '../context/AppContext';
+import { useApp, useActivePeriod, useApprovableLeaveRequests, useAlertsForCompany } from '../context/AppContext';
 import Header from '../components/Header';
-import { isPlatoonLeadership } from '../utils/permissions';
+import { isPlatoonLeadership, isCompanyLeadership } from '../utils/permissions';
+import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
 import type { TimeSlot, MissionType, Soldier } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -25,8 +26,10 @@ const formatRelative = (mins: number): string => {
 
 export default function DashboardPage() {
   const { currentRole } = useApp();
-  const isManager = isPlatoonLeadership(currentRole);
-  return isManager ? <ManagerDashboard /> : <SoldierDashboard />;
+  // Three Home variants — same shell, different operational intent.
+  if (isCompanyLeadership(currentRole))   return <ManagerDashboard />;          // placeholder until next slice
+  if (isPlatoonLeadership(currentRole))   return <PlatoonCommanderDashboard />; // timeline-led
+  return <SoldierDashboard />;                                                  // hero-led personal
 }
 
 // ─── Manager Dashboard ────────────────────────────────────────────────────────
@@ -171,6 +174,172 @@ function ManagerDashboard() {
         )}
 
       </main>
+    </div>
+  );
+}
+
+// ─── Platoon Commander Dashboard (timeline-led) ──────────────────────────────
+// Reads top-to-bottom as: now → next 12 hours → waiting work → primary action.
+// No alerts feed. Override alerts that demand immediate attention surface as
+// timeline cards; everything else lives in the company commander view.
+
+function PlatoonCommanderDashboard() {
+  const navigate = useNavigate();
+  const { soldiers, leaves, groups, currentUser } = useApp();
+  const activePeriod = useActivePeriod();
+  const approvableRequests = useApprovableLeaveRequests();
+  const myAlerts = useAlertsForCompany();           // platoon-tier sees only their own platoon's alerts
+
+  const myPlatoon = groups.find((g) => g.id === currentUser?.commandedPlatoonId)
+    ?? groups.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
+
+  // "Now" stats strip
+  const today = new Date().toISOString().slice(0, 10);
+  const onLeaveIds = useMemo(() => {
+    const ids = new Set<string>();
+    leaves.forEach((lv) => {
+      if (today < lv.startDate || today > lv.endDate) return;
+      if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
+      else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => ids.add(s.id));
+      else soldiers.forEach((s) => ids.add(s.id));
+    });
+    return ids;
+  }, [leaves, soldiers, today]);
+  const onBase     = soldiers.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
+  const atHome     = onLeaveIds.size;
+  const unavail    = soldiers.filter((s) => !s.availability && !onLeaveIds.has(s.id)).length;
+
+  // Currently running missions (compact list)
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const activeMissions = useMemo(() => {
+    if (!activePeriod) return [];
+    return activePeriod.missionTypes.map((mt) => {
+      const todayDate = activePeriod.missionTypes[0]?.timeSlots[0]?.date ?? today;
+      const slots = mt.timeSlots.filter((ts) => ts.date === todayDate);
+      const active = slots.find((ts) => {
+        const s = timeToMins(ts.startTime);
+        let e   = timeToMins(ts.endTime); if (e <= s) e += 24 * 60;
+        const n = nowMins < s && (s - nowMins) > 12 * 60 ? nowMins + 24 * 60 : nowMins;
+        return n >= s && n < e;
+      });
+      return active ? { mt, ts: active } : null;
+    }).filter(Boolean) as Array<{ mt: MissionType; ts: TimeSlot }>;
+  }, [activePeriod, today, nowMins]);
+
+  // The timeline itself
+  const pendingApprovals = approvableRequests.filter((r) => r.status === 'pending').length;
+  const events = useMemo(() => buildPlatoonTimeline({
+    now,
+    period: activePeriod ?? null,
+    leaves,
+    soldiers,
+    pendingApprovals,
+    recentAlerts: myAlerts,
+    horizonHours: 12,
+  }), [now, activePeriod, leaves, soldiers, pendingApprovals, myAlerts]);
+
+  return (
+    <div className="min-h-screen bg-mil-bg" dir="rtl">
+      <Header title={myPlatoon?.name ?? 'מחלקה'} />
+      <main className="px-4 py-4 pb-28 max-w-xl mx-auto space-y-5">
+
+        {/* ── עכשיו ──────────────────────────────────────── */}
+        <section>
+          <p className="text-xs font-bold tracking-widest text-mil-muted uppercase mb-2 px-1">עכשיו</p>
+          <div className="bg-mil-card border border-mil-border rounded-2xl px-4 py-3">
+            <p className="text-sm text-mil-text">
+              <span className="font-bold text-mil-olive">{onBase}</span> בבסיס
+              <span className="text-mil-ghost mx-2">·</span>
+              <span className="font-bold text-mil-sand">{atHome}</span> בבית
+              <span className="text-mil-ghost mx-2">·</span>
+              <span className="font-bold text-mil-ghost">{unavail}</span> לא זמין
+            </p>
+            {activeMissions.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-mil-border space-y-1.5">
+                {activeMissions.map(({ mt, ts }) => {
+                  const names = ts.assignedSoldierIds
+                    .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
+                    .filter(Boolean) as string[];
+                  return (
+                    <div key={ts.id} className="flex items-center gap-3 text-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" />
+                      <span className="font-medium text-mil-text">{mt.name}</span>
+                      <span className="text-mil-olive truncate text-xs mr-auto">
+                        {names.length > 0 ? names.join(' · ') : <span className="text-mil-muted">—</span>}
+                      </span>
+                      <span className="text-xs text-mil-ghost font-mono">{ts.startTime}–{ts.endTime}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── השעות הקרובות ──────────────────────────────── */}
+        <section>
+          <p className="text-xs font-bold tracking-widest text-mil-muted uppercase mb-2 px-1">השעות הקרובות</p>
+          {events.length === 0 ? (
+            <CalmCard />
+          ) : (
+            <div className="space-y-2">
+              {events.map((ev) => <TimelineCard key={ev.id} event={ev} onCta={() => ev.ctaHref && navigate(ev.ctaHref)} />)}
+            </div>
+          )}
+        </section>
+
+        {/* ── Single primary action ─────────────────────── */}
+        <button
+          onClick={() => navigate('/schedule')}
+          className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-4 rounded-2xl text-base transition-colors flex items-center justify-center gap-2"
+        >
+          <span className="text-lg">▦</span>
+          <span>הכנס משימות לשיבוץ</span>
+        </button>
+
+      </main>
+    </div>
+  );
+}
+
+// ─── Timeline rendering ─────────────────────────────────────────────────────
+
+function TimelineCard({ event, onCta }: { event: OpsEvent; onCta: () => void }) {
+  const edge =
+    event.severity === 'alert' ? 'bg-mil-alert' :
+    event.severity === 'warn'  ? 'bg-mil-warn'  :
+    'bg-mil-olive';
+  const labelTone =
+    event.severity === 'alert' ? 'text-mil-alert' :
+    event.severity === 'warn'  ? 'text-mil-warn'  :
+    'text-mil-muted';
+
+  return (
+    <div className="bg-mil-card border border-mil-border rounded-xl flex overflow-hidden">
+      <div className={`w-1 ${edge} flex-shrink-0`} />
+      <div className="flex-1 px-4 py-3">
+        <p className={`text-xs font-bold tracking-wide ${labelTone}`}>{event.whenLabel}</p>
+        <p className="text-sm font-medium text-mil-text mt-0.5 leading-snug">{event.title}</p>
+        {event.detail && <p className="text-xs text-mil-muted mt-1 leading-snug">{event.detail}</p>}
+        {event.ctaLabel && (
+          <button
+            onClick={onCta}
+            className="mt-2 text-xs font-bold text-mil-olive hover:text-mil-olive-dim border border-mil-olive/30 rounded-lg px-3 py-1 transition-colors"
+          >
+            {event.ctaLabel} ←
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CalmCard() {
+  return (
+    <div className="bg-mil-olive-bg border border-mil-olive/20 rounded-2xl px-5 py-6 text-center">
+      <p className="text-sm font-bold text-mil-olive-dim">הכל רגוע</p>
+      <p className="text-xs text-mil-muted mt-1">אין שינויים מתוכננים ב-12 השעות הקרובות</p>
     </div>
   );
 }
