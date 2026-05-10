@@ -33,8 +33,7 @@ import { EmergencyBanner } from './components/ui';
 import LoginPage          from './pages/LoginPage';
 import StartPage          from './pages/StartPage';
 import CreateCompanyPage  from './pages/CreateCompanyPage';
-// JoinCompanyPage lands next commit — keep the route placeholder for now
-import StartPage_join     from './pages/StartPage';   // temporary fallback
+import JoinCompanyPage    from './pages/JoinCompanyPage';
 import DashboardPage      from './pages/DashboardPage';   // renders the Home variants
 import SoldiersPage       from './pages/SoldiersPage';
 import SchedulePage       from './pages/SchedulePage';
@@ -78,7 +77,7 @@ function AppRoutes() {
 
         {/* ── Onboarding (authed but no group) ─────── */}
         <Route path="/start"   element={currentUser ? <StartPage />          : auth} />
-        <Route path="/join"    element={currentUser ? <StartPage_join />     : auth} />
+        <Route path="/join"    element={currentUser ? <JoinCompanyPage />    : auth} />
         <Route path="/create"  element={currentUser ? <CreateCompanyPage />  : auth} />
 
         {/* ── Authed + has a group ─────────────────── */}

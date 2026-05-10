@@ -1,5 +1,16 @@
+// First screen after auth for users with no company yet.
+//
+// Two paths — and ONLY two:
+//   1. Join an existing company (the vast majority of users)
+//   2. Create a new company (company commander / deputy only)
+//
+// There is no generic "create a platoon" choice anywhere in the app.
+// Platoons are organisational structure inside a company, configured
+// by the company commander during setup.
+
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { Card, PageMain, PageTitle, CardTitle, Body, Muted } from '../components/ui';
 
 export default function StartPage() {
   const { currentUser } = useApp();
@@ -7,54 +18,50 @@ export default function StartPage() {
   const firstName = currentUser?.name?.split(' ')[0] ?? '';
 
   return (
-    <div className="min-h-screen bg-mil-bg flex flex-col items-center justify-center px-5" dir="rtl">
-      <div className="w-full max-w-sm space-y-6">
-
-        {/* Logo */}
-        <div className="text-center mb-2">
-          <h1 className="text-4xl font-bold text-mil-olive tracking-widest">שבץ־נא</h1>
-          <p className="text-mil-muted text-sm mt-1">
-            {firstName ? `שלום, ${firstName}!` : 'ברוך הבא'}
-          </p>
+    <div className="min-h-screen bg-mil-bg flex flex-col" dir="rtl">
+      <PageMain>
+        <div className="text-center pt-8 pb-4">
+          <h1 className="text-4xl font-extrabold text-mil-olive tracking-widest">שבץ־נא</h1>
+          {firstName && <Muted className="mt-3">שלום, {firstName}</Muted>}
         </div>
 
-        <p className="text-center text-mil-text font-medium">מה תרצה לעשות?</p>
+        <div>
+          <PageTitle>איך תרצה/י להתחיל?</PageTitle>
+          <Muted className="mt-2">המערכת בנויה סביב פלוגה — את/ה תצטרפ/י לפלוגה קיימת, או תיצור/י אחת חדשה כמ״פ.</Muted>
+        </div>
 
-        {/* Join existing platoon */}
-        <button
-          onClick={() => navigate('/join')}
-          className="w-full bg-mil-card border-2 border-mil-border hover:border-mil-olive rounded-2xl p-6 text-right transition-all group"
-        >
-          <div className="text-4xl mb-3 text-mil-olive">◎</div>
-          <h2 className="text-xl font-bold text-mil-text mb-1">הצטרף למחלקה שלך</h2>
-          <p className="text-sm text-mil-muted leading-relaxed">הזן קוד הצטרפות שקיבלת מהמ״מ שלך, או סרוק QR</p>
-          <div className="mt-4 flex items-center gap-2 text-mil-olive text-sm font-medium group-hover:gap-3 transition-all">
-            <span>הצטרפות</span>
-            <span>←</span>
+        {/* JOIN — primary path, top of the list */}
+        <Card variant="hero" onClick={() => navigate('/join')}>
+          <div className="px-5 py-5 text-right">
+            <div className="text-3xl text-mil-olive mb-3">◎</div>
+            <CardTitle className="text-lg">הצטרף לפלוגה קיימת</CardTitle>
+            <Body className="text-mil-muted mt-1.5 leading-relaxed">
+              קיבלת קוד מהמ״פ או מהמ״מ שלך? הצטרף כאן — תבחר/י את המחלקה ואת התפקיד שלך.
+            </Body>
+            <div className="mt-3 inline-flex items-center gap-2 text-mil-olive font-bold text-sm">
+              <span>הצטרפות</span><span>←</span>
+            </div>
           </div>
-        </button>
+        </Card>
 
-        {/* Create new platoon */}
-        <button
-          onClick={() => navigate('/create')}
-          className="w-full bg-mil-olive-bg border-2 border-mil-olive/30 hover:border-mil-olive rounded-2xl p-6 text-right transition-all group"
-        >
-          <div className="text-4xl mb-3 text-mil-olive">▦</div>
-          <h2 className="text-xl font-bold text-mil-text mb-1">צור סידור למחלקה</h2>
-          <p className="text-sm text-mil-muted leading-relaxed">למ״מ ולסמל — הגדר מחלקה חדשה, הכנס חיילים ובנה סידור</p>
-          <div className="mt-4 flex items-center gap-2 text-mil-olive text-sm font-medium group-hover:gap-3 transition-all">
-            <span>יצירה</span>
-            <span>←</span>
+        {/* CREATE — secondary, with explicit gate language */}
+        <Card variant="muted" onClick={() => navigate('/create')}>
+          <div className="px-5 py-5 text-right">
+            <div className="text-3xl text-mil-olive-dim mb-3">▦</div>
+            <CardTitle className="text-lg">צור פלוגה חדשה</CardTitle>
+            <Body className="text-mil-muted mt-1.5 leading-relaxed">
+              למ״פ או סמ״פ בלבד. תגדיר/י את המחלקות, התת-קבוצות וכללי הפעולה.
+            </Body>
+            <div className="mt-3 inline-flex items-center gap-2 text-mil-olive-dim font-bold text-sm">
+              <span>הקמת פלוגה</span><span>←</span>
+            </div>
           </div>
-        </button>
+        </Card>
 
-        <button
-          onClick={() => { /* will be handled via route guard */ }}
-          className="w-full text-center text-xs text-mil-ghost py-2"
-        >
-          מחובר בתור: {currentUser?.name}
-        </button>
-      </div>
+        {currentUser && (
+          <Muted className="text-center pt-2">מחובר/ת בתור: {currentUser.name}</Muted>
+        )}
+      </PageMain>
     </div>
   );
 }
