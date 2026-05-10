@@ -1,3 +1,29 @@
+// Final operational route map. Anything reachable in <2 taps from Home
+// is NOT a route — it's a card or a modal. The shape:
+//
+//   PUBLIC
+//     /login        identity tabs
+//
+//   ONBOARDING (authed but no group)
+//     /start        join existing / create new
+//     /join         multi-step join wizard       (was /join-platoon)
+//     /create       multi-step create wizard      (was /create-platoon)
+//
+//   AUTHED + group
+//     /home         role-adaptive operational Home   ← was /dashboard
+//     /schedule     period hub + mission editor + slot override
+//     /soldiers     roster (filterable)
+//     /profile      identity + leave-request submit (soldier)
+//
+//   MANAGER ONLY
+//     /leaves       full leave queue (also reached from Home timeline card)
+//
+// Removed from the route map: /report, /groups, /audit-log, /emergency,
+// /create-mission, /onboarding, /offline, legacy /join. Their content
+// either lives in /home now (report → company stats; emergency → banner;
+// audit-log → /home alerts feed) or is reached via wizard inside another
+// flow (create-mission → SchedulePage modal). Old URLs redirect to /home.
+
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppProvider, useApp, useOperationalEmergency } from './context/AppContext';
 import BottomNav from './components/BottomNav';
@@ -8,22 +34,15 @@ import LoginPage          from './pages/LoginPage';
 import StartPage          from './pages/StartPage';
 import JoinPlatoonPage    from './pages/JoinPlatoonPage';
 import CreatePlatoonPage  from './pages/CreatePlatoonPage';
-import DashboardPage      from './pages/DashboardPage';
+import DashboardPage      from './pages/DashboardPage';   // renders the Home variants
 import SoldiersPage       from './pages/SoldiersPage';
-import CreateMissionPage  from './pages/CreateMissionPage';
 import SchedulePage       from './pages/SchedulePage';
-import EmergencyPage      from './pages/EmergencyPage';
-import AuditLogPage       from './pages/AuditLogPage';
 import LeavesPage         from './pages/LeavesPage';
-import MyGroupsPage       from './pages/MyGroupsPage';
 import ProfilePage        from './pages/ProfilePage';
-import JoinGroupPage      from './pages/JoinGroupPage';
-import OfflinePage        from './pages/OfflinePage';
-import OnboardingPage     from './pages/OnboardingPage';
-import ReportPage         from './pages/ReportPage';
 
-// Routes where the bottom nav is hidden (full-screen onboarding flows)
-const FULL_SCREEN_PATHS = ['/login', '/start', '/join-platoon', '/create-platoon', '/onboarding', '/join'];
+// Full-screen flows hide the bottom nav AND the emergency banner so
+// new-user wizards aren't competing with operational signals.
+const FULL_SCREEN_PATHS = ['/login', '/start', '/join', '/create'];
 
 function AppRoutes() {
   const { currentUser, groups } = useApp();
@@ -31,65 +50,64 @@ function AppRoutes() {
   const location = useLocation();
   const emergency = useOperationalEmergency();
   const auth = <Navigate to="/login" replace />;
-  const hasGroup = !!currentUser && groups.some((g) => g.memberIds.includes(currentUser.id));
-  const showNav = currentUser && !FULL_SCREEN_PATHS.includes(location.pathname);
-  // Banner is hidden on full-screen onboarding flows so the emergency
-  // signal doesn't compete with new-user wizards.
-  const showEmergency = emergency && currentUser && !FULL_SCREEN_PATHS.includes(location.pathname);
+
+  const hasGroup       = !!currentUser && groups.some((g) => g.memberIds.includes(currentUser.id));
+  const isFullScreen   = FULL_SCREEN_PATHS.includes(location.pathname);
+  const showNav        = currentUser && !isFullScreen;
+  const showEmergency  = !!emergency && !!currentUser && !isFullScreen;
 
   return (
     <>
       {showEmergency && (
         <EmergencyBanner
-          message={emergency.message}
-          detail={emergency.detail}
-          actionLabel={emergency.actionLabel}
-          onAction={emergency.actionHref ? () => navigate(emergency.actionHref!) : undefined}
+          message={emergency!.message}
+          detail={emergency!.detail}
+          actionLabel={emergency!.actionLabel}
+          onAction={emergency!.actionHref ? () => navigate(emergency!.actionHref!) : undefined}
         />
       )}
+
       <Routes>
-        {/* Public */}
+        {/* ── Public ────────────────────────────────── */}
         <Route path="/login" element={
           currentUser
-            ? <Navigate to={hasGroup ? '/dashboard' : '/start'} replace />
+            ? <Navigate to={hasGroup ? '/home' : '/start'} replace />
             : <LoginPage />
         } />
-        <Route path="/join" element={<JoinGroupPage />} />
 
-        {/* Onboarding choice — requires login but no group */}
-        <Route path="/start"           element={currentUser ? <StartPage />          : auth} />
-        <Route path="/join-platoon"    element={currentUser ? <JoinPlatoonPage />    : auth} />
-        <Route path="/create-platoon"  element={currentUser ? <CreatePlatoonPage />  : auth} />
-        <Route path="/onboarding"      element={<OnboardingPage />} />
+        {/* ── Onboarding (authed but no group) ─────── */}
+        <Route path="/start"   element={currentUser ? <StartPage />          : auth} />
+        <Route path="/join"    element={currentUser ? <JoinPlatoonPage />    : auth} />
+        <Route path="/create"  element={currentUser ? <CreatePlatoonPage />  : auth} />
 
-        {/* Authenticated — require both login AND a group */}
-        <Route path="/dashboard" element={
+        {/* ── Authed + has a group ─────────────────── */}
+        <Route path="/home" element={
           !currentUser ? auth : !hasGroup ? <Navigate to="/start" replace /> : <DashboardPage />
         } />
-        <Route path="/soldiers"  element={currentUser ? <SoldiersPage />  : auth} />
-        <Route path="/schedule"  element={currentUser ? <SchedulePage />  : auth} />
-        <Route path="/groups"    element={currentUser ? <MyGroupsPage />  : auth} />
-        <Route path="/profile"   element={currentUser ? <ProfilePage />   : auth} />
-        <Route path="/offline"   element={currentUser ? <OfflinePage />   : auth} />
+        <Route path="/schedule" element={currentUser ? <SchedulePage /> : auth} />
+        <Route path="/soldiers" element={currentUser ? <SoldiersPage /> : auth} />
+        <Route path="/profile"  element={currentUser ? <ProfilePage />  : auth} />
 
-        {/* Manager / Owner only */}
-        <Route path="/create-mission" element={
-          <ProtectedRoute minRole="platoonCommander"><CreateMissionPage /></ProtectedRoute>
-        } />
-        <Route path="/report" element={
-          <ProtectedRoute minRole="platoonCommander"><ReportPage /></ProtectedRoute>
-        } />
+        {/* ── Manager only ─────────────────────────── */}
         <Route path="/leaves" element={
           <ProtectedRoute minRole="platoonCommander"><LeavesPage /></ProtectedRoute>
         } />
-        <Route path="/emergency" element={
-          <ProtectedRoute minRole="platoonCommander"><EmergencyPage /></ProtectedRoute>
-        } />
-        <Route path="/audit-log" element={
-          <ProtectedRoute minRole="platoonCommander"><AuditLogPage /></ProtectedRoute>
-        } />
 
-        <Route path="*" element={<Navigate to={currentUser ? (hasGroup ? '/dashboard' : '/start') : '/login'} replace />} />
+        {/* ── Legacy redirects (so old links don't 404) ── */}
+        <Route path="/dashboard"      element={<Navigate to="/home"  replace />} />
+        <Route path="/join-platoon"   element={<Navigate to="/join"  replace />} />
+        <Route path="/create-platoon" element={<Navigate to="/create" replace />} />
+        <Route path="/report"         element={<Navigate to="/home"  replace />} />
+        <Route path="/groups"         element={<Navigate to="/home"  replace />} />
+        <Route path="/audit-log"      element={<Navigate to="/home"  replace />} />
+        <Route path="/emergency"      element={<Navigate to="/home"  replace />} />
+        <Route path="/create-mission" element={<Navigate to="/schedule" replace />} />
+        <Route path="/onboarding"     element={<Navigate to="/start" replace />} />
+        <Route path="/offline"        element={<Navigate to="/home"  replace />} />
+
+        <Route path="*" element={
+          <Navigate to={currentUser ? (hasGroup ? '/home' : '/start') : '/login'} replace />
+        } />
       </Routes>
 
       {showNav && <BottomNav />}

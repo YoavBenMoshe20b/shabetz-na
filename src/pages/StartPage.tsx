@@ -22,7 +22,7 @@ export default function StartPage() {
 
         {/* Join existing platoon */}
         <button
-          onClick={() => navigate('/join-platoon')}
+          onClick={() => navigate('/join')}
           className="w-full bg-mil-card border-2 border-mil-border hover:border-mil-olive rounded-2xl p-6 text-right transition-all group"
         >
           <div className="text-4xl mb-3 text-mil-olive">◎</div>
@@ -36,7 +36,7 @@ export default function StartPage() {
 
         {/* Create new platoon */}
         <button
-          onClick={() => navigate('/create-platoon')}
+          onClick={() => navigate('/create')}
           className="w-full bg-mil-olive-bg border-2 border-mil-olive/30 hover:border-mil-olive rounded-2xl p-6 text-right transition-all group"
         >
           <div className="text-4xl mb-3 text-mil-olive">▦</div>

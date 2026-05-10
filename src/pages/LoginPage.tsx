@@ -67,7 +67,7 @@ export default function LoginPage() {
     await new Promise((r) => setTimeout(r, 350));
     const user = login(id.trim(), pw);
     setLoading(false);
-    if (user) navigate(user.joinedGroupIds.length > 0 ? '/dashboard' : '/start');
+    if (user) navigate(user.joinedGroupIds.length > 0 ? '/home' : '/start');
     else setError('שם משתמש / אימייל או סיסמה שגויים');
   };
 

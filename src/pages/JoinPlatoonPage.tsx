@@ -266,7 +266,7 @@ export default function JoinPlatoonPage() {
               </div>
             )}
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/home')}
               className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-4 rounded-xl text-base transition-colors"
             >
               כניסה למחלקה →
