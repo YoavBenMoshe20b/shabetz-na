@@ -60,19 +60,19 @@ function AppRoutes() {
 
         {/* Manager / Owner only */}
         <Route path="/create-mission" element={
-          <ProtectedRoute requiredRoles={['owner', 'manager']}><CreateMissionPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander"><CreateMissionPage /></ProtectedRoute>
         } />
         <Route path="/report" element={
-          <ProtectedRoute requiredRoles={['owner', 'manager']}><ReportPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander"><ReportPage /></ProtectedRoute>
         } />
         <Route path="/leaves" element={
-          <ProtectedRoute requiredRoles={['owner', 'manager']}><LeavesPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander"><LeavesPage /></ProtectedRoute>
         } />
         <Route path="/emergency" element={
-          <ProtectedRoute requiredRoles={['owner', 'manager']}><EmergencyPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander"><EmergencyPage /></ProtectedRoute>
         } />
         <Route path="/audit-log" element={
-          <ProtectedRoute requiredRoles={['owner', 'manager']}><AuditLogPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander"><AuditLogPage /></ProtectedRoute>
         } />
 
         <Route path="*" element={<Navigate to={currentUser ? (hasGroup ? '/dashboard' : '/start') : '/login'} replace />} />
