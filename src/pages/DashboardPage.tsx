@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp, useActivePeriod, useApprovableLeaveRequests, useAlertsForCompany } from '../context/AppContext';
+import { useApp, useActivePeriod, useApprovableLeaveRequests, useAlertsForCompany, useMyCompany, useMyPlatoons } from '../context/AppContext';
 import Header from '../components/Header';
 import { isPlatoonLeadership, isCompanyLeadership } from '../utils/permissions';
 import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
+import { Card, StatusPill, StatusDot, Section, PageMain, CollapsibleSection } from '../components/ui';
 import type { TimeSlot, MissionType, Soldier } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -27,153 +28,209 @@ const formatRelative = (mins: number): string => {
 export default function DashboardPage() {
   const { currentRole } = useApp();
   // Three Home variants — same shell, different operational intent.
-  if (isCompanyLeadership(currentRole))   return <ManagerDashboard />;          // placeholder until next slice
-  if (isPlatoonLeadership(currentRole))   return <PlatoonCommanderDashboard />; // timeline-led
+  if (isCompanyLeadership(currentRole))   return <CompanyCommanderDashboard />; // operational overview
+  if (isPlatoonLeadership(currentRole))   return <PlatoonCommanderDashboard />; // timeline-led action queue
   return <SoldierDashboard />;                                                  // hero-led personal
 }
 
-// ─── Manager Dashboard ────────────────────────────────────────────────────────
+// ─── Company Commander Dashboard (operational overview) ──────────────────────
+// Reads as: עכשיו → השעות הקרובות → פעילות אחרונה (collapsed) → הגדרות.
+// The company commander does NOT see leave queues here per spec — those
+// belong to platoon commanders. Override alerts are demoted to a collapsed
+// section, never the headline.
 
-function ManagerDashboard() {
-  const { soldiers, leaves, miluimPeriods, groups, currentUser, approveLeaveRequest, rejectLeaveRequest } = useApp();
-  // Scoped: only requests this user is allowed to act on. A pure company
-  // commander sees an empty queue here (per spec); a חפ״ק dual-role user
-  // sees only their commanded platoon's requests.
-  const approvableRequests = useApprovableLeaveRequests();
+function CompanyCommanderDashboard() {
   const navigate = useNavigate();
+  const { soldiers, leaves, subUnits, groups, overrideAlerts } = useApp();
+  const myCompany = useMyCompany();
+  const myPlatoons = useMyPlatoons();
+  const allAlerts = useAlertsForCompany();
   const activePeriod = useActivePeriod();
 
-  const myGroup = groups.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
-  const miluim = miluimPeriods.find((m) => m.groupId === myGroup?.id);
-
   const today = new Date().toISOString().slice(0, 10);
-  const onLeaveIds = new Set<string>();
-  leaves.forEach((lv) => {
-    if (today < lv.startDate || today > lv.endDate) return;
-    if (lv.scope === 'individual') lv.soldierIds.forEach((id) => onLeaveIds.add(id));
-    else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => onLeaveIds.add(s.id));
-    else soldiers.forEach((s) => onLeaveIds.add(s.id));
+  const now = new Date();
+
+  // Soldiers attached to a platoon via their subUnit (subUnit.platoonId)
+  const soldiersInPlatoon = (platoonId: string): Soldier[] => {
+    const ids = subUnits.filter((s) => s.platoonId === platoonId).map((s) => s.id);
+    return soldiers.filter((s) => s.subUnitId && ids.includes(s.subUnitId));
+  };
+
+  const onLeaveIds = useMemo(() => {
+    const ids = new Set<string>();
+    leaves.forEach((lv) => {
+      if (today < lv.startDate || today > lv.endDate) return;
+      if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
+      else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => ids.add(s.id));
+      else soldiers.forEach((s) => ids.add(s.id));
+    });
+    return ids;
+  }, [leaves, soldiers, today]);
+
+  // Per-platoon stats
+  const platoonStats = myPlatoons.map((p) => {
+    const ps = soldiersInPlatoon(p.id);
+    const onBase = ps.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
+    const atHome = ps.filter((s) => onLeaveIds.has(s.id)).length;
+    const requiredMin = p.minSoldiersOnBase ?? Math.ceil((myCompany?.settings.minSoldiersOnBase ?? 0) / Math.max(1, myPlatoons.length));
+    const status: 'ready' | 'warning' | 'critical' =
+      onBase < requiredMin              ? 'critical' :
+      onBase < requiredMin + 1          ? 'warning'  :
+      'ready';
+    return { platoon: p, total: ps.length, onBase, atHome, requiredMin, status };
   });
-  const onBase = soldiers.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
-  const atHome = onLeaveIds.size;
-  const unavailable = soldiers.filter((s) => !s.availability && !onLeaveIds.has(s.id)).length;
-  const pendingRequests = approvableRequests.filter((r) => r.status === 'pending');
+
+  const totalOnBase = platoonStats.reduce((sum, ps) => sum + ps.onBase, 0);
+  const totalSoldiers = platoonStats.reduce((sum, ps) => sum + ps.total, 0);
+
+  // Cross-company timeline (no pending approvals — CC doesn't approve)
+  const events = useMemo(() => buildPlatoonTimeline({
+    now,
+    period: activePeriod ?? null,
+    leaves,
+    soldiers,
+    pendingApprovals: 0,
+    recentAlerts: allAlerts,
+    horizonHours: 12,
+  }), [now, activePeriod, leaves, soldiers, allAlerts]);
+
+  // Recent activity (override alerts, regardless of status, demoted to collapsible)
+  const [showActivity, setShowActivity] = useState(false);
+  const openAlertCount = overrideAlerts.filter((a) => a.companyId === myCompany?.id && a.status === 'open').length;
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
-      <Header title="פיקוד מחלקה" />
-      <main className="px-4 py-4 pb-28 max-w-xl mx-auto space-y-4">
+      <Header title={myCompany?.name ?? 'פלוגה'} />
+      <PageMain>
 
-        {/* Platoon header */}
-        <div className="bg-mil-olive-bg border border-mil-olive/30 rounded-2xl px-4 py-3">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-bold text-mil-text">{myGroup?.name ?? 'מחלקה'}</h2>
-            <span className="text-xs text-mil-muted">{myGroup?.unitName}</span>
-          </div>
-          {miluim && (
-            <p className="text-xs text-mil-muted mt-0.5">{miluim.description} · {miluim.startDate} → {miluim.endDate}</p>
-          )}
-        </div>
-
-        {/* Big action cards */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold tracking-widest text-mil-muted uppercase mt-2 px-1">פעולות ראשיות</h3>
-
-          <button
-            onClick={() => navigate('/schedule')}
-            className="w-full bg-mil-card border-2 border-mil-olive/30 hover:border-mil-olive rounded-2xl p-5 text-right transition-all group"
-          >
-            <div className="flex items-start gap-4">
-              <div className="text-4xl text-mil-olive flex-shrink-0">▦</div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-mil-text mb-0.5">הכנס משימות לתקופה</h3>
-                <p className="text-sm text-mil-muted leading-snug">בחר תקופת זמן, הגדר משימות, ובנה שיבוץ</p>
-                {activePeriod && (
-                  <p className="text-xs text-mil-olive mt-2 font-medium">
-                    תקופה פעילה: {activePeriod.name} · {activePeriod.missionTypes.length} משימות
-                  </p>
-                )}
-                <div className="mt-3 inline-flex items-center gap-2 text-mil-olive text-sm font-bold group-hover:gap-3 transition-all">
-                  <span>פתח שיבוץ</span><span>←</span>
-                </div>
-              </div>
+        {/* ── עכשיו ──────────────────────────────────── */}
+        <Section label="עכשיו">
+          <Card>
+            <div className="px-4 py-3">
+              <p className="text-sm text-mil-text">
+                <span className="font-bold text-mil-olive">{totalOnBase}</span>
+                <span className="text-mil-ghost mx-1">/</span>
+                <span className="text-mil-text">{totalSoldiers}</span>
+                <span className="mr-1">בבסיס</span>
+                <span className="text-mil-ghost mx-2">·</span>
+                <span className="text-mil-muted">{platoonStats.length} מחלקות</span>
+              </p>
             </div>
-          </button>
+          </Card>
 
-          <button
-            onClick={() => navigate('/leaves')}
-            className="w-full bg-mil-card border-2 border-mil-sand/40 hover:border-mil-sand rounded-2xl p-5 text-right transition-all group"
-          >
-            <div className="flex items-start gap-4">
-              <div className="text-4xl text-mil-warn flex-shrink-0">⊖</div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-mil-text mb-0.5">הכנס יציאות</h3>
-                <p className="text-sm text-mil-muted leading-snug">מחלקתיות / כיתתיות / אישיות</p>
-                {pendingRequests.length > 0 && (
-                  <p className="text-xs text-mil-warn mt-2 font-medium">
-                    {pendingRequests.length} בקשות ממתינות לאישור
-                  </p>
-                )}
-                <div className="mt-3 inline-flex items-center gap-2 text-mil-warn text-sm font-bold group-hover:gap-3 transition-all">
-                  <span>נהל יציאות</span><span>←</span>
-                </div>
-              </div>
-            </div>
-          </button>
-        </div>
-
-        {/* Quick stats */}
-        <div>
-          <h3 className="text-xs font-bold tracking-widest text-mil-muted uppercase mt-2 px-1 mb-2">מצב כוח אדם</h3>
-          <div className="grid grid-cols-3 gap-2">
-            <Stat value={onBase}        label="בבסיס"   tone="olive" />
-            <Stat value={atHome}        label="בבית"     tone="sand"  />
-            <Stat value={unavailable}   label="לא זמין" tone="muted" />
-          </div>
-          <button
-            onClick={() => navigate('/report')}
-            className="w-full mt-2 text-center text-sm text-mil-olive hover:text-mil-olive-dim py-2 border border-mil-border rounded-xl bg-mil-card hover:bg-mil-olive-bg transition-colors"
-          >
-            צפה בדוח כוח אדם מלא →
-          </button>
-        </div>
-
-        {/* Pending approvals — inline */}
-        {pendingRequests.length > 0 && (
-          <div className="bg-mil-card border border-mil-warn/40 rounded-2xl overflow-hidden">
-            <div className="bg-mil-warn-bg border-b border-mil-warn/30 px-4 py-2.5 flex items-center gap-2">
-              <span className="text-mil-warn text-lg">!</span>
-              <span className="text-sm font-bold text-mil-warn">בקשות יציאה ממתינות ({pendingRequests.length})</span>
-            </div>
-            <div className="divide-y divide-mil-border">
-              {pendingRequests.slice(0, 3).map((req) => (
-                <div key={req.id} className="px-4 py-3">
-                  <div className="mb-2">
-                    <p className="text-sm font-medium text-mil-text">{req.soldierName}</p>
-                    <p className="text-xs text-mil-muted">{req.soldierTeamClass} · {req.startDate} {req.startTime}–{req.endDate} {req.endTime}</p>
-                    <p className="text-xs text-mil-text mt-0.5 italic">{req.reason}</p>
+          {platoonStats.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {platoonStats.map((ps) => (
+                <Card
+                  key={ps.platoon.id}
+                  variant={ps.status === 'critical' ? 'critical' : 'default'}
+                  className="text-right"
+                >
+                  <div className="px-4 py-3">
+                    <div className="flex items-start justify-between mb-1">
+                      <p className="font-bold text-mil-text text-sm leading-tight">{ps.platoon.name}</p>
+                      <StatusDot status={ps.status} />
+                    </div>
+                    <p className="text-xs text-mil-muted">
+                      <span className="font-bold text-mil-text">{ps.onBase}</span>
+                      <span className="mx-0.5">/</span>
+                      <span>{ps.total}</span>
+                      <span className="mr-1">בבסיס</span>
+                    </p>
+                    {ps.atHome > 0 && (
+                      <p className="text-xs text-mil-sand mt-0.5">{ps.atHome} בבית</p>
+                    )}
+                    {ps.platoon.isSpecialPlatoon && (
+                      <p className="text-[10px] text-mil-muted mt-1 tracking-wide">מיוחדת</p>
+                    )}
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => currentUser && approveLeaveRequest(req.id, currentUser.id, currentUser.name)}
-                      className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-mil-success-bg text-mil-success border border-mil-success-border hover:bg-mil-success hover:text-white transition-colors"
-                    >
-                      ✓ אשר
-                    </button>
-                    <button
-                      onClick={() => currentUser && rejectLeaveRequest(req.id, currentUser.id, currentUser.name)}
-                      className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-mil-alert-bg text-mil-alert border border-mil-alert-border hover:bg-mil-alert hover:text-white transition-colors"
-                    >
-                      ✕ דחה
-                    </button>
-                  </div>
-                </div>
+                </Card>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </Section>
 
-      </main>
+        {/* ── השעות הקרובות בפלוגה ───────────────── */}
+        <Section label="השעות הקרובות בפלוגה">
+          {events.length === 0 ? (
+            <Card variant="soft">
+              <div className="px-5 py-6 text-center">
+                <p className="text-sm font-bold text-mil-olive-dim">הכל רגוע</p>
+                <p className="text-xs text-mil-muted mt-1">אין שינויים מתוכננים ב-12 השעות הקרובות</p>
+              </div>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {events.map((ev) => <TimelineCard key={ev.id} event={ev} onCta={() => ev.ctaHref && navigate(ev.ctaHref)} />)}
+            </div>
+          )}
+        </Section>
+
+        {/* ── פעילות מחלקות אחרונה (collapsed) ─────── */}
+        <CollapsibleSection
+          label="פעילות מחלקות אחרונה"
+          open={showActivity}
+          onToggle={() => setShowActivity((v) => !v)}
+          count={openAlertCount}
+        >
+          {allAlerts.length === 0 ? (
+            <Card>
+              <p className="px-4 py-3 text-sm text-mil-muted">אין פעילות לתעד</p>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {allAlerts.slice(0, 8).map((a) => (
+                <Card key={a.id}>
+                  <div className="px-4 py-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      {a.status === 'open' && <StatusPill status={a.riskLevel === 'high' ? 'critical' : 'warning'}>פתוח</StatusPill>}
+                      {a.status === 'acknowledged' && <span className="text-[10px] text-mil-muted">נצפה</span>}
+                      {a.status === 'resolved' && <span className="text-[10px] text-mil-success">טופל</span>}
+                      <span className="text-xs text-mil-ghost mr-auto">
+                        {groups.find((g) => g.id === a.platoonId)?.name ?? '—'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-mil-text leading-snug">{a.description}</p>
+                    {a.suggestedAction && (
+                      <p className="text-xs text-mil-muted mt-1">{a.suggestedAction}</p>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
+
+        {/* ── הגדרות פלוגה ──────────────────────────── */}
+        <Section label="הגדרות פלוגה">
+          <Card>
+            <div className="divide-y divide-mil-border">
+              <div className="px-4 py-3 flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-mil-text">מינימום בבסיס</p>
+                  <p className="text-xs text-mil-muted">{myCompany?.settings.minSoldiersOnBase ?? '—'} חיילים</p>
+                </div>
+                <span className="text-xs text-mil-ghost">בקרוב</span>
+              </div>
+              <div className="px-4 py-3 flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-mil-text">מבנה החברה</p>
+                  <p className="text-xs text-mil-muted">{myPlatoons.length} מחלקות · {subUnits.filter((s) => myPlatoons.some((p) => p.id === s.platoonId)).length} תת-קבוצות</p>
+                </div>
+                <span className="text-xs text-mil-ghost">בקרוב</span>
+              </div>
+              <div className="px-4 py-3 flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-mil-text">משתמשים והרשאות</p>
+                  <p className="text-xs text-mil-muted">ניהול חברי פלוגה</p>
+                </div>
+                <span className="text-xs text-mil-ghost">בקרוב</span>
+              </div>
+            </div>
+          </Card>
+        </Section>
+
+      </PageMain>
     </div>
   );
 }
@@ -752,14 +809,3 @@ function NextShiftCard({
   );
 }
 
-// ─── Bits ─────────────────────────────────────────────────────────────────────
-
-function Stat({ value, label, tone }: { value: number; label: string; tone: 'olive' | 'sand' | 'muted' }) {
-  const colorMap = { olive: 'text-mil-olive', sand: 'text-mil-sand', muted: 'text-mil-ghost' };
-  return (
-    <div className="bg-mil-card border border-mil-border rounded-xl p-3 text-center">
-      <p className={`text-3xl font-bold ${colorMap[tone]}`}>{value}</p>
-      <p className="text-xs text-mil-muted mt-0.5">{label}</p>
-    </div>
-  );
-}
