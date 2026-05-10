@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { direction: rtl; background: #f7f3ea; }
+  body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; color: #2a3a18; }
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body { overscroll-behavior: none; }
