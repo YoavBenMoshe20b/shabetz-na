@@ -11,6 +11,38 @@ import {
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSubUnits, mockCompanyMissions, mockOverrideAlerts,
 } from '../data/mockData';
 
+// ─── Company-first flow shapes ───────────────────────────────────────────────
+//
+// The operational center of the app is the COMPANY. Only company commanders
+// instantiate a company; everyone else joins an EXISTING one. These types are
+// the contracts for those two operations.
+
+export interface CreateCompanyInput {
+  name: string;                    // e.g. "פלוגה ב"
+  unitName?: string;               // e.g. "גדוד 51"
+  settings: CompanySettings;
+  /** Internal platoons defined during setup. At least one is required. */
+  platoons: Array<{
+    name: string;                  // e.g. "מחלקה א׳" or "חפ״ק"
+    isSpecial?: boolean;
+    /** Sub-unit names to seed under this platoon. Empty for special platoons
+     *  whose structure the platoon commander will define later. */
+    subUnitNames: string[];
+  }>;
+}
+
+export type JoinIdentity =
+  | {
+      kind:        'soldier';
+      platoonId:   string;
+      subUnitId?:  string;
+      operationalRole?: string;
+      pendingLeaves?: Array<{ startDate: string; startTime: string; endDate: string; endTime: string; reason: string }>;
+    }
+  | { kind: 'platoonCommander'; platoonId: string }
+  | { kind: 'platoonSergeant';  platoonId: string }
+  | { kind: 'deputyCompanyCommander' };
+
 interface AppContextType {
   currentUser:    MockUser | null;
   currentRole:    UserRole;
@@ -36,9 +68,13 @@ interface AppContextType {
   addSubUnit:     (data: { platoonId: string; name: string }) => SubUnit;
   removeSubUnit:  (id: string) => void;
   renameSubUnit:  (id: string, name: string) => void;
-  createCompany:  (data: { name: string; unitName?: string; settings: CompanySettings }) => string;     // returns invite code
-  inviteOfficer:  (companyId: string, role: 'platoonCommander' | 'platoonSergeant', platoonId?: string) => string; // returns invite code
-  inviteSoldier:  (platoonId: string) => string; // returns invite code (= group code)
+  // The ONE entry point for organisational creation. Only company-level
+  // leadership invokes this (gated by canCreateCompany). It creates the
+  // Company + its Platoons + their SubUnits in one transaction, then sets
+  // the current user as that company's commander.
+  createCompany:  (data: CreateCompanyInput) => string;     // returns invite code
+  inviteOfficer:  (companyId: string, role: 'platoonCommander' | 'platoonSergeant', platoonId?: string) => string;
+  inviteSoldier:  (platoonId: string) => string;
 
   // Company-level missions (created by company commander only)
   companyMissions:    CompanyMission[];
@@ -53,8 +89,10 @@ interface AppContextType {
 
   login:          (identifier: string, password: string) => MockUser | null;
   register:       (data: { name: string; email: string; username: string; password: string }) => { user: MockUser | null; error?: string };
-  joinGroup:      (code: string, role: string, subUnitId: string, pendingLeaves: Array<{ startDate: string; startTime: string; endDate: string; endTime: string; reason: string }>) => boolean;
-  createGroup:    (data: { name: string; unitName?: string; availableRoles: string[]; commanderName: string; sergeantName: string; size?: number; enemyConfusion?: boolean; confusionMinutes?: number }) => string;
+  // Joining always means joining an EXISTING company. Officers (platoonCommander /
+  // platoonSergeant / deputyCompanyCommander) are placed inside the company
+  // structure; soldiers go into a specific platoon → sub-unit.
+  joinCompany:    (code: string, identity: JoinIdentity) => { ok: boolean; error?: string };
   logout:         () => void;
   switchRole:     (role: UserRole) => void; // dev/test only
   addPeriod:      (p: SchedulePeriod) => void;
@@ -212,100 +250,169 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { user: newUser };
   };
 
-  const joinGroup = (
-    code: string,
-    role: string,
-    subUnitId: string,
-    pendingLeaves: Array<{ startDate: string; startTime: string; endDate: string; endTime: string; reason: string }>,
-  ): boolean => {
-    const group = groups.find((g) => g.code === code.toUpperCase());
-    if (!group || !currentUser) return false;
-    const subUnit = subUnits.find((s) => s.id === subUnitId);
+  // ── Join an EXISTING company (the only way non-commanders enter) ──
+  // Officers (platoonCommander / platoonSergeant / deputyCompanyCommander) are
+  // attached to the company structure; soldiers go inside a specific platoon
+  // and sub-unit. There is intentionally no path for soldiers to "create" or
+  // "claim" anything — they only fit into structure that's already there.
+  const joinCompany = (code: string, identity: JoinIdentity): { ok: boolean; error?: string } => {
+    if (!currentUser) return { ok: false, error: 'לא מחובר' };
+    const company = companies.find((c) => c.inviteCode === code.trim().toUpperCase());
+    if (!company) return { ok: false, error: 'קוד פלוגה לא נמצא' };
+
+    if (identity.kind === 'deputyCompanyCommander') {
+      setCompanies((prev) => prev.map((c) => c.id === company.id
+        ? { ...c, deputyCommanderUserId: currentUser.id }
+        : c
+      ));
+      setCurrentUser((prev) => prev ? {
+        ...prev,
+        role: 'deputyCompanyCommander',
+        companyId: company.id,
+      } : prev);
+      setCurrentRole('deputyCompanyCommander');
+      return { ok: true };
+    }
+
+    // From here on we need a platoon
+    const platoon = groups.find((g) => g.id === identity.platoonId && g.companyId === company.id);
+    if (!platoon) return { ok: false, error: 'המחלקה שנבחרה לא שייכת לפלוגה זו' };
+
+    if (identity.kind === 'platoonCommander' || identity.kind === 'platoonSergeant') {
+      const isCommander = identity.kind === 'platoonCommander';
+      setGroups((prev) => prev.map((g) => g.id === platoon.id ? ({
+        ...g,
+        memberIds: g.memberIds.includes(currentUser.id) ? g.memberIds : [...g.memberIds, currentUser.id],
+        ...(isCommander
+          ? { platoonCommanderUserId: currentUser.id, platoonCommander: currentUser.name }
+          : { platoonSergeantUserId:  currentUser.id, platoonSergeant:  currentUser.name }),
+        scheduleManagers: g.scheduleManagers?.includes(currentUser.id)
+          ? g.scheduleManagers
+          : [...(g.scheduleManagers ?? []), currentUser.id],
+      }) : g));
+      setCurrentUser((prev) => prev ? {
+        ...prev,
+        role: identity.kind,
+        companyId: company.id,
+        commandedPlatoonId: platoon.id,
+        joinedGroupIds: prev.joinedGroupIds.includes(platoon.id) ? prev.joinedGroupIds : [...prev.joinedGroupIds, platoon.id],
+      } : prev);
+      setCurrentRole(identity.kind);
+      return { ok: true };
+    }
+
+    // identity.kind === 'soldier'
+    const subUnit = identity.subUnitId ? subUnits.find((s) => s.id === identity.subUnitId) : undefined;
     const subUnitName = subUnit?.name ?? '';
+    const operationalRole = identity.operationalRole ?? '';
     const soldierRecord: Soldier = {
       id: `s-${Date.now()}`,
       name: currentUser.name,
-      operationalRoles: (role ? [role] : []) as import('../types').OperationalRole[],
-      teamClass: subUnitName,         // legacy display field
-      subUnitId,
+      operationalRoles: (operationalRole ? [operationalRole] : []) as import('../types').OperationalRole[],
+      teamClass: subUnitName,
+      subUnitId: subUnit?.id,
       availability: true,
       availabilityNotes: [],
       currentLoad: 0,
       userId: currentUser.id,
     };
     setSoldiers((prev) => [...prev, soldierRecord]);
-    setSubUnits((prev) => prev.map((s) => s.id === subUnitId ? { ...s, soldierIds: [...s.soldierIds, soldierRecord.id] } : s));
-    setGroups((prev) => prev.map((g) => g.id === group.id ? { ...g, memberIds: [...g.memberIds, currentUser.id] } : g));
+    if (subUnit) {
+      setSubUnits((prev) => prev.map((s) => s.id === subUnit.id
+        ? { ...s, soldierIds: [...s.soldierIds, soldierRecord.id] }
+        : s
+      ));
+    }
+    setGroups((prev) => prev.map((g) => g.id === platoon.id
+      ? { ...g, memberIds: g.memberIds.includes(currentUser.id) ? g.memberIds : [...g.memberIds, currentUser.id] }
+      : g
+    ));
     setCurrentUser((prev) => prev ? {
       ...prev,
-      joinedGroupIds: [...prev.joinedGroupIds, group.id],
+      role: 'soldier',
+      companyId: company.id,
+      joinedGroupIds: prev.joinedGroupIds.includes(platoon.id) ? prev.joinedGroupIds : [...prev.joinedGroupIds, platoon.id],
       teamClass: subUnitName,
-      subUnitId,
+      subUnitId: subUnit?.id,
       soldierProfileId: soldierRecord.id,
     } : prev);
-    pendingLeaves.forEach((lv) => {
+
+    (identity.pendingLeaves ?? []).forEach((lv) => {
       setLeaveRequests((prev) => [...prev, {
         ...lv,
         id: `lr-${Date.now()}-${Math.random()}`,
         soldierId: soldierRecord.id,
         soldierName: currentUser.name,
         soldierTeamClass: subUnitName,
-        soldierSubUnitId: subUnitId,
-        soldierSubUnitName: subUnitName,
+        soldierSubUnitId: subUnit?.id,
+        soldierSubUnitName: subUnitName || undefined,
         status: 'pending',
         submittedAt: new Date().toISOString(),
       }]);
     });
-    return true;
+    return { ok: true };
   };
 
-  const createGroup = (data: {
-    name: string; unitName?: string; availableRoles: string[];
-    commanderName: string; sergeantName: string;
-    size?: number; enemyConfusion?: boolean; confusionMinutes?: number;
-  }): string => {
-    const code = `UNIT-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newGroup: Group = {
-      id: `g-${Date.now()}`,
-      name: data.name,
-      unitName: data.unitName,
-      code,
-      ownerId: currentUser?.id ?? '',
-      memberIds: [currentUser?.id ?? ''],
-      platoonCommander: data.commanderName,
-      platoonSergeant: data.sergeantName,
-      scheduleManagers: [currentUser?.id ?? ''],
-      availableRoles: data.availableRoles,
-      size: data.size,
-      enemyConfusion: data.enemyConfusion,
-      confusionMinutes: data.confusionMinutes,
-    };
-    setGroups((prev) => [...prev, newGroup]);
-    setCurrentUser((prev) => prev ? { ...prev, joinedGroupIds: [...prev.joinedGroupIds, newGroup.id], role: 'platoonCommander', commandedPlatoonId: newGroup.id } : prev);
-    setCurrentRole('platoonCommander');
-    return code;
-  };
+  // ── Create COMPANY (sole entry point for org creation) ─────────────────────
+  // One atomic transaction: Company + Platoons + SubUnits. The current user
+  // becomes the company commander. There is no path for non-commanders to
+  // reach this — the route guard + permission helper enforce that.
 
-  // ── Company hierarchy actions ─────────────────────────────────────────────
-  // These are stubs — the API surface used by the upcoming "company commander
-  // setup wizard" screen. They mutate state but do not yet have a UI.
+  const DEFAULT_AVAILABLE_ROLES = ['קלע', 'חובש', 'נגביסט', 'מאגיסט', 'קשר מ״מ', 'רחפן', 'מ״מ', 'סמל'];
 
-  const createCompany = (data: { name: string; unitName?: string; settings: CompanySettings }): string => {
+  const createCompany = (data: CreateCompanyInput): string => {
     if (!currentUser) return '';
+    const companyId  = `co-${Date.now()}`;
     const inviteCode = `CO-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newCo: Company = {
-      id: `co-${Date.now()}`,
+
+    // Create platoons + sub-units first so we can reference their ids
+    const newPlatoons: Group[] = [];
+    const newSubUnits: SubUnit[] = [];
+    data.platoons.forEach((p, idx) => {
+      const platoonId = `g-${Date.now()}-${idx}`;
+      const platoonCode = `UNIT-${Math.floor(1000 + Math.random() * 9000)}`;
+      const subUnitIds: string[] = [];
+      p.subUnitNames.forEach((suName, sIdx) => {
+        const suId = `su-${Date.now()}-${idx}-${sIdx}`;
+        subUnitIds.push(suId);
+        newSubUnits.push({ id: suId, platoonId, name: suName, soldierIds: [] });
+      });
+      newPlatoons.push({
+        id: platoonId,
+        name: p.name,
+        unitName: data.unitName,
+        code: platoonCode,
+        ownerId: currentUser.id,
+        memberIds: [],                            // populated as users join
+        availableRoles: DEFAULT_AVAILABLE_ROLES,
+        companyId,
+        subUnitIds,
+        isSpecialPlatoon: p.isSpecial,
+        followsCompanyLeaveRotation: !p.isSpecial,
+      });
+    });
+
+    const newCompany: Company = {
+      id: companyId,
       name: data.name,
       unitName: data.unitName,
       commanderUserId: currentUser.id,
-      platoonIds: [],
+      platoonIds: newPlatoons.map((p) => p.id),
       inviteCode,
       settings: data.settings,
       createdAt: new Date().toISOString(),
     };
-    setCompanies((prev) => [...prev, newCo]);
-    setCurrentUser((prev) => prev ? { ...prev, role: 'companyCommander', companyId: newCo.id } : prev);
+
+    setCompanies((prev) => [...prev, newCompany]);
+    setGroups((prev)    => [...prev, ...newPlatoons]);
+    setSubUnits((prev)  => [...prev, ...newSubUnits]);
+    setCurrentUser((prev) => prev ? {
+      ...prev,
+      role: 'companyCommander',
+      companyId,
+    } : prev);
     setCurrentRole('companyCommander');
+
     return inviteCode;
   };
 
@@ -375,7 +482,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createCompany, inviteOfficer, inviteSoldier,
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
-      login, register, joinGroup, createGroup, logout, switchRole, addPeriod, updatePeriod, addAuditLog,
+      login, register, joinCompany, logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
     }}>
