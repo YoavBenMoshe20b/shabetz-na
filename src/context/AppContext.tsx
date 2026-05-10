@@ -440,6 +440,100 @@ export function useSubUnitsForPlatoon(platoonId: string | undefined): SubUnit[] 
   return subUnits.filter((s) => s.platoonId === platoonId);
 }
 
+// Operational emergency detector — returns a non-null payload when the
+// platoon/company has a LIVE issue that should shift the whole UI:
+//   - any platoon below its required minimum manpower on base
+//   - any open override alert with requiresImmediateAttention=true
+//   - any active scheduled slot in the published period below minSoldiers
+//
+// Scoped per-user: a soldier never sees this (they're not allowed to see
+// company-wide manpower). A platoon-tier user sees emergencies in their
+// own platoon. A company-tier user sees the worst across all platoons.
+export interface OperationalEmergency {
+  severity: 'critical';
+  message: string;
+  detail?: string;
+  actionLabel?: string;
+  actionHref?: string;
+}
+
+export function useOperationalEmergency(): OperationalEmergency | null {
+  const { currentUser, currentRole, soldiers, leaves, groups, subUnits, companies, periods, overrideAlerts } = useApp();
+  if (!currentUser) return null;
+  if (currentRole === 'soldier') return null;     // soldiers never see this layer
+
+  // Resolve scope: which platoons should we evaluate?
+  let scopePlatoons: typeof groups = [];
+  if (currentRole === 'companyCommander' || currentRole === 'deputyCompanyCommander' || currentRole === 'owner') {
+    const co = companies.find((c) => c.id === currentUser.companyId);
+    scopePlatoons = co ? groups.filter((g) => co.platoonIds.includes(g.id) || g.companyId === co.id) : [];
+  } else if (currentUser.commandedPlatoonId) {
+    const p = groups.find((g) => g.id === currentUser.commandedPlatoonId);
+    if (p) scopePlatoons = [p];
+  } else {
+    scopePlatoons = groups.filter((g) => g.memberIds.includes(currentUser.id));
+  }
+  if (scopePlatoons.length === 0) return null;
+
+  // 1. Below-minimum platoon
+  const today = new Date().toISOString().slice(0, 10);
+  const onLeaveIds = new Set<string>();
+  leaves.forEach((lv) => {
+    if (today < lv.startDate || today > lv.endDate) return;
+    if (lv.scope === 'individual') lv.soldierIds.forEach((id) => onLeaveIds.add(id));
+    else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => onLeaveIds.add(s.id));
+    else soldiers.forEach((s) => onLeaveIds.add(s.id));
+  });
+  for (const p of scopePlatoons) {
+    const ids   = subUnits.filter((s) => s.platoonId === p.id).map((s) => s.id);
+    const ps    = soldiers.filter((s) => s.subUnitId && ids.includes(s.subUnitId));
+    const onBase = ps.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
+    const required = p.minSoldiersOnBase ?? 0;
+    if (required > 0 && onBase < required) {
+      return {
+        severity: 'critical',
+        message: `${p.name} מתחת לסד״כ`,
+        detail: `${onBase}/${required} בבסיס · נדרשת פעולה`,
+        actionLabel: 'פתח שיבוץ',
+        actionHref: '/schedule',
+      };
+    }
+  }
+
+  // 2. High-risk open override alert
+  const platoonIds = new Set(scopePlatoons.map((p) => p.id));
+  const highOpen = overrideAlerts.find((a) => a.status === 'open' && a.riskLevel === 'high' && platoonIds.has(a.platoonId));
+  if (highOpen) {
+    return {
+      severity: 'critical',
+      message: highOpen.description,
+      detail: highOpen.suggestedAction,
+      actionLabel: 'פתח שיבוץ',
+      actionHref: '/schedule',
+    };
+  }
+
+  // 3. Critical slot — published period only
+  const published = periods.find((p) => p.status === 'published');
+  if (published) {
+    for (const mt of published.missionTypes) {
+      for (const ts of mt.timeSlots) {
+        if (ts.status === 'conflict' && ts.assignedSoldierIds.length < mt.minSoldiers) {
+          return {
+            severity: 'critical',
+            message: `${mt.name} לא מאוישת במלואה`,
+            detail: `${ts.assignedSoldierIds.length}/${mt.minSoldiers} · ${ts.date} ${ts.startTime}`,
+            actionLabel: 'פתח שיבוץ',
+            actionHref: '/schedule',
+          };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 // Override alerts visible to company leadership. A company commander sees
 // alerts from every platoon in their company. A platoon commander sees
 // alerts that originated in their own platoon (so they know what their

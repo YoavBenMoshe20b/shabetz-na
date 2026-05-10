@@ -1,7 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AppProvider, useApp } from './context/AppContext';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { AppProvider, useApp, useOperationalEmergency } from './context/AppContext';
 import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
+import { EmergencyBanner } from './components/ui';
 
 import LoginPage          from './pages/LoginPage';
 import StartPage          from './pages/StartPage';
@@ -26,13 +27,26 @@ const FULL_SCREEN_PATHS = ['/login', '/start', '/join-platoon', '/create-platoon
 
 function AppRoutes() {
   const { currentUser, groups } = useApp();
+  const navigate = useNavigate();
   const location = useLocation();
+  const emergency = useOperationalEmergency();
   const auth = <Navigate to="/login" replace />;
   const hasGroup = !!currentUser && groups.some((g) => g.memberIds.includes(currentUser.id));
   const showNav = currentUser && !FULL_SCREEN_PATHS.includes(location.pathname);
+  // Banner is hidden on full-screen onboarding flows so the emergency
+  // signal doesn't compete with new-user wizards.
+  const showEmergency = emergency && currentUser && !FULL_SCREEN_PATHS.includes(location.pathname);
 
   return (
     <>
+      {showEmergency && (
+        <EmergencyBanner
+          message={emergency.message}
+          detail={emergency.detail}
+          actionLabel={emergency.actionLabel}
+          onAction={emergency.actionHref ? () => navigate(emergency.actionHref!) : undefined}
+        />
+      )}
       <Routes>
         {/* Public */}
         <Route path="/login" element={
