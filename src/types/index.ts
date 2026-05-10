@@ -10,7 +10,7 @@ export type UserRole =
   | 'manager';           // [legacy] ≈ platoonCommander
 
 export type OperationalRole =
-  | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל'
+  | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'מ״כ'
   | 'חובש' | 'נגביסט' | 'קלע' | 'מאגיסט' | 'רחפן';
 
 export type TeamClass = 'כיתה 1' | 'כיתה 2' | 'כיתה 3' | 'מפקדה' | 'אחר';

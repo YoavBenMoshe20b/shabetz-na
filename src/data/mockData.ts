@@ -1,6 +1,6 @@
 import type {
   Soldier, SchedulePeriod, AuditLog, MockUser, Group, Leave, LeaveRequest,
-  EquipmentRequirements, SoldierHistory, MiluimPeriod,
+  EquipmentRequirements, SoldierHistory, MiluimPeriod, Company,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -20,16 +20,18 @@ const watchEquip: EquipmentRequirements = {
 // Firebase Auth or another secure auth provider before production.
 export const mockUsers: MockUser[] = [
   {
-    id: 'u1', name: 'יוסי כהן', role: 'owner',
+    id: 'u1', name: 'יוסי כהן', role: 'companyCommander',
     phone: '0501234567', email: 'yosi@unit.il', username: 'yosi123',
     password: 'Test@1234', joinedGroupIds: ['g1'],
     operationalRoles: ['מ״פ'], teamClass: 'מפקדה',
+    companyId: 'co1',
   },
   {
-    id: 'u2', name: 'דוד לוי', role: 'manager',
+    id: 'u2', name: 'דוד לוי', role: 'platoonCommander',
     phone: '0507654321', email: 'david@unit.il', username: 'david99',
     password: 'Test@1234', joinedGroupIds: ['g1'],
-    operationalRoles: ['סמ״פ'], teamClass: 'מפקדה',
+    operationalRoles: ['מ״מ'], teamClass: 'מפקדה',
+    companyId: 'co1', commandedPlatoonId: 'g1',
   },
   {
     id: 'u3', name: 'משה ישראלי', role: 'soldier',
@@ -37,12 +39,27 @@ export const mockUsers: MockUser[] = [
     password: 'Test@1234', joinedGroupIds: ['g1'],
     operationalRoles: ['קלע', 'חובש'], teamClass: 'כיתה 1',
     soldierProfileId: 's1',
+    companyId: 'co1',
   },
   {
     id: 'u4', name: 'עמית גרין', role: 'soldier',
     phone: '0504567890', email: 'amit@unit.il', username: 'amit22',
     password: 'Test@1234', joinedGroupIds: [],
     operationalRoles: [], teamClass: 'אחר',
+  },
+  {
+    id: 'u5', name: 'אלון בן-שמעון', role: 'platoonSergeant',
+    phone: '0508889999', email: 'alon@unit.il', username: 'alon_s',
+    password: 'Test@1234', joinedGroupIds: ['g1'],
+    operationalRoles: ['סמל'], teamClass: 'מפקדה',
+    companyId: 'co1', commandedPlatoonId: 'g1',
+  },
+  {
+    id: 'u6', name: 'תומר אזולאי', role: 'squadCommander',
+    phone: '0501112222', email: 'tomer@unit.il', username: 'tomer_az',
+    password: 'Test@1234', joinedGroupIds: ['g1'],
+    operationalRoles: ['מ״כ'], teamClass: 'כיתה 1',
+    companyId: 'co1', commandedPlatoonId: 'g1', commandedSquadClass: 'כיתה 1',
   },
 ];
 
@@ -276,19 +293,52 @@ export const mockSchedulePeriods: SchedulePeriod[] = [
 export const mockGroups: Group[] = [
   {
     id: 'g1', name: 'מחלקה א׳', unitName: 'גדוד 51', code: 'UNIT-4821',
-    ownerId: 'u1', memberIds: ['u1', 'u2', 'u3'],
-    platoonCommander: 'יוסי כהן', platoonSergeant: 'דוד לוי',
-    scheduleManagers: ['u1', 'u2'],
+    ownerId: 'u1', memberIds: ['u1', 'u2', 'u3', 'u5', 'u6'],
+    platoonCommander: 'דוד לוי', platoonSergeant: 'אלון בן-שמעון',
+    scheduleManagers: ['u1', 'u2', 'u5'],
     availableRoles: ['קלע', 'חובש', 'נגביסט', 'מאגיסט', 'קשר מ״מ', 'רחפן', 'מ״מ', 'סמל'],
     size: 10,
     enemyConfusion: false,
     confusionMinutes: 0,
+    companyId: 'co1',
+    platoonCommanderUserId: 'u2',
+    platoonSergeantUserId: 'u5',
+    squadCommanderUserIds: { 'כיתה 1': 'u6' },
+    isSpecialPlatoon: false,
+    followsCompanyLeaveRotation: true,
   },
   {
     id: 'g2', name: 'כיתת סיור', unitName: 'גדוד 51', code: 'UNIT-9934',
     ownerId: 'u2', memberIds: ['u2'],
     availableRoles: ['קלע', 'חובש', 'מ״מ'],
     size: 8,
+    companyId: 'co1',
+    isSpecialPlatoon: true,
+    followsCompanyLeaveRotation: false,   // recon platoon: own leave rotation
+    minSoldiersOnBase: 4,
+  },
+];
+
+// ─── Companies / פלוגות ──────────────────────────────────────────────────────
+
+export const mockCompanies: Company[] = [
+  {
+    id: 'co1',
+    name: 'פלוגה ב',
+    unitName: 'גדוד 51',
+    commanderUserId: 'u1',
+    deputyCommanderUserId: undefined,
+    platoonIds: ['g1', 'g2'],
+    inviteCode: 'CO-5108',
+    createdAt: '2024-04-20T08:00:00',
+    settings: {
+      rotationStrategy: 'platoon-based',
+      minSoldiersOnBase: 18,
+      specialPlatoonsFollowLeaveRotation: false,   // matches g2's flag
+      companyHomePeriods: [
+        { id: 'chp1', startDate: '2024-07-04', endDate: '2024-07-07', description: 'יציאה כלל-פלוגתית — 4 ביולי' },
+      ],
+    },
   },
 ];
 

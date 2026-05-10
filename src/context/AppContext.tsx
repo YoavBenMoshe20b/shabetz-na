@@ -2,11 +2,11 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type {
   MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Group, TeamClass,
   MissionType, ReminderSetting, Leave, LeaveRequest, SoldierHistory, MiluimPeriod,
-  ShiftWarning, FairnessScore,
+  ShiftWarning, FairnessScore, Company, CompanySettings,
 } from '../types';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockGroups, mockLeaves, mockLeaveRequests,
-  mockSoldierHistory, mockMiluimPeriods,
+  mockSoldierHistory, mockMiluimPeriods, mockCompanies,
 } from '../data/mockData';
 
 interface AppContextType {
@@ -28,6 +28,11 @@ interface AppContextType {
   lastFairness:   FairnessScore[];
   lastGeneratedPeriodId: string | null;
   setGenerationResult: (periodId: string, warnings: ShiftWarning[], fairness: FairnessScore[]) => void;
+  // Company hierarchy
+  companies:      Company[];
+  createCompany:  (data: { name: string; unitName?: string; settings: CompanySettings }) => string;     // returns invite code
+  inviteOfficer:  (companyId: string, role: 'platoonCommander' | 'platoonSergeant', platoonId?: string) => string; // returns invite code
+  inviteSoldier:  (platoonId: string) => string; // returns invite code (= group code)
 
   login:          (identifier: string, password: string) => MockUser | null;
   register:       (data: { name: string; email: string; username: string; password: string }) => { user: MockUser | null; error?: string };
@@ -68,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastWarnings,  setLastWarnings]  = useState<ShiftWarning[]>([]);
   const [lastFairness,  setLastFairness]  = useState<FairnessScore[]>([]);
   const [lastGeneratedPeriodId, setLastGeneratedPeriodId] = useState<string | null>(null);
+  const [companies,     setCompanies]     = useState<Company[]>(mockCompanies);
 
   const setGenerationResult = (periodId: string, warnings: ShiftWarning[], fairness: FairnessScore[]) => {
     setLastGeneratedPeriodId(periodId);
@@ -180,9 +186,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       confusionMinutes: data.confusionMinutes,
     };
     setGroups((prev) => [...prev, newGroup]);
-    setCurrentUser((prev) => prev ? { ...prev, joinedGroupIds: [...prev.joinedGroupIds, newGroup.id], role: 'owner' } : prev);
-    setCurrentRole('owner');
+    setCurrentUser((prev) => prev ? { ...prev, joinedGroupIds: [...prev.joinedGroupIds, newGroup.id], role: 'platoonCommander', commandedPlatoonId: newGroup.id } : prev);
+    setCurrentRole('platoonCommander');
     return code;
+  };
+
+  // ── Company hierarchy actions ─────────────────────────────────────────────
+  // These are stubs — the API surface used by the upcoming "company commander
+  // setup wizard" screen. They mutate state but do not yet have a UI.
+
+  const createCompany = (data: { name: string; unitName?: string; settings: CompanySettings }): string => {
+    if (!currentUser) return '';
+    const inviteCode = `CO-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newCo: Company = {
+      id: `co-${Date.now()}`,
+      name: data.name,
+      unitName: data.unitName,
+      commanderUserId: currentUser.id,
+      platoonIds: [],
+      inviteCode,
+      settings: data.settings,
+      createdAt: new Date().toISOString(),
+    };
+    setCompanies((prev) => [...prev, newCo]);
+    setCurrentUser((prev) => prev ? { ...prev, role: 'companyCommander', companyId: newCo.id } : prev);
+    setCurrentRole('companyCommander');
+    return inviteCode;
+  };
+
+  // Returns an invite code an officer can paste / scan. Mock impl reuses
+  // a UNIT-XXXX style code; once a real backend exists this becomes a
+  // single-use signed token bound to the (companyId, role, platoonId) tuple.
+  const inviteOfficer = (
+    _companyId: string,
+    _role: 'platoonCommander' | 'platoonSergeant',
+    _platoonId?: string,
+  ): string => `OFF-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  // For inviting a soldier into a specific platoon. Returns the platoon's
+  // existing join code if known, else a freshly generated placeholder.
+  const inviteSoldier = (platoonId: string): string => {
+    const platoon = groups.find((g) => g.id === platoonId);
+    return platoon?.code ?? `INV-${Math.floor(1000 + Math.random() * 9000)}`;
   };
 
   const logout = () => { setCurrentUser(null); setCurrentRole('soldier'); };
@@ -231,6 +276,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentUser, currentRole, soldiers, periods, auditLogs, groups,
       leaves, leaveRequests, soldierHistory, miluimPeriods, reminders, isOnline, hasEmergency,
       lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
+      companies, createCompany, inviteOfficer, inviteSoldier,
       login, register, joinGroup, createGroup, logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
@@ -249,6 +295,43 @@ export function useApp() {
 export function useActivePeriod() {
   const { periods } = useApp();
   return periods.find((p) => p.status === 'published') ?? periods[0] ?? null;
+}
+
+// The company the current user belongs to (if any).
+// company commander → his commanded company
+// platoon commander / sergeant / squad commander / soldier → company of their platoon
+export function useMyCompany() {
+  const { currentUser, companies, groups } = useApp();
+  if (!currentUser) return null;
+  if (currentUser.companyId) {
+    return companies.find((c) => c.id === currentUser.companyId) ?? null;
+  }
+  // Fallback: derive via the user's first joined platoon
+  const platoon = groups.find((g) => currentUser.joinedGroupIds.includes(g.id));
+  if (!platoon?.companyId) return null;
+  return companies.find((c) => c.id === platoon.companyId) ?? null;
+}
+
+// Platoons the current user has authority over.
+// company commander → all platoons in his company
+// platoon commander/sergeant → his commanded platoon
+// squad commander / soldier → empty (they don't manage platoons)
+export function useMyPlatoons(): Group[] {
+  const { currentUser, currentRole, groups } = useApp();
+  const company = useMyCompany();
+  if (!currentUser) return [];
+  if (currentRole === 'companyCommander' || currentRole === 'owner') {
+    if (!company) return [];
+    return groups.filter((g) => company.platoonIds.includes(g.id) || g.companyId === company.id);
+  }
+  if (currentRole === 'platoonCommander' || currentRole === 'platoonSergeant' || currentRole === 'manager') {
+    if (currentUser.commandedPlatoonId) {
+      return groups.filter((g) => g.id === currentUser.commandedPlatoonId);
+    }
+    // Legacy: any platoon the user is a member of
+    return groups.filter((g) => g.memberIds.includes(currentUser.id));
+  }
+  return [];
 }
 
 export function useVisiblePeriods() {
