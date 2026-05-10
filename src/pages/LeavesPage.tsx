@@ -6,7 +6,7 @@ import type { LeaveScope } from '../types';
 
 const scopeLabel: Record<LeaveScope, string> = {
   individual: 'יחיד',
-  subUnit:    'תת-קבוצה',
+  squad:    'כיתה',
   machlaka:   'מחלקה',
 };
 
@@ -19,7 +19,7 @@ const reqStatusStyle = {
 
 export default function LeavesPage() {
   const {
-    leaves, soldiers, subUnits, addLeave, removeLeave, addAuditLog,
+    leaves, soldiers, squads, addLeave, removeLeave, addAuditLog,
     currentUser, currentRole,
     approveLeaveRequest, rejectLeaveRequest,
   } = useApp();
@@ -33,10 +33,10 @@ export default function LeavesPage() {
   // Sub-units the current manager can issue leaves against:
   // company commander → all sub-units in the company; platoon leader →
   // sub-units of their platoon only.
-  const visibleSubUnits = subUnits.filter((s) =>
+  const visibleSquads = squads.filter((s) =>
     myPlatoons.some((p) => p.id === s.platoonId)
   );
-  const subUnitNameOf = (id?: string) => subUnits.find((s) => s.id === id)?.name ?? '—';
+  const squadNameOf = (id?: string) => squads.find((s) => s.id === id)?.name ?? '—';
 
   const isManager = isPlatoonLeadership(currentRole);
   const [tab, setTab] = useState<'leaves' | 'requests'>('leaves');
@@ -44,7 +44,7 @@ export default function LeavesPage() {
   const [form, setForm] = useState({
     scope:      'individual' as LeaveScope,
     soldierIds: [] as string[],
-    subUnitId:  visibleSubUnits[0]?.id ?? '',
+    squadId:  visibleSquads[0]?.id ?? '',
     startDate:  '',
     startTime:  '14:00',
     endDate:    '',
@@ -65,18 +65,18 @@ export default function LeavesPage() {
 
   const leaveDescription = () => {
     if (form.scope === 'individual') return form.soldierIds.map(getSoldierName).join(', ');
-    if (form.scope === 'subUnit')    return `תת-קבוצה: ${subUnitNameOf(form.subUnitId)}`;
+    if (form.scope === 'squad')    return `כיתה: ${squadNameOf(form.squadId)}`;
     return 'כל המחלקה';
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const subUnit = subUnits.find((s) => s.id === form.subUnitId);
+    const squad = squads.find((s) => s.id === form.squadId);
     addLeave({
       scope:         form.scope,
       soldierIds:    form.soldierIds,
-      subUnitId:     form.scope === 'subUnit' ? form.subUnitId : undefined,
-      teamClass:     form.scope === 'subUnit' ? subUnit?.name : undefined,
+      squadId:     form.scope === 'squad' ? form.squadId : undefined,
+      teamClass:     form.scope === 'squad' ? squad?.name : undefined,
       startDate:     form.startDate,
       startTime:     form.startTime,
       endDate:       form.endDate,
@@ -88,7 +88,7 @@ export default function LeavesPage() {
     addAuditLog({ actorName: currentUser!.name, actorRole: currentRole, action: 'הגדיר יציאה', target: leaveDescription() });
     setSaved(true);
     setShowForm(false);
-    setForm({ scope: 'individual', soldierIds: [], subUnitId: visibleSubUnits[0]?.id ?? '', startDate: '', startTime: '14:00', endDate: '', endTime: '08:00', note: '' });
+    setForm({ scope: 'individual', soldierIds: [], squadId: visibleSquads[0]?.id ?? '', startDate: '', startTime: '14:00', endDate: '', endTime: '08:00', note: '' });
     setTimeout(() => setSaved(false), 3000);
   };
 
@@ -148,7 +148,7 @@ export default function LeavesPage() {
                   <div>
                     <label className="block text-xs text-mil-muted mb-2">סוג יציאה</label>
                     <div className="flex gap-2">
-                      {(['individual', 'subUnit', 'machlaka'] as LeaveScope[]).map((s) => (
+                      {(['individual', 'squad', 'machlaka'] as LeaveScope[]).map((s) => (
                         <button
                           key={s}
                           type="button"
@@ -188,12 +188,12 @@ export default function LeavesPage() {
                     </div>
                   )}
 
-                  {form.scope === 'subUnit' && (
+                  {form.scope === 'squad' && (
                     <div>
-                      <label className="block text-xs text-mil-muted mb-1.5">תת-קבוצה</label>
-                      <select className={inp} value={form.subUnitId} onChange={(e) => setForm((f) => ({ ...f, subUnitId: e.target.value }))}>
-                        {visibleSubUnits.length === 0 && <option value="">— אין תת-קבוצות במחלקתך —</option>}
-                        {visibleSubUnits.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      <label className="block text-xs text-mil-muted mb-1.5">כיתה</label>
+                      <select className={inp} value={form.squadId} onChange={(e) => setForm((f) => ({ ...f, squadId: e.target.value }))}>
+                        {visibleSquads.length === 0 && <option value="">— אין כיתות במחלקתך —</option>}
+                        {visibleSquads.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </div>
                   )}
@@ -245,8 +245,8 @@ export default function LeavesPage() {
               {leaves.map((lv) => {
                 const who = lv.scope === 'individual'
                   ? lv.soldierIds.map(getSoldierName).join(', ')
-                  : lv.scope === 'subUnit'
-                  ? `תת-קבוצה: ${subUnitNameOf(lv.subUnitId)}`
+                  : lv.scope === 'squad'
+                  ? `כיתה: ${squadNameOf(lv.squadId)}`
                   : 'כל המחלקה';
 
                 return (

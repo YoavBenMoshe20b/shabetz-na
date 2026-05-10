@@ -44,7 +44,7 @@ export default function DashboardPage() {
 
 function CompanyCommanderDashboard() {
   const navigate = useNavigate();
-  const { soldiers, leaves, subUnits, groups, overrideAlerts } = useApp();
+  const { soldiers, leaves, squads, platoons, overrideAlerts } = useApp();
   const myCompany = useMyCompany();
   const myPlatoons = useMyPlatoons();
   const allAlerts = useAlertsForCompany();
@@ -53,10 +53,10 @@ function CompanyCommanderDashboard() {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
 
-  // Soldiers attached to a platoon via their subUnit (subUnit.platoonId)
+  // Soldiers attached to a platoon via their squad (squad.platoonId)
   const soldiersInPlatoon = (platoonId: string): Soldier[] => {
-    const ids = subUnits.filter((s) => s.platoonId === platoonId).map((s) => s.id);
-    return soldiers.filter((s) => s.subUnitId && ids.includes(s.subUnitId));
+    const ids = squads.filter((s) => s.platoonId === platoonId).map((s) => s.id);
+    return soldiers.filter((s) => s.squadId && ids.includes(s.squadId));
   };
 
   const onLeaveIds = useMemo(() => {
@@ -64,7 +64,7 @@ function CompanyCommanderDashboard() {
     leaves.forEach((lv) => {
       if (today < lv.startDate || today > lv.endDate) return;
       if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
-      else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => ids.add(s.id));
+      else if (lv.scope === 'squad') soldiers.filter((s) => s.squadId === lv.squadId).forEach((s) => ids.add(s.id));
       else soldiers.forEach((s) => ids.add(s.id));
     });
     return ids;
@@ -185,7 +185,7 @@ function CompanyCommanderDashboard() {
                       {a.status === 'open' && <StatusPill status={a.riskLevel === 'high' ? 'critical' : 'warning'}>פתוח</StatusPill>}
                       {a.status === 'acknowledged' && <Hint>נצפה</Hint>}
                       {a.status === 'resolved' && <Hint className="text-mil-success">טופל</Hint>}
-                      <Hint className="mr-auto">{groups.find((g) => g.id === a.platoonId)?.name ?? '—'}</Hint>
+                      <Hint className="mr-auto">{platoons.find((g) => g.id === a.platoonId)?.name ?? '—'}</Hint>
                     </div>
                     <Body>{a.description}</Body>
                     {a.suggestedAction && <Muted className="mt-1">{a.suggestedAction}</Muted>}
@@ -206,7 +206,7 @@ function CompanyCommanderDashboard() {
               />
               <SettingsRow
                 title="מבנה החברה"
-                detail={`${myPlatoons.length} מחלקות · ${subUnits.filter((s) => myPlatoons.some((p) => p.id === s.platoonId)).length} תת-קבוצות`}
+                detail={`${myPlatoons.length} מחלקות · ${squads.filter((s) => myPlatoons.some((p) => p.id === s.platoonId)).length} כיתות`}
               />
               <SettingsRow
                 title="משתמשים והרשאות"
@@ -240,13 +240,13 @@ function SettingsRow({ title, detail }: { title: string; detail: string }) {
 
 function PlatoonCommanderDashboard() {
   const navigate = useNavigate();
-  const { soldiers, leaves, groups, currentUser } = useApp();
+  const { soldiers, leaves, platoons, currentUser } = useApp();
   const activePeriod = useActivePeriod();
   const approvableRequests = useApprovableLeaveRequests();
   const myAlerts = useAlertsForCompany();           // platoon-tier sees only their own platoon's alerts
 
-  const myPlatoon = groups.find((g) => g.id === currentUser?.commandedPlatoonId)
-    ?? groups.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
+  const myPlatoon = platoons.find((g) => g.id === currentUser?.commandedPlatoonId)
+    ?? platoons.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
 
   // "Now" stats strip
   const today = new Date().toISOString().slice(0, 10);
@@ -255,7 +255,7 @@ function PlatoonCommanderDashboard() {
     leaves.forEach((lv) => {
       if (today < lv.startDate || today > lv.endDate) return;
       if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
-      else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => ids.add(s.id));
+      else if (lv.scope === 'squad') soldiers.filter((s) => s.squadId === lv.squadId).forEach((s) => ids.add(s.id));
       else soldiers.forEach((s) => ids.add(s.id));
     });
     return ids;
@@ -421,12 +421,12 @@ function StatGroup({ metric, label, tone }: { metric: number; label: string; ton
 // ─── Soldier Dashboard ────────────────────────────────────────────────────────
 
 function SoldierDashboard() {
-  const { soldiers, leaves, currentUser, groups, subUnits, setReminder, addLeaveRequest } = useApp();
+  const { soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest } = useApp();
   const activePeriod = useActivePeriod();
-  const myGroup = groups.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
+  const myPlatoon = platoons.find((p) => p.id === currentUser?.platoonId);
 
   const myProfile = soldiers.find((s) => s.id === currentUser?.soldierProfileId || s.userId === currentUser?.id);
-  const mySubUnitName = subUnits.find((s) => s.id === myProfile?.subUnitId)?.name ?? myProfile?.teamClass ?? '';
+  const mySquadName = squads.find((s) => s.id === myProfile?.squadId)?.name ?? myProfile?.teamClass ?? '';
 
   // Collapsibles + modal state
   const [showWeek,    setShowWeek]    = useState(false);
@@ -488,7 +488,7 @@ function SoldierDashboard() {
     leaves.forEach((lv) => {
       if (scheduleDate < lv.startDate || scheduleDate > lv.endDate) return;
       if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
-      else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => ids.add(s.id));
+      else if (lv.scope === 'squad') soldiers.filter((s) => s.squadId === lv.squadId).forEach((s) => ids.add(s.id));
       else soldiers.forEach((s) => ids.add(s.id));
     });
     return ids;
@@ -517,8 +517,8 @@ function SoldierDashboard() {
       soldierId:           myProfile.id,
       soldierName:         myProfile.name,
       soldierTeamClass:    myProfile.teamClass,
-      soldierSubUnitId:    myProfile.subUnitId,
-      soldierSubUnitName:  mySubUnitName || undefined,
+      soldierSquadId:    myProfile.squadId,
+      soldierSquadName:  mySquadName || undefined,
       startDate: data.startDate,
       startTime: data.startTime,
       endDate:   data.endDate,
@@ -549,8 +549,8 @@ function SoldierDashboard() {
         <div>
           <PageTitle>שלום, {currentUser?.name?.split(' ')[0]}</PageTitle>
           <Muted className="mt-1.5">
-            {myGroup?.name}
-            {mySubUnitName && ` · ${mySubUnitName}`}
+            {myPlatoon?.name}
+            {mySquadName && ` · ${mySquadName}`}
             {myProfile && myProfile.operationalRoles.length > 0 && ` · ${myProfile.operationalRoles.join(', ')}`}
           </Muted>
         </div>
@@ -632,12 +632,12 @@ function SoldierDashboard() {
               const tone =
                 onLeave ? 'bg-mil-sand' :
                 s.availability ? 'bg-mil-success' : 'bg-mil-ghost';
-              const subUnit = subUnits.find((su) => su.id === s.subUnitId)?.name ?? s.teamClass;
+              const squad = squads.find((su) => su.id === s.squadId)?.name ?? s.teamClass;
               return (
                 <div key={s.id} className="px-4 py-3 flex items-center gap-3">
                   <span className={`w-2 h-2 rounded-full ${tone} flex-shrink-0`} />
                   <Body className="flex-1">{s.name}</Body>
-                  <Muted>{subUnit}</Muted>
+                  <Muted>{squad}</Muted>
                 </div>
               );
             })}

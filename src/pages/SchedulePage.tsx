@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp, useVisiblePeriods } from '../context/AppContext';
 import Header from '../components/Header';
-import { canPublishSchedule, canRecalculate, canViewManagerNotes, isPlatoonLeadership } from '../utils/permissions';
+import { canPublishSchedule, canRecalculate, canViewCommanderNotes, isPlatoonLeadership } from '../utils/permissions';
 import { generateSchedule, generateTimeSlots, regenerateSlot } from '../utils/scheduleAlgo';
 import type {
   MissionCategory, OperationalRole, MissionType, SchedulePeriod, TimeSlot,
@@ -61,7 +61,7 @@ export default function SchedulePage() {
   const {
     soldiers, leaves, updatePeriod, addPeriod, addAuditLog, currentUser, currentRole,
     soldierHistory, lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
-    groups, recordOverrideAlert,
+    platoons, recordOverrideAlert,
   } = useApp();
   const visiblePeriods = useVisiblePeriods();
   const isManager = isPlatoonLeadership(currentRole);
@@ -103,7 +103,7 @@ export default function SchedulePage() {
       endDate: periodForm.endDate,
       status: 'draft',
       missionTypes: [],
-      managerNotes: [],
+      commanderNotes: [],
     };
     addPeriod(newPeriod);
     addAuditLog({ actorName: currentUser!.name, actorRole: currentRole, action: 'יצר תקופת שיבוץ', target: periodForm.name });
@@ -136,7 +136,7 @@ export default function SchedulePage() {
     // Heuristic for now: the period belongs to the user's commanded platoon
     // if they have one, otherwise to the first platoon they're a member of.
     if (currentUser?.commandedPlatoonId) return currentUser.commandedPlatoonId;
-    return groups.find((g) => g.memberIds.includes(currentUser?.id ?? ''))?.id;
+    return platoons.find((g) => g.memberIds.includes(currentUser?.id ?? ''))?.id;
   };
 
   const handleAssign = (missionId: string, slotId: string, soldierId: string) => {
@@ -477,14 +477,14 @@ export default function SchedulePage() {
             )}
 
             {/* Manager notes */}
-            {canViewManagerNotes(currentRole) && period.managerNotes.length > 0 && (
+            {canViewCommanderNotes(currentRole) && period.commanderNotes.length > 0 && (
               <div className="bg-mil-card border border-mil-olive/20 rounded-xl overflow-hidden">
                 <div className="bg-mil-surface border-b border-mil-border px-4 py-2.5 flex items-center gap-2">
                   <span className="text-xs font-bold tracking-widest text-mil-sand">הערות מנהל</span>
                   <span className="text-xs text-mil-text-inv/40">(מוסתר מחיילים)</span>
                 </div>
                 <div className="px-4 py-3 space-y-1.5">
-                  {period.managerNotes.map((n) => (
+                  {period.commanderNotes.map((n) => (
                     <div key={n.id} className="flex gap-2 text-xs">
                       <span className="text-mil-olive mt-0.5">▸</span>
                       <span className="text-mil-text">{n.text}</span>

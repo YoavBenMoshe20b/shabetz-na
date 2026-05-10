@@ -20,7 +20,7 @@ type Identity = 'soldier' | 'platoonCommander' | 'platoonSergeant' | 'deputyComp
 interface PendingLeave { startDate: string; startTime: string; endDate: string; endTime: string; reason: string }
 
 export default function JoinCompanyPage() {
-  const { companies, groups, subUnits, joinCompany } = useApp();
+  const { companies, platoons, squads, joinCompany } = useApp();
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>(1);
@@ -29,18 +29,18 @@ export default function JoinCompanyPage() {
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [foundCompany, setFoundCompany] = useState<typeof companies[0] | null>(null);
-  const companyPlatoons = foundCompany ? groups.filter((g) => g.companyId === foundCompany.id) : [];
+  const companyPlatoons = foundCompany ? platoons.filter((g) => g.companyId === foundCompany.id) : [];
 
   // Step 2: identity
   const [identity, setIdentity] = useState<Identity | null>(null);
 
   // Step 3: platoon (soldier + officer)
   const [platoonId, setPlatoonId] = useState<string>('');
-  const platoon = groups.find((g) => g.id === platoonId);
-  const platoonSubUnits = platoon ? subUnits.filter((s) => s.platoonId === platoon.id) : [];
+  const platoon = platoons.find((g) => g.id === platoonId);
+  const platoonSquads = platoon ? squads.filter((s) => s.platoonId === platoon.id) : [];
 
   // Step 4: sub-unit (soldier only)
-  const [subUnitId, setSubUnitId] = useState<string>('');
+  const [squadId, setSquadId] = useState<string>('');
 
   // Step 5: operational role (soldier only)
   const [opRole, setOpRole] = useState<string>('');
@@ -83,16 +83,16 @@ export default function JoinCompanyPage() {
       return;
     }
     // soldier
-    if (platoonSubUnits.length > 0) {
-      setSubUnitId(platoonSubUnits[0].id);
+    if (platoonSquads.length > 0) {
+      setSquadId(platoonSquads[0].id);
       setStep(4);
     } else {
       setStep(5);  // platoon has no sub-units yet — skip to role
     }
   };
 
-  const handleSubUnitNext = () => {
-    if (!subUnitId) return;
+  const handleSquadNext = () => {
+    if (!squadId) return;
     setStep(5);
   };
 
@@ -111,7 +111,7 @@ export default function JoinCompanyPage() {
     submit({
       kind: 'soldier',
       platoonId,
-      subUnitId: subUnitId || undefined,
+      squadId: squadId || undefined,
       operationalRole: opRole,
       pendingLeaves: hasLeaves ? pendingLeaves : undefined,
     });
@@ -220,7 +220,7 @@ export default function JoinCompanyPage() {
             <div className="space-y-2.5">
               <IdentityOption
                 label="חייל"
-                hint="התפקיד הנפוץ ביותר — תבחר/י את המחלקה ותת-הקבוצה בהמשך"
+                hint="התפקיד הנפוץ ביותר — תבחר/י את המחלקה והכיתה בהמשך"
                 active={identity === 'soldier'}
                 onClick={() => setIdentity('soldier')}
               />
@@ -285,20 +285,20 @@ export default function JoinCompanyPage() {
         {step === 4 && (
           <>
             <div>
-              <PageTitle>לאיזו תת-קבוצה?</PageTitle>
+              <PageTitle>לאיזו כיתה?</PageTitle>
               <Muted className="mt-2">{platoon?.name}</Muted>
             </div>
             <div className="space-y-2.5">
-              {platoonSubUnits.map((su) => (
-                <Card key={su.id} variant={subUnitId === su.id ? 'hero' : 'default'} onClick={() => setSubUnitId(su.id)}>
+              {platoonSquads.map((su) => (
+                <Card key={su.id} variant={squadId === su.id ? 'hero' : 'default'} onClick={() => setSquadId(su.id)}>
                   <div className="px-4 py-3.5 flex items-center gap-3">
                     <CardTitle className="flex-1">{su.name}</CardTitle>
-                    {subUnitId === su.id && <StatusPill status="ready">נבחר</StatusPill>}
+                    {squadId === su.id && <StatusPill status="ready">נבחר</StatusPill>}
                   </div>
                 </Card>
               ))}
             </div>
-            <Button variant="primary" size="lg" fullWidth disabled={!subUnitId} onClick={handleSubUnitNext}>
+            <Button variant="primary" size="lg" fullWidth disabled={!squadId} onClick={handleSquadNext}>
               המשך ←
             </Button>
           </>

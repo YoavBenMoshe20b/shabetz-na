@@ -1,14 +1,14 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type {
-  MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Group,
+  MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Platoon,
   MissionType, ReminderSetting, Leave, LeaveRequest, SoldierHistory, MiluimPeriod,
-  ShiftWarning, FairnessScore, Company, CompanySettings, SubUnit,
+  ShiftWarning, FairnessScore, Company, CompanySettings, Squad,
   CompanyMission, OverrideAlert,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
-  mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockGroups, mockLeaves, mockLeaveRequests,
-  mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSubUnits, mockCompanyMissions, mockOverrideAlerts,
+  mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockPlatoons, mockLeaves, mockLeaveRequests,
+  mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -27,7 +27,7 @@ export interface CreateCompanyInput {
     isSpecial?: boolean;
     /** Sub-unit names to seed under this platoon. Empty for special platoons
      *  whose structure the platoon commander will define later. */
-    subUnitNames: string[];
+    squadNames: string[];
   }>;
 }
 
@@ -35,7 +35,7 @@ export type JoinIdentity =
   | {
       kind:        'soldier';
       platoonId:   string;
-      subUnitId?:  string;
+      squadId?:  string;
       operationalRole?: string;
       pendingLeaves?: Array<{ startDate: string; startTime: string; endDate: string; endTime: string; reason: string }>;
     }
@@ -49,7 +49,7 @@ interface AppContextType {
   soldiers:       Soldier[];
   periods:        SchedulePeriod[];
   auditLogs:      AuditLog[];
-  groups:         Group[];
+  platoons:       Platoon[];
   leaves:         Leave[];
   leaveRequests:  LeaveRequest[];
   soldierHistory: SoldierHistory[];
@@ -64,13 +64,13 @@ interface AppContextType {
   setGenerationResult: (periodId: string, warnings: ShiftWarning[], fairness: FairnessScore[]) => void;
   // Company hierarchy
   companies:      Company[];
-  subUnits:       SubUnit[];
-  addSubUnit:     (data: { platoonId: string; name: string }) => SubUnit;
-  removeSubUnit:  (id: string) => void;
-  renameSubUnit:  (id: string, name: string) => void;
+  squads:       Squad[];
+  addSquad:     (data: { platoonId: string; name: string }) => Squad;
+  removeSquad:  (id: string) => void;
+  renameSquad:  (id: string, name: string) => void;
   // The ONE entry point for organisational creation. Only company-level
   // leadership invokes this (gated by canCreateCompany). It creates the
-  // Company + its Platoons + their SubUnits in one transaction, then sets
+  // Company + its Platoons + their Squads in one transaction, then sets
   // the current user as that company's commander.
   createCompany:  (data: CreateCompanyInput) => string;     // returns invite code
   inviteOfficer:  (companyId: string, role: 'platoonCommander' | 'platoonSergeant', platoonId?: string) => string;
@@ -117,7 +117,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [soldiers,     setSoldiers]     = useState<Soldier[]>(mockSoldiers);
   const [periods,      setPeriods]      = useState<SchedulePeriod[]>(mockSchedulePeriods);
   const [auditLogs,    setAuditLogs]    = useState<AuditLog[]>(mockAuditLogs);
-  const [groups, setGroups]             = useState<Group[]>(mockGroups);
+  const [platoons, setPlatoons]           = useState<Platoon[]>(mockPlatoons);
   const [leaves,        setLeaves]        = useState<Leave[]>(mockLeaves);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(mockLeaveRequests);
   const [soldierHistory]                  = useState<SoldierHistory[]>(mockSoldierHistory);
@@ -129,33 +129,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastFairness,  setLastFairness]  = useState<FairnessScore[]>([]);
   const [lastGeneratedPeriodId, setLastGeneratedPeriodId] = useState<string | null>(null);
   const [companies,     setCompanies]     = useState<Company[]>(mockCompanies);
-  const [subUnits,      setSubUnits]      = useState<SubUnit[]>(mockSubUnits);
+  const [squads,      setSquads]      = useState<Squad[]>(mockSquads);
 
-  const addSubUnit = (data: { platoonId: string; name: string }): SubUnit => {
-    const newSu: SubUnit = {
+  const addSquad = (data: { platoonId: string; name: string }): Squad => {
+    const newSu: Squad = {
       id: `su-${Date.now()}`,
       platoonId: data.platoonId,
       name: data.name,
       soldierIds: [],
     };
-    setSubUnits((prev) => [...prev, newSu]);
-    setGroups((prev) => prev.map((g) => g.id === data.platoonId
-      ? { ...g, subUnitIds: [...(g.subUnitIds ?? []), newSu.id] }
+    setSquads((prev) => [...prev, newSu]);
+    setPlatoons((prev) => prev.map((g) => g.id === data.platoonId
+      ? { ...g, squadIds: [...(g.squadIds ?? []), newSu.id] }
       : g
     ));
     return newSu;
   };
 
-  const removeSubUnit = (id: string) => {
-    setSubUnits((prev) => prev.filter((s) => s.id !== id));
-    setGroups((prev) => prev.map((g) => g.subUnitIds?.includes(id)
-      ? { ...g, subUnitIds: g.subUnitIds.filter((x) => x !== id) }
+  const removeSquad = (id: string) => {
+    setSquads((prev) => prev.filter((s) => s.id !== id));
+    setPlatoons((prev) => prev.map((g) => g.squadIds?.includes(id)
+      ? { ...g, squadIds: g.squadIds.filter((x) => x !== id) }
       : g
     ));
   };
 
-  const renameSubUnit = (id: string, name: string) =>
-    setSubUnits((prev) => prev.map((s) => s.id === id ? { ...s, name } : s));
+  const renameSquad = (id: string, name: string) =>
+    setSquads((prev) => prev.map((s) => s.id === id ? { ...s, name } : s));
 
   // ── Company missions (company-tier capability — gated by canCreateCompanyMission) ──
   const [companyMissions, setCompanyMissions] = useState<CompanyMission[]>(mockCompanyMissions);
@@ -240,7 +240,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       email: data.email.trim(),
       username: data.username.trim(),
       password: data.password,
-      joinedGroupIds: [],
       operationalRoles: [],
       teamClass: '',
     };
@@ -275,12 +274,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     // From here on we need a platoon
-    const platoon = groups.find((g) => g.id === identity.platoonId && g.companyId === company.id);
+    const platoon = platoons.find((g) => g.id === identity.platoonId && g.companyId === company.id);
     if (!platoon) return { ok: false, error: 'המחלקה שנבחרה לא שייכת לפלוגה זו' };
 
     if (identity.kind === 'platoonCommander' || identity.kind === 'platoonSergeant') {
       const isCommander = identity.kind === 'platoonCommander';
-      setGroups((prev) => prev.map((g) => g.id === platoon.id ? ({
+      setPlatoons((prev) => prev.map((g) => g.id === platoon.id ? ({
         ...g,
         memberIds: g.memberIds.includes(currentUser.id) ? g.memberIds : [...g.memberIds, currentUser.id],
         ...(isCommander
@@ -295,35 +294,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
         role: identity.kind,
         companyId: company.id,
         commandedPlatoonId: platoon.id,
-        joinedGroupIds: prev.joinedGroupIds.includes(platoon.id) ? prev.joinedGroupIds : [...prev.joinedGroupIds, platoon.id],
+        platoonId: platoon.id,
       } : prev);
       setCurrentRole(identity.kind);
       return { ok: true };
     }
 
     // identity.kind === 'soldier'
-    const subUnit = identity.subUnitId ? subUnits.find((s) => s.id === identity.subUnitId) : undefined;
-    const subUnitName = subUnit?.name ?? '';
+    const squad = identity.squadId ? squads.find((s) => s.id === identity.squadId) : undefined;
+    const squadName = squad?.name ?? '';
     const operationalRole = identity.operationalRole ?? '';
     const soldierRecord: Soldier = {
       id: `s-${Date.now()}`,
       name: currentUser.name,
       operationalRoles: (operationalRole ? [operationalRole] : []) as import('../types').OperationalRole[],
-      teamClass: subUnitName,
-      subUnitId: subUnit?.id,
+      teamClass: squadName,
+      squadId: squad?.id,
       availability: true,
       availabilityNotes: [],
       currentLoad: 0,
       userId: currentUser.id,
     };
     setSoldiers((prev) => [...prev, soldierRecord]);
-    if (subUnit) {
-      setSubUnits((prev) => prev.map((s) => s.id === subUnit.id
+    if (squad) {
+      setSquads((prev) => prev.map((s) => s.id === squad.id
         ? { ...s, soldierIds: [...s.soldierIds, soldierRecord.id] }
         : s
       ));
     }
-    setGroups((prev) => prev.map((g) => g.id === platoon.id
+    setPlatoons((prev) => prev.map((g) => g.id === platoon.id
       ? { ...g, memberIds: g.memberIds.includes(currentUser.id) ? g.memberIds : [...g.memberIds, currentUser.id] }
       : g
     ));
@@ -331,9 +330,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...prev,
       role: 'soldier',
       companyId: company.id,
-      joinedGroupIds: prev.joinedGroupIds.includes(platoon.id) ? prev.joinedGroupIds : [...prev.joinedGroupIds, platoon.id],
-      teamClass: subUnitName,
-      subUnitId: subUnit?.id,
+      platoonId: platoon.id,
+      teamClass: squadName,
+      squadId: squad?.id,
       soldierProfileId: soldierRecord.id,
     } : prev);
 
@@ -343,9 +342,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: `lr-${Date.now()}-${Math.random()}`,
         soldierId: soldierRecord.id,
         soldierName: currentUser.name,
-        soldierTeamClass: subUnitName,
-        soldierSubUnitId: subUnit?.id,
-        soldierSubUnitName: subUnitName || undefined,
+        soldierTeamClass: squadName,
+        soldierSquadId: squad?.id,
+        soldierSquadName: squadName || undefined,
         status: 'pending',
         submittedAt: new Date().toISOString(),
       }]);
@@ -354,7 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Create COMPANY (sole entry point for org creation) ─────────────────────
-  // One atomic transaction: Company + Platoons + SubUnits. The current user
+  // One atomic transaction: Company + Platoons + Squads. The current user
   // becomes the company commander. There is no path for non-commanders to
   // reach this — the route guard + permission helper enforce that.
 
@@ -366,27 +365,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const inviteCode = `CO-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // Create platoons + sub-units first so we can reference their ids
-    const newPlatoons: Group[] = [];
-    const newSubUnits: SubUnit[] = [];
+    const newPlatoons: Platoon[] = [];
+    const newSquads: Squad[] = [];
     data.platoons.forEach((p, idx) => {
       const platoonId = `g-${Date.now()}-${idx}`;
       const platoonCode = `UNIT-${Math.floor(1000 + Math.random() * 9000)}`;
-      const subUnitIds: string[] = [];
-      p.subUnitNames.forEach((suName, sIdx) => {
+      const squadIds: string[] = [];
+      p.squadNames.forEach((suName, sIdx) => {
         const suId = `su-${Date.now()}-${idx}-${sIdx}`;
-        subUnitIds.push(suId);
-        newSubUnits.push({ id: suId, platoonId, name: suName, soldierIds: [] });
+        squadIds.push(suId);
+        newSquads.push({ id: suId, platoonId, name: suName, soldierIds: [] });
       });
       newPlatoons.push({
         id: platoonId,
         name: p.name,
         unitName: data.unitName,
         code: platoonCode,
-        ownerId: currentUser.id,
         memberIds: [],                            // populated as users join
         availableRoles: DEFAULT_AVAILABLE_ROLES,
         companyId,
-        subUnitIds,
+        squadIds,
         isSpecialPlatoon: p.isSpecial,
         followsCompanyLeaveRotation: !p.isSpecial,
       });
@@ -404,8 +402,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     setCompanies((prev) => [...prev, newCompany]);
-    setGroups((prev)    => [...prev, ...newPlatoons]);
-    setSubUnits((prev)  => [...prev, ...newSubUnits]);
+    setPlatoons((prev)    => [...prev, ...newPlatoons]);
+    setSquads((prev)  => [...prev, ...newSquads]);
     setCurrentUser((prev) => prev ? {
       ...prev,
       role: 'companyCommander',
@@ -428,7 +426,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // For inviting a soldier into a specific platoon. Returns the platoon's
   // existing join code if known, else a freshly generated placeholder.
   const inviteSoldier = (platoonId: string): string => {
-    const platoon = groups.find((g) => g.id === platoonId);
+    const platoon = platoons.find((g) => g.id === platoonId);
     return platoon?.code ?? `INV-${Math.floor(1000 + Math.random() * 9000)}`;
   };
 
@@ -475,10 +473,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      currentUser, currentRole, soldiers, periods, auditLogs, groups,
+      currentUser, currentRole, soldiers, periods, auditLogs, platoons,
       leaves, leaveRequests, soldierHistory, miluimPeriods, reminders, isOnline, hasEmergency,
       lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
-      companies, subUnits, addSubUnit, removeSubUnit, renameSubUnit,
+      companies, squads, addSquad, removeSquad, renameSquad,
       createCompany, inviteOfficer, inviteSoldier,
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
@@ -506,13 +504,14 @@ export function useActivePeriod() {
 // company commander → his commanded company
 // platoon commander / sergeant / squad commander / soldier → company of their platoon
 export function useMyCompany() {
-  const { currentUser, companies, groups } = useApp();
+  const { currentUser, companies, platoons } = useApp();
   if (!currentUser) return null;
   if (currentUser.companyId) {
     return companies.find((c) => c.id === currentUser.companyId) ?? null;
   }
-  // Fallback: derive via the user's first joined platoon
-  const platoon = groups.find((g) => currentUser.joinedGroupIds.includes(g.id));
+  // Fallback: derive via the user's platoon
+  if (!currentUser.platoonId) return null;
+  const platoon = platoons.find((g) => g.id === currentUser.platoonId);
   if (!platoon?.companyId) return null;
   return companies.find((c) => c.id === platoon.companyId) ?? null;
 }
@@ -521,30 +520,30 @@ export function useMyCompany() {
 // companyCommander / deputyCompanyCommander → all platoons in their company
 // platoonCommander / platoonSergeant         → their commanded platoon
 // soldier                                    → empty (no management scope)
-export function useMyPlatoons(): Group[] {
-  const { currentUser, currentRole, groups } = useApp();
+export function useMyPlatoons(): Platoon[] {
+  const { currentUser, currentRole, platoons } = useApp();
   const company = useMyCompany();
   if (!currentUser) return [];
   if (currentRole === 'companyCommander' || currentRole === 'deputyCompanyCommander' || currentRole === 'owner') {
     if (!company) return [];
-    return groups.filter((g) => company.platoonIds.includes(g.id) || g.companyId === company.id);
+    return platoons.filter((g) => company.platoonIds.includes(g.id) || g.companyId === company.id);
   }
   if (currentRole === 'platoonCommander' || currentRole === 'platoonSergeant' || currentRole === 'manager') {
     if (currentUser.commandedPlatoonId) {
-      return groups.filter((g) => g.id === currentUser.commandedPlatoonId);
+      return platoons.filter((g) => g.id === currentUser.commandedPlatoonId);
     }
     // Legacy fallback: any platoon the user is a member of
-    return groups.filter((g) => g.memberIds.includes(currentUser.id));
+    return platoons.filter((g) => g.memberIds.includes(currentUser.id));
   }
   return [];
 }
 
-// SubUnits belonging to a given platoon (organisational layer).
+// Squads belonging to a given platoon (organisational layer).
 // Returns [] if the platoon has none defined.
-export function useSubUnitsForPlatoon(platoonId: string | undefined): SubUnit[] {
-  const { subUnits } = useApp();
+export function useSquadsForPlatoon(platoonId: string | undefined): Squad[] {
+  const { squads } = useApp();
   if (!platoonId) return [];
-  return subUnits.filter((s) => s.platoonId === platoonId);
+  return squads.filter((s) => s.platoonId === platoonId);
 }
 
 // Operational emergency detector — returns a non-null payload when the
@@ -565,20 +564,20 @@ export interface OperationalEmergency {
 }
 
 export function useOperationalEmergency(): OperationalEmergency | null {
-  const { currentUser, currentRole, soldiers, leaves, groups, subUnits, companies, periods, overrideAlerts } = useApp();
+  const { currentUser, currentRole, soldiers, leaves, platoons, squads, companies, periods, overrideAlerts } = useApp();
   if (!currentUser) return null;
   if (currentRole === 'soldier') return null;     // soldiers never see this layer
 
   // Resolve scope: which platoons should we evaluate?
-  let scopePlatoons: typeof groups = [];
+  let scopePlatoons: typeof platoons = [];
   if (currentRole === 'companyCommander' || currentRole === 'deputyCompanyCommander' || currentRole === 'owner') {
     const co = companies.find((c) => c.id === currentUser.companyId);
-    scopePlatoons = co ? groups.filter((g) => co.platoonIds.includes(g.id) || g.companyId === co.id) : [];
+    scopePlatoons = co ? platoons.filter((g) => co.platoonIds.includes(g.id) || g.companyId === co.id) : [];
   } else if (currentUser.commandedPlatoonId) {
-    const p = groups.find((g) => g.id === currentUser.commandedPlatoonId);
+    const p = platoons.find((g) => g.id === currentUser.commandedPlatoonId);
     if (p) scopePlatoons = [p];
   } else {
-    scopePlatoons = groups.filter((g) => g.memberIds.includes(currentUser.id));
+    scopePlatoons = platoons.filter((g) => g.memberIds.includes(currentUser.id));
   }
   if (scopePlatoons.length === 0) return null;
 
@@ -588,12 +587,12 @@ export function useOperationalEmergency(): OperationalEmergency | null {
   leaves.forEach((lv) => {
     if (today < lv.startDate || today > lv.endDate) return;
     if (lv.scope === 'individual') lv.soldierIds.forEach((id) => onLeaveIds.add(id));
-    else if (lv.scope === 'subUnit') soldiers.filter((s) => s.subUnitId === lv.subUnitId).forEach((s) => onLeaveIds.add(s.id));
+    else if (lv.scope === 'squad') soldiers.filter((s) => s.squadId === lv.squadId).forEach((s) => onLeaveIds.add(s.id));
     else soldiers.forEach((s) => onLeaveIds.add(s.id));
   });
   for (const p of scopePlatoons) {
-    const ids   = subUnits.filter((s) => s.platoonId === p.id).map((s) => s.id);
-    const ps    = soldiers.filter((s) => s.subUnitId && ids.includes(s.subUnitId));
+    const ids   = squads.filter((s) => s.platoonId === p.id).map((s) => s.id);
+    const ps    = soldiers.filter((s) => s.squadId && ids.includes(s.squadId));
     const onBase = ps.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
     const required = p.minSoldiersOnBase ?? 0;
     if (required > 0 && onBase < required) {
@@ -646,7 +645,7 @@ export function useOperationalEmergency(): OperationalEmergency | null {
 // alerts that originated in their own platoon (so they know what their
 // own actions logged upward). Soldiers see nothing here.
 export function useAlertsForCompany(): OverrideAlert[] {
-  const { currentUser, currentRole, overrideAlerts, groups } = useApp();
+  const { currentUser, currentRole, overrideAlerts, platoons } = useApp();
   if (!currentUser) return [];
   // Company-tier sees every alert in their company.
   if (currentRole === 'companyCommander' || currentRole === 'deputyCompanyCommander' || currentRole === 'owner') {
@@ -658,7 +657,7 @@ export function useAlertsForCompany(): OverrideAlert[] {
   }
   // Legacy fallback for platoon-role users without commandedPlatoonId.
   if (currentRole === 'platoonCommander' || currentRole === 'platoonSergeant' || currentRole === 'manager') {
-    const myPlatoonIds = groups.filter((g) => g.memberIds.includes(currentUser.id)).map((g) => g.id);
+    const myPlatoonIds = platoons.filter((g) => g.memberIds.includes(currentUser.id)).map((g) => g.id);
     return overrideAlerts.filter((a) => myPlatoonIds.includes(a.platoonId));
   }
   return [];
@@ -668,9 +667,9 @@ export function useAlertsForCompany(): OverrideAlert[] {
 // commander (no commanded platoon); scoped to the user's commanded platoon
 // for platoon leadership and for the חפ״ק dual-role case.
 export function useApprovableLeaveRequests(): LeaveRequest[] {
-  const { currentUser, leaveRequests, soldiers, groups } = useApp();
+  const { currentUser, leaveRequests, soldiers, platoons } = useApp();
   if (!currentUser) return [];
-  return leaveRequests.filter((req) => canApproveLeaveFor(currentUser, req, soldiers, groups));
+  return leaveRequests.filter((req) => canApproveLeaveFor(currentUser, req, soldiers, platoons));
 }
 
 export function useVisiblePeriods() {

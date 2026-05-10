@@ -23,7 +23,7 @@
 // Legacy 'owner' ≈ companyCommander, legacy 'manager' ≈ platoonCommander
 // so old mock users still resolve correctly.
 
-import type { UserRole, MockUser, Group, LeaveRequest, Soldier } from '../types';
+import type { UserRole, MockUser, Platoon, LeaveRequest, Soldier } from '../types';
 
 // ─── Role hierarchy ──────────────────────────────────────────────────────────
 
@@ -70,9 +70,8 @@ export const canEditSchedule     = (role: UserRole) => isPlatoonLeadership(role)
 export const canPublishSchedule  = (role: UserRole) => isPlatoonLeadership(role);
 export const canTriggerEmergency = (role: UserRole) => isPlatoonLeadership(role);
 export const canViewAuditLog     = (role: UserRole) => isPlatoonLeadership(role);
-export const canViewManagerNotes = (role: UserRole) => isPlatoonLeadership(role);
+export const canViewCommanderNotes = (role: UserRole) => isPlatoonLeadership(role);
 export const canRecalculate      = (role: UserRole) => isPlatoonLeadership(role);
-export const canCreateGroup      = (role: UserRole) => isPlatoonLeadership(role);
 export const canDeleteData       = (role: UserRole) => isCompanyLeadership(role);
 export const canCreateCompany    = (role: UserRole) => isCompanyLeadership(role);
 
@@ -88,7 +87,7 @@ export const canViewFairness         = (role: UserRole): boolean => isPlatoonLea
 // company commander may always.
 
 /** Can this user manage the given platoon's roster, schedule, leave queue? */
-export function canManagePlatoon(user: MockUser, platoon: Group): boolean {
+export function canManagePlatoon(user: MockUser, platoon: Platoon): boolean {
   if (isCompanyLeadership(user.role)) {
     // Company commander manages every platoon in his company
     return !platoon.companyId || platoon.companyId === user.companyId;
@@ -116,7 +115,7 @@ export function canApproveLeaveFor(
   user: MockUser,
   request: LeaveRequest,
   soldiers: Soldier[],
-  platoons: Group[],
+  platoons: Platoon[],
 ): boolean {
   const soldier = soldiers.find((s) => s.id === request.soldierId);
   if (!soldier) return false;
@@ -147,6 +146,6 @@ export function canSoldierSeeSchedule(user: MockUser): boolean {
 }
 
 /** Manual-override on slots: anyone who can manage the platoon. */
-export function canManuallyOverride(user: MockUser, platoon: Group): boolean {
+export function canManuallyOverride(user: MockUser, platoon: Platoon): boolean {
   return canManagePlatoon(user, platoon);
 }

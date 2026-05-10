@@ -240,6 +240,6 @@ function describeLeaveScope(lv: Leave, soldiers: Soldier[]): string {
     const names = lv.soldierIds.map((id) => soldiers.find((s) => s.id === id)?.name).filter(Boolean);
     return names.length > 0 ? names.join(' · ') : 'חייל';
   }
-  if (lv.scope === 'subUnit') return `תת-קבוצה`;
+  if (lv.scope === 'squad') return `כיתה`;
   return 'כלל המחלקה';
 }

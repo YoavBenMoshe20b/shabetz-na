@@ -4,23 +4,23 @@ import Header from '../components/Header';
 import { isPlatoonLeadership } from '../utils/permissions';
 
 export default function SoldiersPage() {
-  const { soldiers, subUnits, currentRole, updateSoldierAvailability } = useApp();
+  const { soldiers, squads, currentRole, updateSoldierAvailability } = useApp();
   const myPlatoons = useMyPlatoons();
-  const visibleSubUnits = subUnits.filter((s) =>
+  const visibleSquads = squads.filter((s) =>
     myPlatoons.length === 0 ? true : myPlatoons.some((p) => p.id === s.platoonId)
   );
 
-  const [subUnitFilter, setSubUnitFilter] = useState<'all' | string>('all');  // 'all' or a SubUnit id
+  const [squadFilter, setSquadFilter] = useState<'all' | string>('all');  // 'all' or a Squad id
   const [availFilter, setAvailFilter] = useState<'all' | 'available' | 'unavailable'>('all');
 
   const filtered = soldiers.filter((s) => {
-    const subUnitOk = subUnitFilter === 'all' || s.subUnitId === subUnitFilter;
+    const squadOk = squadFilter === 'all' || s.squadId === squadFilter;
     const availOk   = availFilter === 'all' || (availFilter === 'available' ? s.availability : !s.availability);
-    return subUnitOk && availOk;
+    return squadOk && availOk;
   });
 
-  const subUnitDisplayName = (s: { subUnitId?: string; teamClass: string }) =>
-    subUnits.find((su) => su.id === s.subUnitId)?.name ?? s.teamClass;
+  const squadDisplayName = (s: { squadId?: string; teamClass: string }) =>
+    squads.find((su) => su.id === s.squadId)?.name ?? s.teamClass;
 
   const isManager = isPlatoonLeadership(currentRole);
 
@@ -47,21 +47,21 @@ export default function SoldiersPage() {
           ))}
           <div className="w-px bg-mil-border mx-1 flex-shrink-0" />
           <button
-            onClick={() => setSubUnitFilter('all')}
+            onClick={() => setSquadFilter('all')}
             className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-colors ${
-              subUnitFilter === 'all'
+              squadFilter === 'all'
                 ? 'bg-mil-olive-bg border-mil-olive/50 text-mil-olive'
                 : 'bg-mil-card border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
             }`}
           >
             הכל
           </button>
-          {visibleSubUnits.map((su) => (
+          {visibleSquads.map((su) => (
             <button
               key={su.id}
-              onClick={() => setSubUnitFilter(su.id)}
+              onClick={() => setSquadFilter(su.id)}
               className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-colors ${
-                subUnitFilter === su.id
+                squadFilter === su.id
                   ? 'bg-mil-olive-bg border-mil-olive/50 text-mil-olive'
                   : 'bg-mil-card border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
               }`}
@@ -79,7 +79,7 @@ export default function SoldiersPage() {
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <p className="font-bold text-mil-text">{s.name}</p>
-                  <p className="text-xs text-mil-muted">{subUnitDisplayName(s)}</p>
+                  <p className="text-xs text-mil-muted">{squadDisplayName(s)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   {isManager ? (

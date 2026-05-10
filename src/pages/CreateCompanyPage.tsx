@@ -2,7 +2,7 @@
 //
 // ONE entry point for organisational creation. Only company-level leadership
 // passes through here. It produces a Company with its internal Platoons and
-// (optionally) per-platoon SubUnits in a single transaction. There is no
+// (optionally) per-platoon Squads in a single transaction. There is no
 // "create platoon" experience anywhere else in the app — only this wizard.
 //
 // 4 steps + a success screen:
@@ -23,13 +23,13 @@ interface PlatoonDraft {
   id: string;          // local-only id for keying
   name: string;
   isSpecial: boolean;
-  subUnitsCsv: string; // comma-separated names, easier to type than per-row UI
+  squadsCsv: string; // comma-separated names, easier to type than per-row UI
 }
 
 const DEFAULT_PLATOONS: () => PlatoonDraft[] = () => [
-  { id: 'p1', name: 'מחלקה א׳', isSpecial: false, subUnitsCsv: 'כיתה א, כיתה ב, כיתה ג' },
-  { id: 'p2', name: 'מחלקה ב׳', isSpecial: false, subUnitsCsv: 'כיתה א, כיתה ב, כיתה ג' },
-  { id: 'p3', name: 'מחלקה ג׳', isSpecial: false, subUnitsCsv: 'כיתה א, כיתה ב, כיתה ג' },
+  { id: 'p1', name: 'מחלקה א׳', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
+  { id: 'p2', name: 'מחלקה ב׳', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
+  { id: 'p3', name: 'מחלקה ג׳', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
 ];
 
 export default function CreateCompanyPage() {
@@ -61,7 +61,7 @@ export default function CreateCompanyPage() {
   // ── Platoon list editing ────────────────────────────────
   const addPlatoon = () => setPlatoons((prev) => [
     ...prev,
-    { id: `p-${Date.now()}`, name: '', isSpecial: false, subUnitsCsv: '' },
+    { id: `p-${Date.now()}`, name: '', isSpecial: false, squadsCsv: '' },
   ]);
   const removePlatoon = (id: string) =>
     setPlatoons((prev) => prev.filter((p) => p.id !== id));
@@ -82,7 +82,7 @@ export default function CreateCompanyPage() {
       platoons: platoons.map((p) => ({
         name: p.name.trim(),
         isSpecial: p.isSpecial,
-        subUnitNames: p.subUnitsCsv
+        squadNames: p.squadsCsv
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean),
@@ -168,11 +168,11 @@ export default function CreateCompanyPage() {
                     <Field label="שם המחלקה">
                       <input className={inp} value={p.name} onChange={(e) => patchPlatoon(p.id, { name: e.target.value })} placeholder="מחלקה א׳" />
                     </Field>
-                    <Field label="תת-קבוצות (מופרדות בפסיק)">
+                    <Field label="כיתות (מופרדות בפסיק)">
                       <input
                         className={inp}
-                        value={p.subUnitsCsv}
-                        onChange={(e) => patchPlatoon(p.id, { subUnitsCsv: e.target.value })}
+                        value={p.squadsCsv}
+                        onChange={(e) => patchPlatoon(p.id, { squadsCsv: e.target.value })}
                         placeholder="כיתה א, כיתה ב, כיתה ג"
                       />
                     </Field>
@@ -276,7 +276,7 @@ export default function CreateCompanyPage() {
                   <SummaryRow
                     key={p.id}
                     label={`· ${p.name}`}
-                    value={p.subUnitsCsv || 'ללא תת-קבוצות'}
+                    value={p.squadsCsv || 'ללא כיתות'}
                   />
                 ))}
                 <SummaryRow label="מינימום בבסיס" value={`${minOnBase} חיילים`} />

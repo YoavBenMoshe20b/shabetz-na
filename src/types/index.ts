@@ -35,9 +35,9 @@ export interface Soldier {
   id: string;
   name: string;
   operationalRoles: OperationalRole[];
-  teamClass: TeamClass;          // @deprecated — use subUnitId
-  subUnitId?: string;            // organisational sub-unit (preferred)
-  availability: boolean;         // manager-controlled toggle
+  teamClass: TeamClass;          // @deprecated — use squadId
+  squadId?: string;              // organisational squad (preferred)
+  availability: boolean;         // commander-controlled toggle
   availabilityNotes: AvailabilityNote[];
   currentLoad: number;
   phone?: string;
@@ -46,16 +46,16 @@ export interface Soldier {
 
 // ─── Leaves / יציאות ─────────────────────────────────────────────────────────
 
-// 'subUnit' replaces the legacy 'class' scope; both denote a leave that
-// applies to everyone in a given organisational sub-unit.
-export type LeaveScope = 'individual' | 'subUnit' | 'machlaka';
+// 'squad' replaces the legacy 'class' scope; both denote a leave that
+// applies to everyone in a given organisational squad.
+export type LeaveScope = 'individual' | 'squad' | 'machlaka';
 
 export interface Leave {
   id: string;
   scope: LeaveScope;
   soldierIds: string[];
-  teamClass?: TeamClass;          // @deprecated — use subUnitId
-  subUnitId?: string;             // organisational sub-unit (preferred)
+  teamClass?: TeamClass;          // @deprecated — use squadId
+  squadId?: string;               // organisational squad (preferred)
   startDate: string;
   startTime: string;
   endDate: string;
@@ -72,9 +72,9 @@ export interface LeaveRequest {
   id: string;
   soldierId: string;
   soldierName: string;
-  soldierTeamClass: TeamClass;     // @deprecated — use soldierSubUnitId
-  soldierSubUnitId?: string;
-  soldierSubUnitName?: string;     // snapshot for display (sub-units can be renamed)
+  soldierTeamClass: TeamClass;     // @deprecated — use soldierSquadId
+  soldierSquadId?: string;
+  soldierSquadName?: string;       // snapshot for display (squads can be renamed)
   startDate: string;
   startTime: string;
   endDate: string;
@@ -154,9 +154,9 @@ export interface MissionType {
 
   // Mixing policies
   soldierMixing: SoldierMixingPolicy;
-  classMixing: ClassMixingPolicy;        // @deprecated — interpret as subUnitMixing
-  allowedClasses?: TeamClass[];          // @deprecated — use allowedSubUnitIds
-  allowedSubUnitIds?: string[];          // when classMixing === 'specific'
+  classMixing: ClassMixingPolicy;        // @deprecated — interpret as squadMixing
+  allowedClasses?: TeamClass[];          // @deprecated — use allowedSquadIds
+  allowedSquadIds?: string[];            // when classMixing === 'specific'
 
   // Equipment
   hasEquipment: boolean;
@@ -173,7 +173,7 @@ export interface MissionType {
 
 export type ScheduleStatus = 'draft' | 'published';
 
-export interface ManagerNote {
+export interface CommanderNote {
   id: string;
   authorId: string;
   authorName: string;
@@ -188,7 +188,7 @@ export interface SchedulePeriod {
   endDate: string;
   status: ScheduleStatus;
   missionTypes: MissionType[];
-  managerNotes: ManagerNote[];
+  commanderNotes: CommanderNote[];
 }
 
 // ─── Warnings / Audit ────────────────────────────────────────────────────────
@@ -208,7 +208,7 @@ export interface ShiftWarning {
   soldierIds?: string[];
   timeSlotIds?: string[];
   missionId?: string;
-  managerOnly: boolean;     // if true, hidden from soldier views
+  commanderOnly: boolean;   // if true, hidden from soldier views
 }
 
 // ─── Fairness ────────────────────────────────────────────────────────────────
@@ -285,30 +285,29 @@ export interface Company {
   createdAt: string;
 }
 
-// ─── SubUnits / תת-קבוצות (organisational — NOT a permission role) ──────────
+// ─── Squads / כיתות (organisational — NOT a permission role) ────────────────
 //
-// A platoon is composed of one or more SubUnits whose names are defined
-// per-platoon by the company commander. Examples:
+// A Platoon is composed of one or more Squads. Names are defined per-platoon
+// by the company commander during setup, e.g.:
 //   "מחלקה 1"       → ["כיתה א", "כיתה ב", "כיתה ג"]
 //   "מחלקה מיוחדת"  → ["ספרפס", "משקשק", "חוליה טכנית"]
-// SubUnit grants no permissions on its own. If a soldier leads a sub-unit
-// that fact lives in operationalRoles ('מ״כ' etc.), not in UserRole.
+// Squad grants no permissions on its own. If a soldier leads a squad
+// that fact lives in operationalRoles ('מ״כ' etc.), not in OperationalRole.
 
-export interface SubUnit {
+export interface Squad {
   id:         string;
   name:       string;        // free-text Hebrew/English label
-  platoonId:  string;        // parent Group id
-  soldierIds: string[];      // members of this sub-unit
+  platoonId:  string;        // parent Platoon id
+  soldierIds: string[];      // members of this squad
 }
 
-// ─── Groups / מחלקה (platoon — child of Company) ─────────────────────────────
+// ─── Platoons / מחלקות (child of Company) ────────────────────────────────────
 
-export interface Group {
+export interface Platoon {
   id: string;
   name: string;
   unitName?: string;
   code: string;
-  ownerId: string;
   memberIds: string[];
   platoonCommander?: string;
   platoonSergeant?: string;
@@ -318,11 +317,11 @@ export interface Group {
   enemyConfusion?: boolean;
   confusionMinutes?: number;
 
-  // Company hierarchy (added in refactor)
-  companyId?: string;                       // parent company
+  // Company hierarchy
+  companyId: string;                        // required — platoons exist only inside a company
   platoonCommanderUserId?: string;          // user id of מ״מ
   platoonSergeantUserId?: string;           // user id of סמל
-  subUnitIds?: string[];                    // child SubUnit ids
+  squadIds?: string[];                      // child Squad ids
   isSpecialPlatoon?: boolean;               // different mission rules
   followsCompanyLeaveRotation?: boolean;    // default: true
   minSoldiersOnBase?: number;               // platoon-level override
@@ -420,7 +419,7 @@ export interface OverrideAlert {
 
 export interface MiluimPeriod {
   id: string;
-  groupId: string;
+  companyId: string;         // miluim is a company-level cycle
   startDate: string;
   endDate: string;
   description: string;
@@ -446,13 +445,14 @@ export interface MockUser {
   email: string;
   username: string;
   password: string;
-  joinedGroupIds: string[];
+  /** A user belongs to AT MOST ONE platoon inside their company. */
+  platoonId?: string;
   operationalRoles: OperationalRole[];
   teamClass: TeamClass;
   soldierProfileId?: string;          // links to Soldier record
 
-  // Company-hierarchy scope (added in refactor)
+  // Company-hierarchy scope
   companyId?: string;                 // company this user belongs to
-  commandedPlatoonId?: string;        // when role = platoonCommander / platoonSergeant
-  subUnitId?: string;                 // organisational sub-unit (preferred over teamClass)
+  commandedPlatoonId?: string;        // officers only — the platoon they command
+  squadId?: string;                   // soldier's squad inside the platoon
 }

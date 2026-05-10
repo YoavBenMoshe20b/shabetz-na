@@ -67,7 +67,7 @@ export default function LoginPage() {
     await new Promise((r) => setTimeout(r, 350));
     const user = login(id.trim(), pw);
     setLoading(false);
-    if (user) navigate(user.joinedGroupIds.length > 0 ? '/home' : '/start');
+    if (user) navigate(user.platoonId || user.companyId ? '/home' : '/start');
     else setError('שם משתמש / אימייל או סיסמה שגויים');
   };
 
@@ -279,7 +279,7 @@ export default function LoginPage() {
                 <span className="text-mil-text">{u.name}</span>
                 <span className="font-mono text-mil-ghost">{u.username}</span>
                 <span className="text-mil-olive-dim">
-                  {u.joinedGroupIds.length === 0 ? 'חדש' : roleLabel(u.role)}
+                  {!u.platoonId && !u.companyId ? 'חדש' : roleLabel(u.role)}
                 </span>
               </button>
             ))}

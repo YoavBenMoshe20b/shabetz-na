@@ -15,7 +15,7 @@
 //        insufficientRest, unfairDistribution, etc.
 //   5. Return updated mission types + warnings + per-soldier fairness scores.
 //
-// All warnings carry `managerOnly: true`. The soldier UI must filter them out.
+// All warnings carry `commanderOnly: true`. The soldier UI must filter them out.
 
 import type {
   Soldier, MissionType, TimeSlot, OperationalRole, Leave,
@@ -149,7 +149,7 @@ function isSoldierOnLeave(soldier: Soldier, leaves: Leave[], slot: TimeSlot): bo
     const lvEnd   = `${lv.endDate}T${lv.endTime}`;
     if (slotStart >= lvEnd || slotEnd <= lvStart) return false;
     if (lv.scope === 'individual') return lv.soldierIds.includes(soldier.id);
-    if (lv.scope === 'subUnit')    return soldier.subUnitId === lv.subUnitId;
+    if (lv.scope === 'squad')    return soldier.squadId === lv.squadId;
     if (lv.scope === 'machlaka')   return true;
     return false;
   });
@@ -158,11 +158,11 @@ function isSoldierOnLeave(soldier: Soldier, leaves: Leave[], slot: TimeSlot): bo
 // Sub-unit / class-mixing constraint. Reads sub-unit id (preferred) and falls
 // back to legacy teamClass when migration data is incomplete.
 function classMixingOk(soldier: Soldier, mt: MissionType, alreadyAssigned: Soldier[]): boolean {
-  const soldierKey = (s: Soldier) => s.subUnitId ?? s.teamClass;
+  const soldierKey = (s: Soldier) => s.squadId ?? s.teamClass;
 
   if (mt.classMixing === 'specific') {
-    if (mt.allowedSubUnitIds && mt.allowedSubUnitIds.length > 0) {
-      return soldier.subUnitId ? mt.allowedSubUnitIds.includes(soldier.subUnitId) : false;
+    if (mt.allowedSquadIds && mt.allowedSquadIds.length > 0) {
+      return soldier.squadId ? mt.allowedSquadIds.includes(soldier.squadId) : false;
     }
     if (mt.allowedClasses && mt.allowedClasses.length > 0) {
       return mt.allowedClasses.includes(soldier.teamClass);
@@ -383,7 +383,7 @@ function collectWarnings(
       // Understaffed
       if (slot.assignedSoldierIds.length < mt.minSoldiers) {
         out.push({
-          type: 'understaffed', severity: 'critical', managerOnly: true,
+          type: 'understaffed', severity: 'critical', commanderOnly: true,
           message: `${mt.name} — חסרים ${mt.minSoldiers - slot.assignedSoldierIds.length} חיילים (${slot.date} ${slot.startTime})`,
           missionId: mt.id, timeSlotIds: [slot.id],
         });
@@ -393,7 +393,7 @@ function collectWarnings(
       for (const role of mt.requiredRoles) {
         if (!assignedSoldiers.some((s) => s.operationalRoles.includes(role))) {
           out.push({
-            type: 'missingRole', severity: 'critical', managerOnly: true,
+            type: 'missingRole', severity: 'critical', commanderOnly: true,
             message: `${mt.name} — חסר ${role} (${slot.date} ${slot.startTime})`,
             missionId: mt.id, timeSlotIds: [slot.id],
           });
@@ -404,7 +404,7 @@ function collectWarnings(
       if (mt.needsCommander && !assignedSoldiers.some((s) =>
         s.operationalRoles.includes('מ״מ') || s.operationalRoles.includes('סמל'))) {
         out.push({
-          type: 'commanderMissing', severity: 'warning', managerOnly: true,
+          type: 'commanderMissing', severity: 'warning', commanderOnly: true,
           message: `${mt.name} — חסר מפקד (${slot.date} ${slot.startTime})`,
           missionId: mt.id, timeSlotIds: [slot.id],
         });
@@ -413,7 +413,7 @@ function collectWarnings(
       // Medic missing
       if (mt.needsMedic && !assignedSoldiers.some((s) => s.operationalRoles.includes('חובש'))) {
         out.push({
-          type: 'medicMissing', severity: 'warning', managerOnly: true,
+          type: 'medicMissing', severity: 'warning', commanderOnly: true,
           message: `${mt.name} — חסר חובש (${slot.date} ${slot.startTime})`,
           missionId: mt.id, timeSlotIds: [slot.id],
         });
@@ -421,25 +421,25 @@ function collectWarnings(
 
       // Class violation
       if (mt.classMixing === 'no-mix' && assignedSoldiers.length > 1) {
-        const subUnits = new Set(assignedSoldiers.map((s) => s.subUnitId ?? s.teamClass));
-        if (subUnits.size > 1) {
+        const squads = new Set(assignedSoldiers.map((s) => s.squadId ?? s.teamClass));
+        if (squads.size > 1) {
           out.push({
-            type: 'classViolation', severity: 'warning', managerOnly: true,
-            message: `${mt.name} — ערבוב תת-קבוצות אסור (${[...subUnits].join(', ')})`,
+            type: 'classViolation', severity: 'warning', commanderOnly: true,
+            message: `${mt.name} — ערבוב תת-קבוצות אסור (${[...squads].join(', ')})`,
             missionId: mt.id, timeSlotIds: [slot.id],
           });
         }
       }
       if (mt.classMixing === 'specific') {
-        const allowList = mt.allowedSubUnitIds ?? mt.allowedClasses ?? [];
+        const allowList = mt.allowedSquadIds ?? mt.allowedClasses ?? [];
         if (allowList.length > 0) {
           const violators = assignedSoldiers.filter((s) => {
-            const key = mt.allowedSubUnitIds ? s.subUnitId : s.teamClass;
+            const key = mt.allowedSquadIds ? s.squadId : s.teamClass;
             return !allowList.includes(key ?? '');
           });
           if (violators.length > 0) {
             out.push({
-              type: 'classViolation', severity: 'warning', managerOnly: true,
+              type: 'classViolation', severity: 'warning', commanderOnly: true,
               message: `${mt.name} — חיילים מחוץ לתת-קבוצות המותרות: ${violators.map((s) => s.name).join(', ')}`,
               missionId: mt.id, timeSlotIds: [slot.id], soldierIds: violators.map((s) => s.id),
             });
@@ -450,7 +450,7 @@ function collectWarnings(
       // Confusion clamp warning
       if (mt.enableConfusion && mt.confusionDeviationMinutes > Math.floor((mt.maxShiftMinutes - mt.minShiftMinutes) / 2)) {
         out.push({
-          type: 'confusionViolation', severity: 'warning', managerOnly: true,
+          type: 'confusionViolation', severity: 'warning', commanderOnly: true,
           message: `${mt.name} — סטיית בלבול אויב (${mt.confusionDeviationMinutes} דק׳) חורגת מגבולות המשמרת`,
           missionId: mt.id,
         });
@@ -460,7 +460,7 @@ function collectWarnings(
       for (const s of assignedSoldiers) {
         if (isSoldierOnLeave(s, ctx.leaves, slot)) {
           out.push({
-            type: 'onLeave', severity: 'critical', managerOnly: true,
+            type: 'onLeave', severity: 'critical', commanderOnly: true,
             message: `${s.name} משובץ ל-${mt.name} בזמן יציאה ביתית`,
             missionId: mt.id, timeSlotIds: [slot.id], soldierIds: [s.id],
           });
@@ -483,7 +483,7 @@ function collectWarnings(
       if (gap < minRestHours) {
         const sName = soldiersById.get(sId)?.name ?? sId;
         out.push({
-          type: 'insufficientRest', severity: 'warning', managerOnly: true,
+          type: 'insufficientRest', severity: 'warning', commanderOnly: true,
           message: `${sName} — מנוחה קצרה מדי (${gap.toFixed(1)} שעות בין משמרות)`,
           soldierIds: [sId],
         });
@@ -498,7 +498,7 @@ function collectWarnings(
     const min = Math.min(...loads.map((l) => l.hours));
     if (max - min > 12) {
       out.push({
-        type: 'unfairDistribution', severity: 'info', managerOnly: true,
+        type: 'unfairDistribution', severity: 'info', commanderOnly: true,
         message: `חוסר איזון: פער של ${(max - min).toFixed(0)} שעות בין הטעון ביותר לפחות מבין החיילים`,
       });
     }

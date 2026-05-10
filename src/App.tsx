@@ -45,13 +45,13 @@ import ProfilePage        from './pages/ProfilePage';
 const FULL_SCREEN_PATHS = ['/login', '/start', '/join', '/create'];
 
 function AppRoutes() {
-  const { currentUser, groups } = useApp();
+  const { currentUser } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const emergency = useOperationalEmergency();
   const auth = <Navigate to="/login" replace />;
 
-  const hasGroup       = !!currentUser && groups.some((g) => g.memberIds.includes(currentUser.id));
+  const hasPlatoon       = !!currentUser && (!!currentUser.platoonId || !!currentUser.companyId);
   const isFullScreen   = FULL_SCREEN_PATHS.includes(location.pathname);
   const showNav        = currentUser && !isFullScreen;
   const showEmergency  = !!emergency && !!currentUser && !isFullScreen;
@@ -71,7 +71,7 @@ function AppRoutes() {
         {/* ── Public ────────────────────────────────── */}
         <Route path="/login" element={
           currentUser
-            ? <Navigate to={hasGroup ? '/home' : '/start'} replace />
+            ? <Navigate to={hasPlatoon ? '/home' : '/start'} replace />
             : <LoginPage />
         } />
 
@@ -82,7 +82,7 @@ function AppRoutes() {
 
         {/* ── Authed + has a group ─────────────────── */}
         <Route path="/home" element={
-          !currentUser ? auth : !hasGroup ? <Navigate to="/start" replace /> : <DashboardPage />
+          !currentUser ? auth : !hasPlatoon ? <Navigate to="/start" replace /> : <DashboardPage />
         } />
         <Route path="/schedule" element={currentUser ? <SchedulePage /> : auth} />
         <Route path="/soldiers" element={currentUser ? <SoldiersPage /> : auth} />
@@ -106,7 +106,7 @@ function AppRoutes() {
         <Route path="/offline"        element={<Navigate to="/home"  replace />} />
 
         <Route path="*" element={
-          <Navigate to={currentUser ? (hasGroup ? '/home' : '/start') : '/login'} replace />
+          <Navigate to={currentUser ? (hasPlatoon ? '/home' : '/start') : '/login'} replace />
         } />
       </Routes>
 
