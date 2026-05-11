@@ -1,16 +1,14 @@
-// First screen after auth for users with no company yet.
+// Post-bootstrap landing.
 //
-// Two paths — and ONLY two:
-//   1. Join an existing company (the vast majority of users)
-//   2. Create a new company (company commander / deputy only)
-//
-// There is no generic "create a platoon" choice anywhere in the app.
-// Platoons are organisational structure inside a company, configured
-// by the company commander during setup.
+// Under the roster-first model, anyone who reaches /start authenticated has
+// just bootstrapped as a company commander — they registered themselves
+// because no roster exists for them yet. Their only next action is to
+// create their company. Soldiers and officers never see this screen:
+// they go through claim and land directly on /home.
 
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Card, PageMain, PageTitle, CardTitle, Body, Muted } from '../components/ui';
+import { Card, Button, PageMain, PageTitle, CardTitle, Body, Muted } from '../components/ui';
 
 export default function StartPage() {
   const { currentUser } = useApp();
@@ -20,47 +18,46 @@ export default function StartPage() {
   return (
     <div className="min-h-screen bg-mil-bg flex flex-col" dir="rtl">
       <PageMain>
-        <div className="text-center pt-8 pb-4">
-          <h1 className="text-4xl font-extrabold text-mil-olive tracking-widest">שבץ־נא</h1>
-          {firstName && <Muted className="mt-3">שלום, {firstName}</Muted>}
+
+        <div className="text-center pt-6">
+          <h1 className="text-3xl font-extrabold text-mil-olive tracking-widest">שבץ־נא</h1>
+          {firstName && <Muted className="mt-2">שלום, {firstName}</Muted>}
         </div>
 
-        <div>
-          <PageTitle>איך תרצה/י להתחיל?</PageTitle>
-          <Muted className="mt-2">המערכת בנויה סביב פלוגה — את/ה תצטרפ/י לפלוגה קיימת, או תיצור/י אחת חדשה כמ״פ.</Muted>
+        <div className="pt-2">
+          <PageTitle>הצעד הבא: פתיחת הפלוגה</PageTitle>
+          <Muted className="mt-2">
+            תגדיר/י את המבנה: מחלקות, כיתות, מ״מים וסמלים. בסיום תקבל/י קוד פלוגה שאיתו
+            המ״מים יתבעו את זהותם, ומשם הם ירשמו את חייליהם.
+          </Muted>
         </div>
 
-        {/* JOIN — primary path, top of the list */}
-        <Card variant="hero" onClick={() => navigate('/join')}>
+        <Card variant="hero" onClick={() => navigate('/create')}>
           <div className="px-5 py-5 text-right">
-            <div className="text-3xl text-mil-olive mb-3">◎</div>
-            <CardTitle className="text-lg">הצטרף לפלוגה קיימת</CardTitle>
-            <Body className="text-mil-muted mt-1.5 leading-relaxed">
-              קיבלת קוד מהמ״פ או מהמ״מ שלך? הצטרף כאן — תבחר/י את המחלקה ואת התפקיד שלך.
+            <CardTitle className="text-lg">פתיחת הפלוגה כמ״פ</CardTitle>
+            <Body className="text-mil-muted mt-2 leading-relaxed">
+              אשף קצר של ~4 שלבים. תוכל/י לערוך הכל מאוחר יותר.
             </Body>
-            <div className="mt-3 inline-flex items-center gap-2 text-mil-olive font-bold text-sm">
-              <span>הצטרפות</span><span>←</span>
+            <div className="mt-4 inline-flex items-center gap-2 text-mil-olive font-bold text-sm">
+              <span>התחל/י</span><span>←</span>
             </div>
           </div>
         </Card>
 
-        {/* CREATE — secondary, with explicit gate language */}
-        <Card variant="muted" onClick={() => navigate('/create')}>
-          <div className="px-5 py-5 text-right">
-            <div className="text-3xl text-mil-olive-dim mb-3">▦</div>
-            <CardTitle className="text-lg">צור פלוגה חדשה</CardTitle>
-            <Body className="text-mil-muted mt-1.5 leading-relaxed">
-              למ״פ או סמ״פ בלבד. תגדיר/י את המחלקות, התת-קבוצות וכללי הפעולה.
+        <Card variant="muted">
+          <div className="px-4 py-3.5">
+            <Body className="text-mil-muted leading-relaxed">
+              <strong className="text-mil-text">לא מ״פ?</strong> תביעת זהות נעשית מסך ההתחברות
+              עם הטלפון ו-4 ספרות אחרונות בת״ז שמסרת למ״פ או למ״מ.
             </Body>
-            <div className="mt-3 inline-flex items-center gap-2 text-mil-olive-dim font-bold text-sm">
-              <span>הקמת פלוגה</span><span>←</span>
+            <div className="mt-3">
+              <Button variant="secondary" size="sm" onClick={() => navigate('/login')}>
+                חזרה למסך ההתחברות
+              </Button>
             </div>
           </div>
         </Card>
 
-        {currentUser && (
-          <Muted className="text-center pt-2">מחובר/ת בתור: {currentUser.name}</Muted>
-        )}
       </PageMain>
     </div>
   );

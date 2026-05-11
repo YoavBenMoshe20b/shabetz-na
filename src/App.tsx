@@ -33,7 +33,6 @@ import { EmergencyBanner } from './components/ui';
 import LoginPage          from './pages/LoginPage';
 import StartPage          from './pages/StartPage';
 import CreateCompanyPage  from './pages/CreateCompanyPage';
-import JoinCompanyPage    from './pages/JoinCompanyPage';
 import DashboardPage      from './pages/DashboardPage';   // renders the Home variants
 import SoldiersPage       from './pages/SoldiersPage';
 import SchedulePage       from './pages/SchedulePage';
@@ -42,7 +41,7 @@ import ProfilePage        from './pages/ProfilePage';
 
 // Full-screen flows hide the bottom nav AND the emergency banner so
 // new-user wizards aren't competing with operational signals.
-const FULL_SCREEN_PATHS = ['/login', '/start', '/join', '/create'];
+const FULL_SCREEN_PATHS = ['/login', '/start', '/create'];
 
 function AppRoutes() {
   const { currentUser } = useApp();
@@ -77,8 +76,10 @@ function AppRoutes() {
 
         {/* ── Onboarding (authed but no group) ─────── */}
         <Route path="/start"   element={currentUser ? <StartPage />          : auth} />
-        <Route path="/join"    element={currentUser ? <JoinCompanyPage />    : auth} />
         <Route path="/create"  element={currentUser ? <CreateCompanyPage />  : auth} />
+
+        {/* /join is deprecated under the roster-first model — joining means claiming */}
+        <Route path="/join"    element={<Navigate to="/login" replace />} />
 
         {/* ── Authed + has a group ─────────────────── */}
         <Route path="/home" element={
@@ -95,7 +96,7 @@ function AppRoutes() {
 
         {/* ── Legacy redirects (so old links don't 404) ── */}
         <Route path="/dashboard"      element={<Navigate to="/home"  replace />} />
-        <Route path="/join-platoon"   element={<Navigate to="/join"  replace />} />
+        <Route path="/join-platoon"   element={<Navigate to="/login" replace />} />
         <Route path="/create-platoon" element={<Navigate to="/create" replace />} />
         <Route path="/report"         element={<Navigate to="/home"  replace />} />
         <Route path="/groups"         element={<Navigate to="/home"  replace />} />

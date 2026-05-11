@@ -34,14 +34,35 @@ export interface AvailabilityNote {
 export interface Soldier {
   id: string;
   name: string;
+
+  // ── Identity anchor (roster-first security) ──────────────────────────
+  // The slot exists BEFORE the soldier ever opens the app. These two
+  // fields are what the soldier provides to claim the slot. After a
+  // successful claim, password (on MockUser) becomes the auth credential
+  // and idLast4 is retained only for audit.
+  phone: string;
+  idLast4: string;
+
+  // ── Membership lifecycle ─────────────────────────────────────────────
+  // A Soldier IS an active assignment to one company. When the same
+  // person transfers to a new company, the old Soldier flips to
+  // 'inactive' and a new Soldier becomes active. Historical Soldier
+  // records remain in storage strictly for audit; normal selectors
+  // must filter to status === 'active'.
+  companyId: string;
+  status: 'active' | 'inactive';
+  deactivatedAt?: string;
+  deactivatedReason?: 'transferred' | 'discharged' | 'revoked';
+  claimedAt?: string;
+  userId?: string;               // populated when the slot is claimed
+
+  // ── Operational state ───────────────────────────────────────────────
   operationalRoles: OperationalRole[];
   teamClass: TeamClass;          // @deprecated — use squadId
-  squadId?: string;              // organisational squad (preferred)
-  availability: boolean;         // commander-controlled toggle
+  squadId?: string;
+  availability: boolean;
   availabilityNotes: AvailabilityNote[];
   currentLoad: number;
-  phone?: string;
-  userId?: string;
 }
 
 // ─── Leaves / יציאות ─────────────────────────────────────────────────────────
@@ -434,25 +455,37 @@ export interface ReminderSetting {
 }
 
 // ─── Auth (mocked) ───────────────────────────────────────────────────────────
+//
+// Authentication is roster-first: a user cannot exist without an operational
+// slot put on file by command. The exception is the bootstrap CC, who self-
+// registers because there is no roster yet for that person to claim against.
+//
+// All MockUser scope fields (companyId, platoonId, role, etc.) MIRROR the
+// active Soldier record. When a person transfers, these fields are flipped
+// atomically with the Soldier.status change. Selectors should always read
+// these from currentUser (the active picture) and never iterate over the
+// historical Soldier records.
 
-// Authentication is mocked in this MVP and must be replaced with
-// Firebase Auth or another secure auth provider before production.
 export interface MockUser {
-  id: string;
+  id: string;                         // stable across membership transfers
   name: string;
-  role: UserRole;
-  phone: string;
-  email: string;
-  username: string;
-  password: string;
-  /** A user belongs to AT MOST ONE platoon inside their company. */
-  platoonId?: string;
-  operationalRoles: OperationalRole[];
-  teamClass: TeamClass;
-  soldierProfileId?: string;          // links to Soldier record
+  role: UserRole;                     // reflects ACTIVE membership
 
-  // Company-hierarchy scope
-  companyId?: string;                 // company this user belongs to
-  commandedPlatoonId?: string;        // officers only — the platoon they command
-  squadId?: string;                   // soldier's squad inside the platoon
+  // Auth credentials
+  phone: string;                      // primary identifier; never changes
+  idLast4: string;                    // last 4 of ת"ז — used only for first claim, kept for audit
+  password: string;                   // set during claim or bootstrap
+
+  // Active membership (mirror of the active Soldier record)
+  companyId?: string;
+  platoonId?: string;
+  commandedPlatoonId?: string;        // officers only
+  squadId?: string;                   // soldiers only
+  operationalRoles: OperationalRole[];
+  teamClass: TeamClass;               // legacy display field
+  soldierProfileId?: string;          // active Soldier id
+
+  // Audit trail
+  createdAt?: string;
+  lastSignInAt?: string;
 }

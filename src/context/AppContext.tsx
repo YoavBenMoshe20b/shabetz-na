@@ -46,7 +46,12 @@ export type JoinIdentity =
 interface AppContextType {
   currentUser:    MockUser | null;
   currentRole:    UserRole;
+  /** Active roster only. Inactive (historical) records are deliberately
+   *  hidden behind `allSoldiers` so that no operational selector can read
+   *  past memberships by accident. */
   soldiers:       Soldier[];
+  /** Full historical record — audit/security flows ONLY. */
+  allSoldiers:    Soldier[];
   periods:        SchedulePeriod[];
   auditLogs:      AuditLog[];
   platoons:       Platoon[];
@@ -87,11 +92,39 @@ interface AppContextType {
   acknowledgeAlert:    (id: string, byUserId: string) => void;
   resolveAlert:        (id: string, byUserId: string) => void;
 
-  login:          (identifier: string, password: string) => MockUser | null;
-  register:       (data: { name: string; email: string; username: string; password: string }) => { user: MockUser | null; error?: string };
-  // Joining always means joining an EXISTING company. Officers (platoonCommander /
-  // platoonSergeant / deputyCompanyCommander) are placed inside the company
-  // structure; soldiers go into a specific platoon → sub-unit.
+  // ── Roster-first auth ────────────────────────────────────────────────
+  // Sign in for already-claimed identities
+  signIn:         (phone: string, password: string) => { user: MockUser | null; error?: string };
+
+  // Lookup phase of the claim flow: phone + idLast4 -> reveal the slot
+  // (without committing). The result indicates whether a transfer would
+  // be required (i.e. an active Soldier already exists for this phone).
+  lookupClaim:    (phone: string, idLast4: string) => {
+    ok: boolean;
+    soldier?: Soldier;
+    company?: Company;
+    platoon?: Platoon;
+    requiresTransfer?: boolean;
+    currentActiveCompany?: { id: string; name: string };
+    error?: string;
+  };
+
+  // Commit phase. confirmTransfer must be true when a transfer is required.
+  claimIdentity:  (phone: string, idLast4: string, password: string, confirmTransfer?: boolean) => {
+    ok: boolean;
+    user?: MockUser;
+    error?: string;
+  };
+
+  // Bootstrap path — the ONE self-registration in the system. Used only
+  // by users who are opening a brand-new company (no roster exists yet).
+  bootstrapCC:    (data: { name: string; phone: string; idLast4: string; password: string }) => {
+    ok: boolean;
+    user?: MockUser;
+    error?: string;
+  };
+  // joinCompany kept temporarily for any consumer that still references it;
+  // returns a soft error in the roster-first model. Will be removed in S2.
   joinCompany:    (code: string, identity: JoinIdentity) => { ok: boolean; error?: string };
   logout:         () => void;
   switchRole:     (role: UserRole) => void; // dev/test only
@@ -114,7 +147,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser,  setCurrentUser]  = useState<MockUser | null>(null);
   const [currentRole,  setCurrentRole]  = useState<UserRole>('soldier');
   const [users,        setUsers]        = useState<MockUser[]>(mockUsers);
-  const [soldiers,     setSoldiers]     = useState<Soldier[]>(mockSoldiers);
+  // ── Roster: active-only at the boundary ───────────────────────────────
+  // `allSoldiers` is the full historical record — UI/screens MUST NOT read
+  // this directly. Only audit flows should touch it. The exported `soldiers`
+  // selector below filters to status === 'active', and that's what every
+  // operational screen sees.
+  const [allSoldiers,  setAllSoldiers]  = useState<Soldier[]>(mockSoldiers);
+  const soldiers = allSoldiers.filter((s) => s.status === 'active');
+  const setSoldiers = setAllSoldiers;   // legacy callers — semantic equivalence
   const [periods,      setPeriods]      = useState<SchedulePeriod[]>(mockSchedulePeriods);
   const [auditLogs,    setAuditLogs]    = useState<AuditLog[]>(mockAuditLogs);
   const [platoons, setPlatoons]           = useState<Platoon[]>(mockPlatoons);
@@ -215,141 +255,189 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
   }, []);
 
-  const login = (identifier: string, password: string): MockUser | null => {
-    const clean = identifier.trim().toLowerCase();
-    const user = users.find((u) =>
-      (u.email.toLowerCase() === clean || u.username.toLowerCase() === clean) &&
-      u.password === password
-    ) ?? null;
-    if (!user) return null;
+  // ── Sign in (already-claimed identity) ─────────────────────────────────
+  const signIn = (phone: string, password: string): { user: MockUser | null; error?: string } => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const user = users.find((u) => u.phone.replace(/\D/g, '') === cleanPhone) ?? null;
+    if (!user) return { user: null, error: 'טלפון לא נמצא במערכת' };
+    if (user.password !== password) return { user: null, error: 'סיסמה שגויה' };
+    setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, lastSignInAt: new Date().toISOString() } : u));
     setCurrentUser(user);
     setCurrentRole(user.role);
-    return user;
+    return { user };
   };
 
-  const register = (data: { name: string; email: string; username: string; password: string }): { user: MockUser | null; error?: string } => {
-    const emailLower    = data.email.trim().toLowerCase();
-    const usernameLower = data.username.trim().toLowerCase();
-    if (users.some((u) => u.email.toLowerCase() === emailLower))       return { user: null, error: 'אימייל כבר רשום במערכת' };
-    if (users.some((u) => u.username.toLowerCase() === usernameLower)) return { user: null, error: 'שם המשתמש כבר תפוס' };
+  // ── Claim flow: lookup phase ────────────────────────────────────────────
+  // Looks up the ACTIVE Soldier slot matching phone+idLast4. Detects whether
+  // a transfer would be required (the same phone has another active Soldier
+  // already, in any company).
+  const lookupClaim = (phone: string, idLast4: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanId4   = idLast4.trim();
+
+    // Match against ANY soldier (active or inactive) for this phone+id pair
+    const target = allSoldiers.find((s) =>
+      s.phone.replace(/\D/g, '') === cleanPhone && s.idLast4 === cleanId4
+    );
+    if (!target) return { ok: false, error: 'לא נמצא רישום מתאים' };
+
+    if (target.userId) {
+      return { ok: false, error: 'הרישום הזה כבר תבע זהות. השתמש בלשונית "התחברות"' };
+    }
+    if (target.status === 'inactive') {
+      return { ok: false, error: 'הרישום הזה אינו פעיל יותר' };
+    }
+
+    const company = companies.find((c) => c.id === target.companyId);
+    const platoon = platoons.find((p) => p.squadIds?.includes(target.squadId ?? '') || p.id === target.squadId);
+
+    // Transfer check: does this phone already have an active Soldier elsewhere?
+    const otherActive = allSoldiers.find((s) =>
+      s.phone.replace(/\D/g, '') === cleanPhone &&
+      s.status === 'active' &&
+      s.id !== target.id &&
+      s.userId,
+    );
+    if (otherActive) {
+      const otherCo = companies.find((c) => c.id === otherActive.companyId);
+      return {
+        ok: true,
+        soldier: target,
+        company,
+        platoon,
+        requiresTransfer: true,
+        currentActiveCompany: { id: otherCo?.id ?? '', name: otherCo?.name ?? '' },
+      };
+    }
+
+    return { ok: true, soldier: target, company, platoon };
+  };
+
+  // ── Claim flow: commit phase ────────────────────────────────────────────
+  const claimIdentity = (phone: string, idLast4: string, password: string, confirmTransfer = false) => {
+    const lookup = lookupClaim(phone, idLast4);
+    if (!lookup.ok || !lookup.soldier) return { ok: false, error: lookup.error };
+    if (lookup.requiresTransfer && !confirmTransfer) {
+      return { ok: false, error: 'נדרש אישור העברה' };
+    }
+
+    const slot = lookup.soldier;
+    const cleanPhone = phone.replace(/\D/g, '');
+    const now = new Date().toISOString();
+
+    // Find or create the MockUser for this phone (persons survive transfers)
+    let user = users.find((u) => u.phone.replace(/\D/g, '') === cleanPhone);
+    const isNewUser = !user;
+    if (!user) {
+      user = {
+        id: `u-${Date.now()}`,
+        name: slot.name,
+        role: 'soldier',
+        phone, idLast4, password,
+        operationalRoles: slot.operationalRoles,
+        teamClass: slot.teamClass,
+        platoonId: undefined,             // set below from active soldier
+        companyId: undefined,
+        squadId: undefined,
+        soldierProfileId: undefined,
+        createdAt: now,
+      } satisfies MockUser;
+    }
+
+    // Apply transfer if required: deactivate previous active soldier(s)
+    if (lookup.requiresTransfer) {
+      const previousActives = allSoldiers.filter((s) =>
+        s.phone.replace(/\D/g, '') === cleanPhone &&
+        s.status === 'active' &&
+        s.id !== slot.id,
+      );
+      setAllSoldiers((prev) => prev.map((s) => {
+        const isPrev = previousActives.some((p) => p.id === s.id);
+        return isPrev ? { ...s, status: 'inactive' as const, deactivatedAt: now, deactivatedReason: 'transferred' as const } : s;
+      }));
+      previousActives.forEach((p) => {
+        addAuditLog({
+          actorName: slot.name,
+          actorRole: 'soldier',
+          action: 'הועבר לפלוגה חדשה',
+          target: `מ-${companies.find((c) => c.id === p.companyId)?.name ?? '—'} ל-${lookup.company?.name ?? '—'}`,
+        });
+      });
+    }
+
+    // Bind the slot to this user (the claim)
+    setAllSoldiers((prev) => prev.map((s) => s.id === slot.id
+      ? { ...s, userId: user!.id, claimedAt: now }
+      : s
+    ));
+
+    // Update user's scope mirrors to reflect the newly active membership
+    const updatedUser: MockUser = {
+      ...user!,
+      role: 'soldier',
+      password,
+      idLast4,
+      companyId: slot.companyId,
+      platoonId: lookup.platoon?.id,
+      squadId: slot.squadId,
+      operationalRoles: slot.operationalRoles,
+      teamClass: slot.teamClass,
+      soldierProfileId: slot.id,
+      lastSignInAt: now,
+    };
+    setUsers((prev) => isNewUser ? [...prev, updatedUser] : prev.map((u) => u.id === updatedUser.id ? updatedUser : u));
+    setCurrentUser(updatedUser);
+    setCurrentRole('soldier');
+
+    addAuditLog({
+      actorName: slot.name,
+      actorRole: 'soldier',
+      action: 'תבע זהות במערכת',
+      target: `${slot.name} · ${lookup.company?.name ?? '—'}`,
+    });
+
+    return { ok: true, user: updatedUser };
+  };
+
+  // ── Bootstrap CC — the one self-registration path ──────────────────────
+  // Used by a user who has no roster slot anywhere because they're opening
+  // a brand-new company. Their next action MUST be createCompany().
+  const bootstrapCC = (data: { name: string; phone: string; idLast4: string; password: string }) => {
+    const cleanPhone = data.phone.replace(/\D/g, '');
+    if (users.some((u) => u.phone.replace(/\D/g, '') === cleanPhone)) {
+      return { ok: false, error: 'טלפון זה כבר רשום. השתמש בלשונית "התחברות"' };
+    }
+    const now = new Date().toISOString();
     const newUser: MockUser = {
       id: `u-${Date.now()}`,
       name: data.name.trim(),
-      role: 'soldier',
-      phone: '',
-      email: data.email.trim(),
-      username: data.username.trim(),
+      role: 'companyCommander',
+      phone: data.phone,
+      idLast4: data.idLast4,
       password: data.password,
-      operationalRoles: [],
-      teamClass: '',
+      operationalRoles: ['מ״פ'],
+      teamClass: 'מפקדה',
+      createdAt: now,
     };
     setUsers((prev) => [...prev, newUser]);
     setCurrentUser(newUser);
-    setCurrentRole('soldier');
-    return { user: newUser };
+    setCurrentRole('companyCommander');
+    return { ok: true, user: newUser };
   };
 
   // ── Join an EXISTING company (the only way non-commanders enter) ──
   // Officers (platoonCommander / platoonSergeant / deputyCompanyCommander) are
   // attached to the company structure; soldiers go inside a specific platoon
   // and sub-unit. There is intentionally no path for soldiers to "create" or
-  // "claim" anything — they only fit into structure that's already there.
-  const joinCompany = (code: string, identity: JoinIdentity): { ok: boolean; error?: string } => {
-    if (!currentUser) return { ok: false, error: 'לא מחובר' };
-    const company = companies.find((c) => c.inviteCode === code.trim().toUpperCase());
-    if (!company) return { ok: false, error: 'קוד פלוגה לא נמצא' };
-
-    if (identity.kind === 'deputyCompanyCommander') {
-      setCompanies((prev) => prev.map((c) => c.id === company.id
-        ? { ...c, deputyCommanderUserId: currentUser.id }
-        : c
-      ));
-      setCurrentUser((prev) => prev ? {
-        ...prev,
-        role: 'deputyCompanyCommander',
-        companyId: company.id,
-      } : prev);
-      setCurrentRole('deputyCompanyCommander');
-      return { ok: true };
-    }
-
-    // From here on we need a platoon
-    const platoon = platoons.find((g) => g.id === identity.platoonId && g.companyId === company.id);
-    if (!platoon) return { ok: false, error: 'המחלקה שנבחרה לא שייכת לפלוגה זו' };
-
-    if (identity.kind === 'platoonCommander' || identity.kind === 'platoonSergeant') {
-      const isCommander = identity.kind === 'platoonCommander';
-      setPlatoons((prev) => prev.map((g) => g.id === platoon.id ? ({
-        ...g,
-        memberIds: g.memberIds.includes(currentUser.id) ? g.memberIds : [...g.memberIds, currentUser.id],
-        ...(isCommander
-          ? { platoonCommanderUserId: currentUser.id, platoonCommander: currentUser.name }
-          : { platoonSergeantUserId:  currentUser.id, platoonSergeant:  currentUser.name }),
-        scheduleManagers: g.scheduleManagers?.includes(currentUser.id)
-          ? g.scheduleManagers
-          : [...(g.scheduleManagers ?? []), currentUser.id],
-      }) : g));
-      setCurrentUser((prev) => prev ? {
-        ...prev,
-        role: identity.kind,
-        companyId: company.id,
-        commandedPlatoonId: platoon.id,
-        platoonId: platoon.id,
-      } : prev);
-      setCurrentRole(identity.kind);
-      return { ok: true };
-    }
-
-    // identity.kind === 'soldier'
-    const squad = identity.squadId ? squads.find((s) => s.id === identity.squadId) : undefined;
-    const squadName = squad?.name ?? '';
-    const operationalRole = identity.operationalRole ?? '';
-    const soldierRecord: Soldier = {
-      id: `s-${Date.now()}`,
-      name: currentUser.name,
-      operationalRoles: (operationalRole ? [operationalRole] : []) as import('../types').OperationalRole[],
-      teamClass: squadName,
-      squadId: squad?.id,
-      availability: true,
-      availabilityNotes: [],
-      currentLoad: 0,
-      userId: currentUser.id,
+  // Legacy stub. The roster-first model does not permit users to "join"
+  // their way into a company — they CLAIM a slot that already exists.
+  // Kept only so any in-flight reference to joinCompany returns cleanly
+  // until it can be removed.
+  const joinCompany = (_code: string, _identity: JoinIdentity): { ok: boolean; error?: string } => {
+    return {
+      ok: false,
+      error: 'הצטרפות לפלוגה אפשרית רק דרך תביעת זהות. בקש מהמ״מ שלך לרשום אותך.',
     };
-    setSoldiers((prev) => [...prev, soldierRecord]);
-    if (squad) {
-      setSquads((prev) => prev.map((s) => s.id === squad.id
-        ? { ...s, soldierIds: [...s.soldierIds, soldierRecord.id] }
-        : s
-      ));
-    }
-    setPlatoons((prev) => prev.map((g) => g.id === platoon.id
-      ? { ...g, memberIds: g.memberIds.includes(currentUser.id) ? g.memberIds : [...g.memberIds, currentUser.id] }
-      : g
-    ));
-    setCurrentUser((prev) => prev ? {
-      ...prev,
-      role: 'soldier',
-      companyId: company.id,
-      platoonId: platoon.id,
-      teamClass: squadName,
-      squadId: squad?.id,
-      soldierProfileId: soldierRecord.id,
-    } : prev);
-
-    (identity.pendingLeaves ?? []).forEach((lv) => {
-      setLeaveRequests((prev) => [...prev, {
-        ...lv,
-        id: `lr-${Date.now()}-${Math.random()}`,
-        soldierId: soldierRecord.id,
-        soldierName: currentUser.name,
-        soldierTeamClass: squadName,
-        soldierSquadId: squad?.id,
-        soldierSquadName: squadName || undefined,
-        status: 'pending',
-        submittedAt: new Date().toISOString(),
-      }]);
-    });
-    return { ok: true };
   };
 
   // ── Create COMPANY (sole entry point for org creation) ─────────────────────
@@ -480,9 +568,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createCompany, inviteOfficer, inviteSoldier,
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
-      login, register, joinCompany, logout, switchRole, addPeriod, updatePeriod, addAuditLog,
+      signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
+      logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
+      allSoldiers,
     }}>
       {children}
     </AppContext.Provider>

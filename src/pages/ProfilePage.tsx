@@ -63,7 +63,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="font-bold text-mil-text">{currentUser?.name}</p>
-              <p className="text-xs text-mil-muted">{currentUser?.username} · {currentUser?.email}</p>
+              <p className="text-xs text-mil-muted dir-ltr">{currentUser?.phone}</p>
             </div>
           </div>
 
