@@ -4,11 +4,13 @@ import type {
   MissionType, ReminderSetting, Leave, LeaveRequest, SoldierHistory, MiluimPeriod,
   ShiftWarning, FairnessScore, Company, CompanySettings, Squad,
   CompanyMission, OverrideAlert,
+  SoldierStatus, SoldierStatusEvent, Delegation,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockPlatoons, mockLeaves, mockLeaveRequests,
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
+  mockSoldierStatusEvents, mockDelegations,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -52,6 +54,21 @@ interface AppContextType {
   soldiers:       Soldier[];
   /** Full historical record — audit/security flows ONLY. */
   allSoldiers:    Soldier[];
+  /** Append-only operational state log. */
+  soldierStatusEvents: SoldierStatusEvent[];
+  /** Active permission grants (Delegations). Empty by default; CC grant
+   *  UI lands in a future phase. */
+  delegations:    Delegation[];
+
+  // ── Operational state actions ──────────────────────────────────────
+  /** Update a soldier's current operational state. Writes a status event
+   *  to the audit log AND denormalises onto Soldier.currentStatus. */
+  updateSoldierStatus: (data: {
+    soldierId: string;
+    next: SoldierStatus;
+    expectedUntil?: string;
+    reason?: string;
+  }) => void;
   periods:        SchedulePeriod[];
   auditLogs:      AuditLog[];
   platoons:       Platoon[];
@@ -155,6 +172,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [allSoldiers,  setAllSoldiers]  = useState<Soldier[]>(mockSoldiers);
   const soldiers = allSoldiers.filter((s) => s.status === 'active');
   const setSoldiers = setAllSoldiers;   // legacy callers — semantic equivalence
+
+  // ── Operational status log + delegations (foundation, no UI yet) ──────
+  const [soldierStatusEvents, setSoldierStatusEvents] = useState<SoldierStatusEvent[]>(mockSoldierStatusEvents);
+  const [delegations] = useState<Delegation[]>(mockDelegations);
+
+  const updateSoldierStatus = (data: {
+    soldierId: string;
+    next: SoldierStatus;
+    expectedUntil?: string;
+    reason?: string;
+  }) => {
+    const now = new Date().toISOString();
+    // Append to the log
+    setSoldierStatusEvents((prev) => [...prev, {
+      id: `sse-${Date.now()}`,
+      soldierId: data.soldierId,
+      value: data.next,
+      setAt: now,
+      setBy: currentUser?.id ?? 'system',
+      expectedUntil: data.expectedUntil,
+      reason: data.reason,
+    }]);
+    // Denormalise onto the Soldier
+    setAllSoldiers((prev) => prev.map((s) => s.id === data.soldierId ? {
+      ...s,
+      currentStatus: data.next,
+      statusSetAt: now,
+      statusExpectedUntil: data.expectedUntil,
+      availability: data.next === 'in-base',   // keep legacy field in sync for one commit
+    } : s));
+  };
   const [periods,      setPeriods]      = useState<SchedulePeriod[]>(mockSchedulePeriods);
   const [auditLogs,    setAuditLogs]    = useState<AuditLog[]>(mockAuditLogs);
   const [platoons, setPlatoons]           = useState<Platoon[]>(mockPlatoons);
@@ -469,11 +517,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         name: p.name,
         unitName: data.unitName,
         code: platoonCode,
-        memberIds: [],                            // populated as users join
+        memberIds: [],
         availableRoles: DEFAULT_AVAILABLE_ROLES,
         companyId,
         squadIds,
-        isSpecialPlatoon: p.isSpecial,
+        kind: p.isSpecial ? 'forward-command' : 'combat',
+        isSpecialPlatoon: p.isSpecial,    // legacy mirror for one commit
         followsCompanyLeaveRotation: !p.isSpecial,
       });
     });
@@ -573,6 +622,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
       allSoldiers,
+      soldierStatusEvents, delegations, updateSoldierStatus,
     }}>
       {children}
     </AppContext.Provider>

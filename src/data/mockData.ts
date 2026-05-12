@@ -2,6 +2,7 @@ import type {
   Soldier, SchedulePeriod, AuditLog, MockUser, Platoon, Leave, LeaveRequest,
   EquipmentRequirements, SoldierHistory, MiluimPeriod, Company, Squad,
   CompanyMission, OverrideAlert,
+  SoldierStatusEvent, Delegation,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -28,29 +29,45 @@ const watchEquip: EquipmentRequirements = {
 // and MUST NOT appear in operational queries — only audit/security flows
 // may read them.
 
-export const mockSoldiers: Soldier[] = [
-  // ── מחלקה א׳ — claimed: s1 by u3 (משה). Unclaimed: s8 יניב for demo testing ──
-  { id: 's1',  name: 'משה ישראלי',  phone: '0509876543', idLast4: '1111', companyId: 'co1', status: 'active', claimedAt: '2024-05-08T09:00:00', userId: 'u3', operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  availability: true,  availabilityNotes: [], currentLoad: 2 },
-  { id: 's2',  name: 'רוני שמש',    phone: '0502222111', idLast4: '2222', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה 1', squadId: 'su-g1-a',  availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
-  { id: 's3',  name: 'אורן פרץ',    phone: '0503333222', idLast4: '3333', companyId: 'co1', status: 'active', operationalRoles: ['נגביסט'],          teamClass: 'כיתה 2', squadId: 'su-g1-b',  availability: true,  availabilityNotes: [], currentLoad: 3 },
-  { id: 's4',  name: 'נועם כץ',     phone: '0504444333', idLast4: '4444', companyId: 'co1', status: 'active', operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה 2', squadId: 'su-g1-b',  availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
-  { id: 's5',  name: 'איתי בן דוד', phone: '0505555444', idLast4: '5555', companyId: 'co1', status: 'active', operationalRoles: ['סמ״פ', 'רחפן'],   teamClass: 'מפקדה',  squadId: 'su-g1-hq', availability: true,  availabilityNotes: [], currentLoad: 1 },
-  { id: 's6',  name: 'גל מזרחי',    phone: '0506666555', idLast4: '6666', companyId: 'co1', status: 'active', operationalRoles: ['מאגיסט', 'סמל'],  teamClass: 'כיתה 2', squadId: 'su-g1-b',  availability: true,  availabilityNotes: [], currentLoad: 2 },
-  { id: 's7',  name: 'שי אברהם',    phone: '0507777666', idLast4: '7777', companyId: 'co1', status: 'active', operationalRoles: ['רחפן', 'קלע'],    teamClass: 'כיתה 3', squadId: 'su-g1-c',  availability: true,  availabilityNotes: [], currentLoad: 1 },
-  // s8: UNCLAIMED slot — phone + idLast4 below are the claim credentials
-  { id: 's8',  name: 'יניב שלום',   phone: '0508888777', idLast4: '8888', companyId: 'co1', status: 'active', operationalRoles: ['קלע'],             teamClass: 'כיתה 3', squadId: 'su-g1-c',  availability: true,  availabilityNotes: [{ type: 'location', description: 'לא נמצא בבסיס', startDate: '2024-05-12', endDate: '2024-05-13' }], currentLoad: 0 },
-  { id: 's9',  name: 'ניסים דהן',   phone: '0509999888', idLast4: '9999', companyId: 'co1', status: 'active', operationalRoles: ['חובש', 'סמל'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  availability: true,  availabilityNotes: [], currentLoad: 2 },
-  { id: 's10', name: 'אלון ברק',    phone: '0501010101', idLast4: '1010', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'מאגיסט'],  teamClass: 'כיתה 3', squadId: 'su-g1-c',  availability: true,  availabilityNotes: [], currentLoad: 1 },
+// Recent timestamps to drive "מאז" / "since" displays naturally.
+const YESTERDAY_AM = '2024-05-11T07:00:00';
+const TWO_DAYS_AGO = '2024-05-10T14:00:00';
 
-  // ── HISTORICAL — proves that inactive rows are invisible to operational selectors ──
-  // s11 records that יוסי כהן (now CC of co1) was previously a soldier in co2.
-  // status='inactive' → no roster, no Home, no schedule reads this. Audit only.
+export const mockSoldiers: Soldier[] = [
+  // ── מחלקה א׳ ─────────────────────────────────────────────────────────
+  // currentStatus drives every operational view. statusSetAt is the
+  // canonical "since" timestamp; statusExpectedUntil is set when going
+  // home so the system knows when they should be back.
+  { id: 's1',  name: 'משה ישראלי',  phone: '0509876543', idLast4: '1111', companyId: 'co1', status: 'active', claimedAt: '2024-05-08T09:00:00', userId: 'u3', operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's2',  name: 'רוני שמש',    phone: '0502222111', idLast4: '2222', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'home',    statusSetAt: '2024-05-12T00:00:00', statusExpectedUntil: '2024-05-14T22:00:00', availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
+  { id: 's3',  name: 'אורן פרץ',    phone: '0503333222', idLast4: '3333', companyId: 'co1', status: 'active', operationalRoles: ['נגביסט'],          teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 3 },
+  { id: 's4',  name: 'נועם כץ',     phone: '0504444333', idLast4: '4444', companyId: 'co1', status: 'active', operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'inactive-temp', statusSetAt: YESTERDAY_AM, availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
+  { id: 's5',  name: 'איתי בן דוד', phone: '0505555444', idLast4: '5555', companyId: 'co1', status: 'active', operationalRoles: ['סמ״פ', 'רחפן'],   teamClass: 'מפקדה',  squadId: 'su-g1-hq', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
+  { id: 's6',  name: 'גל מזרחי',    phone: '0506666555', idLast4: '6666', companyId: 'co1', status: 'active', operationalRoles: ['מאגיסט', 'סמל'],  teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's7',  name: 'שי אברהם',    phone: '0507777666', idLast4: '7777', companyId: 'co1', status: 'active', operationalRoles: ['רחפן', 'קלע'],    teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
+  // s8: UNCLAIMED slot
+  { id: 's8',  name: 'יניב שלום',   phone: '0508888777', idLast4: '8888', companyId: 'co1', status: 'active', operationalRoles: ['קלע'],             teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [{ type: 'location', description: 'לא נמצא בבסיס', startDate: '2024-05-12', endDate: '2024-05-13' }], currentLoad: 0 },
+  { id: 's9',  name: 'ניסים דהן',   phone: '0509999888', idLast4: '9999', companyId: 'co1', status: 'active', operationalRoles: ['חובש', 'סמל'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's10', name: 'אלון ברק',    phone: '0501010101', idLast4: '1010', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'מאגיסט'],  teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
+
+  // ── HISTORICAL — invisible to operational selectors ──
   { id: 's11', name: 'יוסי כהן',   phone: '0501234567', idLast4: '0001', companyId: 'co2',
     status: 'inactive', deactivatedAt: '2024-04-15T10:00:00', deactivatedReason: 'transferred',
     claimedAt: '2023-09-01T08:00:00', userId: 'u1',
     operationalRoles: ['קלע'], teamClass: 'כיתה 1',
+    currentStatus: 'inactive-temp', statusSetAt: '2024-04-15T10:00:00',
     availability: false, availabilityNotes: [], currentLoad: 0 },
 ];
+
+// Append-only operational state log. Empty for now — populated as
+// soldiers/commanders trigger status changes. Phase B+ flows (escalation
+// reports etc.) will append entries with escalationId set.
+export const mockSoldierStatusEvents: SoldierStatusEvent[] = [];
+
+// Permission delegations granted by the CC. Empty default — every role
+// uses its built-in token bundle. The CC's delegation grant UI lands
+// in phase D; for now this list just provides architectural readiness.
+export const mockDelegations: Delegation[] = [];
 
 // ─── Claimed identities (the auth layer bound to active Soldier records) ─────
 
@@ -321,7 +338,7 @@ export const mockPlatoons: Platoon[] = [
     platoonCommanderUserId: 'u2',
     platoonSergeantUserId: 'u5',
     squadIds: ['su-g1-a', 'su-g1-b', 'su-g1-c', 'su-g1-hq'],
-    isSpecialPlatoon: false,
+    kind: 'combat',
     followsCompanyLeaveRotation: true,
   },
   {
@@ -331,8 +348,8 @@ export const mockPlatoons: Platoon[] = [
     size: 8,
     companyId: 'co1',
     squadIds: ['su-g2-spr', 'su-g2-msh', 'su-g2-tek'],
-    isSpecialPlatoon: true,
-    followsCompanyLeaveRotation: false,   // recon platoon: own leave rotation
+    kind: 'forward-command',
+    followsCompanyLeaveRotation: false,
     minSoldiersOnBase: 4,
   },
 ];

@@ -23,7 +23,7 @@
 // Legacy 'owner' ≈ companyCommander, legacy 'manager' ≈ platoonCommander
 // so old mock users still resolve correctly.
 
-import type { UserRole, MockUser, Platoon, LeaveRequest, Soldier } from '../types';
+import type { UserRole, MockUser, Platoon, LeaveRequest, Soldier, PermissionToken, Delegation } from '../types';
 
 // ─── Role hierarchy ──────────────────────────────────────────────────────────
 
@@ -62,6 +62,88 @@ export const roleLabel = (role: UserRole): string => ({
   owner:                  'בעלים',
   manager:                'מנהל',
 }[role]);
+
+// ─── Permission tokens (new parallel model) ──────────────────────────────────
+//
+// The token system runs alongside the legacy role-only helpers. Existing
+// `canX` predicates become thin wrappers (below) so no consumer breaks.
+// New code should reach for `hasPermission(user, token, scope?)` directly.
+
+const ALL_TOKENS: PermissionToken[] = [
+  'roster.add', 'roster.edit', 'roster.remove',
+  'schedule.create', 'schedule.edit', 'schedule.publish',
+  'mission.create.platoon', 'mission.create.company',
+  'leave.approve.platoon', 'leave.approve.company', 'leave.create.lockedDate',
+  'combatClock.publish', 'combatClock.fillBlock',
+  'comm.send.platoon', 'comm.send.company',
+  'escalation.declare', 'escalation.respond', 'escalation.collectStatus',
+  'logistics.signOut', 'logistics.signIn', 'logistics.viewAll',
+  'report.viewCompanyState', 'report.viewPlatoonState',
+  'delegation.grant',
+];
+
+const PLATOON_LEADERSHIP_TOKENS: PermissionToken[] = [
+  'schedule.create', 'schedule.edit',
+  'mission.create.platoon',
+  'leave.approve.platoon',
+  'combatClock.fillBlock',
+  'comm.send.platoon',
+  'report.viewPlatoonState',
+  'roster.edit',
+  'escalation.respond',
+];
+
+const DEFAULT_TOKENS_BY_ROLE: Record<UserRole, PermissionToken[]> = {
+  companyCommander:       ALL_TOKENS,
+  deputyCompanyCommander: ALL_TOKENS.filter((t) => t !== 'delegation.grant'),
+  owner:                  ALL_TOKENS,                            // legacy alias
+  platoonCommander:       [...PLATOON_LEADERSHIP_TOKENS, 'schedule.publish'],
+  platoonSergeant:        PLATOON_LEADERSHIP_TOKENS,             // peer of PC, no publish seal
+  manager:                [...PLATOON_LEADERSHIP_TOKENS, 'schedule.publish'],   // legacy alias
+  soldier:                [],
+};
+
+/**
+ * Quick role-only check — useful when you only have a role string and
+ * no scope. New code should prefer `hasPermission(user, token, scope?)`
+ * which respects delegations and explicit scope.
+ */
+export const roleHasPermission = (role: UserRole, token: PermissionToken): boolean =>
+  DEFAULT_TOKENS_BY_ROLE[role].includes(token);
+
+/**
+ * The canonical permission check. Resolves:
+ *   1. Default tokens granted by the user's base role.
+ *   2. Any active (non-expired) Delegations granted to this specific user
+ *      or to their role broadly.
+ *   3. Scope: 'company' grants apply everywhere; 'platoon' grants only to
+ *      the named platoon.
+ *
+ * `delegations` is optional — if omitted, only role defaults are consulted.
+ * Future phases (delegation grant UI) will pass the live list.
+ */
+export function hasPermission(
+  user: MockUser,
+  token: PermissionToken,
+  scope?: { platoonId?: string },
+  delegations: Delegation[] = [],
+): boolean {
+  if (roleHasPermission(user.role, token)) return true;
+
+  const now = Date.now();
+  const applies = (d: Delegation): boolean => {
+    if (d.permission !== token) return false;
+    if (d.expiresAt && Date.parse(d.expiresAt) < now) return false;
+    if (d.grantedToUserId && d.grantedToUserId !== user.id) return false;
+    if (d.grantedToRole && d.grantedToRole !== user.role) return false;
+    if (d.scope.kind === 'company') return true;
+    if (d.scope.kind === 'platoon') {
+      return !!scope?.platoonId && d.scope.platoonId === scope.platoonId;
+    }
+    return false;
+  };
+  return delegations.some(applies);
+}
 
 // ─── Role-only helpers (legacy API kept for existing call sites) ─────────────
 

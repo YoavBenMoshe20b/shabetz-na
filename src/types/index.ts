@@ -11,6 +11,51 @@ export type UserRole =
   | 'owner'                    // [legacy] ≈ companyCommander
   | 'manager';                 // [legacy] ≈ platoonCommander
 
+// ─── Permission tokens (separate from roles) ─────────────────────────────────
+// Roles describe WHO you are. Permissions describe WHAT you can do.
+// Each role has default tokens, and the company commander can grant any
+// token to any user via the Delegation entity (with optional expiry —
+// used for temporary escalation grants).
+
+export type PermissionToken =
+  // Roster
+  | 'roster.add' | 'roster.edit' | 'roster.remove'
+  // Schedule
+  | 'schedule.create' | 'schedule.edit' | 'schedule.publish'
+  // Missions
+  | 'mission.create.platoon' | 'mission.create.company'
+  // Leave
+  | 'leave.approve.platoon' | 'leave.approve.company' | 'leave.create.lockedDate'
+  // Combat clock
+  | 'combatClock.publish' | 'combatClock.fillBlock'
+  // Communication
+  | 'comm.send.platoon' | 'comm.send.company'
+  // Escalation
+  | 'escalation.declare' | 'escalation.respond' | 'escalation.collectStatus'
+  // Logistics
+  | 'logistics.signOut' | 'logistics.signIn' | 'logistics.viewAll'
+  // Reports
+  | 'report.viewCompanyState' | 'report.viewPlatoonState'
+  // Meta
+  | 'delegation.grant';
+
+// A permission grant. Lives as data so the CC can grant/revoke per user
+// or per role with optional expiry.
+export interface Delegation {
+  id: string;
+  companyId: string;
+  /** Either a specific user OR an entire role (e.g. "all PCs in this company"). */
+  grantedToUserId?: string;
+  grantedToRole?: UserRole;
+  permission: PermissionToken;
+  /** 'company' for company-wide, or { platoonId } for platoon-scoped. */
+  scope: { kind: 'company' } | { kind: 'platoon'; platoonId: string };
+  grantedByUserId: string;
+  grantedAt: string;
+  /** Optional expiry — used for temporary escalation grants. */
+  expiresAt?: string;
+}
+
 export type OperationalRole =
   | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'מ״כ'
   | 'חובש' | 'נגביסט' | 'קלע' | 'מאגיסט' | 'רחפן';
@@ -57,13 +102,59 @@ export interface Soldier {
   userId?: string;               // populated when the slot is claimed
 
   // ── Operational state ───────────────────────────────────────────────
+  // currentStatus is the SINGLE SOURCE OF TRUTH for "where this soldier
+  // is right now". Engine availability filters, Home status strips, and
+  // commander pictures all read this. The legacy `availability: boolean`
+  // is kept for one transitional commit and then deleted.
+  //
+  // The enum is open to extension — escalation flows will add 'on-the-way'
+  // and 'arrived' values without breaking existing consumers.
+  currentStatus: SoldierStatus;
+  statusSetAt: string;             // ISO timestamp — drives "since when"
+  statusExpectedUntil?: string;    // optional planned return (set when going home)
+
   operationalRoles: OperationalRole[];
-  teamClass: TeamClass;          // @deprecated — use squadId
+
+  // Additive functional-role tags. Live alongside the base role.
+  // Architecture-ready for רס״פ / שליש / מש״ק-קשר / חפ״ק-member / logistics
+  // surfaces in future phases. NOT rendered yet.
+  functionalRoles?: FunctionalRole[];
+
+  teamClass: TeamClass;            // @deprecated — use squadId
   squadId?: string;
-  availability: boolean;
+  availability: boolean;           // @deprecated — derive from currentStatus
   availabilityNotes: AvailabilityNote[];
   currentLoad: number;
 }
+
+export type SoldierStatus =
+  | 'in-base'         // בבסיס — operational and present
+  | 'home'            // בבית   — on approved leave / rotation home
+  | 'inactive-temp';  // לא פעיל זמנית — present but unavailable for assignment
+
+// Append-only audit log of every status change. Soldier.currentStatus
+// is a denormalised cache of the latest event for fast reads.
+export interface SoldierStatusEvent {
+  id:        string;
+  soldierId: string;
+  value:     SoldierStatus;
+  setAt:     string;
+  setBy:     string;               // userId of whoever set it
+  expectedUntil?: string;
+  reason?:   string;
+  // Architecture-ready: escalationId? linked when the event is part of an
+  // EscalationEvent response. Not used yet.
+  escalationId?: string;
+}
+
+// Functional roles — additive tags carried alongside the base UserRole.
+// Each tag carries a default permission bundle (see permissions.ts).
+export type FunctionalRole =
+  | 'rasap'              // רס״פ — logistics chief
+  | 'shalish'            // שליש — admin officer
+  | 'mashak-kesher'      // מש״ק קשר — comms NCO
+  | 'chapack-member'     // חפ״ק member
+  | 'logistics-assistant';
 
 // ─── Leaves / יציאות ─────────────────────────────────────────────────────────
 
@@ -339,14 +430,28 @@ export interface Platoon {
   confusionMinutes?: number;
 
   // Company hierarchy
-  companyId: string;                        // required — platoons exist only inside a company
-  platoonCommanderUserId?: string;          // user id of מ״מ
-  platoonSergeantUserId?: string;           // user id of סמל
-  squadIds?: string[];                      // child Squad ids
-  isSpecialPlatoon?: boolean;               // different mission rules
-  followsCompanyLeaveRotation?: boolean;    // default: true
-  minSoldiersOnBase?: number;               // platoon-level override
+  companyId: string;
+  platoonCommanderUserId?: string;
+  platoonSergeantUserId?: string;
+  squadIds?: string[];
+
+  // What kind of operational unit this is. Replaces the legacy
+  // isSpecialPlatoon boolean — platoons are not homogeneous. A combat
+  // platoon has squads; a logistics platoon has work teams; an HQ
+  // platoon hosts functional-role soldiers (רס״פ / שליש / מש״ק קשר).
+  kind: PlatoonKind;
+  isSpecialPlatoon?: boolean;               // @deprecated — use kind
+
+  followsCompanyLeaveRotation?: boolean;
+  minSoldiersOnBase?: number;
 }
+
+export type PlatoonKind =
+  | 'combat'           // מחלקת לחימה
+  | 'forward-command'  // חפ״ק
+  | 'logistics'        // מפלג
+  | 'hq'               // מפקדה — hosts רס״פ / שליש / מש״ק קשר
+  | 'custom';
 
 // ─── Company-level missions ──────────────────────────────────────────────────
 //

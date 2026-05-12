@@ -557,7 +557,12 @@ export function regenerateSlot(
   fixedSoldierIds: string[] = [],
 ): TimeSlot {
   // Mark fixed soldiers as already-assigned, then run the same scoring loop.
-  const available = ctx.soldiers.filter((s) => s.availability);
+  // Engine availability is driven by currentStatus (new authoritative
+  // field) with safe fallback to the legacy `availability` boolean for
+  // any soldier record that hasn't been migrated yet.
+  const available = ctx.soldiers.filter((s) =>
+    s.currentStatus ? s.currentStatus === 'in-base' : s.availability,
+  );
   const historyById = new Map(ctx.history.map((h) => [h.soldierId, h]));
 
   const state: SoldierState = {
