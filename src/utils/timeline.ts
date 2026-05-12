@@ -12,6 +12,7 @@
 
 import type {
   SchedulePeriod, Leave, OverrideAlert, MissionType, TimeSlot, Soldier,
+  SoldierStatusEvent,
 } from '../types';
 
 export type OpsEventKind =
@@ -22,7 +23,8 @@ export type OpsEventKind =
   | 'manpowerDrop'       // computed: leave start that crosses the min
   | 'rotation'           // CompanyMission rotation event
   | 'pendingApprovals'   // virtual "right now" event
-  | 'override';          // override alert that requires immediate attention
+  | 'override'           // override alert that requires immediate attention
+  | 'statusTransition';  // soldier declared a status change — quiet operational signal
 
 export interface OpsEvent {
   id: string;
@@ -118,7 +120,12 @@ export interface PlatoonTimelineInput {
   soldiers:          Soldier[];
   pendingApprovals:  number;
   recentAlerts:      OverrideAlert[];     // only requiresImmediateAttention surface here
-  horizonHours:      number;              // default 12
+  /** Soldier status declarations (יצאתי הביתה / חזרתי לבסיס / ...).
+   *  Rendered as low-severity ambient signals — not banners, not notifications. */
+  statusEvents?:     SoldierStatusEvent[];
+  /** Only events newer than this point are shown. Defaults to 6h ago. */
+  statusLookbackHours?: number;
+  horizonHours:      number;
 }
 
 export function buildPlatoonTimeline(input: PlatoonTimelineInput): OpsEvent[] {
@@ -208,7 +215,37 @@ export function buildPlatoonTimeline(input: PlatoonTimelineInput): OpsEvent[] {
     });
   }
 
-  // 4. Critical override alerts (only those marked requiresImmediateAttention)
+  // 4. Recent soldier status transitions — quiet ambient signal.
+  // These are NOT alerts. They're the operational equivalent of "what
+  // has changed in the last few hours" — same vocabulary the soldier
+  // uses ("יצא הביתה" / "חזר לבסיס") so the commander sees the platoon
+  // through the same words.
+  if (input.statusEvents && input.statusEvents.length > 0) {
+    const lookbackMs = (input.statusLookbackHours ?? 6) * 3600 * 1000;
+    const cutoff = now.getTime() - lookbackMs;
+    const soldiersById = new Map(input.soldiers.map((s) => [s.id, s]));
+    for (const ev of input.statusEvents) {
+      const setAtMs = Date.parse(ev.setAt);
+      if (isNaN(setAtMs) || setAtMs < cutoff || setAtMs > now.getTime()) continue;
+      const s = soldiersById.get(ev.soldierId);
+      if (!s) continue;
+      const verb =
+        ev.value === 'home'           ? 'יצא הביתה' :
+        ev.value === 'in-base'        ? 'חזר לבסיס' :
+        ev.value === 'inactive-temp'  ? 'סומן לא פעיל' :
+        'עדכן מצב';
+      events.push({
+        id: `status-${ev.id}`,
+        whenIso: ev.setAt,
+        whenLabel: relativeAgo(ev.setAt, now),
+        kind: 'statusTransition',
+        title: `${s.name} ${verb}`,
+        severity: 'normal',
+      });
+    }
+  }
+
+  // 5. Critical override alerts (only those marked requiresImmediateAttention)
   for (const a of recentAlerts) {
     if (!a.requiresImmediateAttention || a.status !== 'open') continue;
     events.push({

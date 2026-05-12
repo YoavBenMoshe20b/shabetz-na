@@ -44,13 +44,12 @@ export default function DashboardPage() {
 
 function CompanyCommanderDashboard() {
   const navigate = useNavigate();
-  const { soldiers, leaves, squads, platoons, overrideAlerts } = useApp();
+  const { soldiers, leaves, squads, platoons, overrideAlerts, soldierStatusEvents } = useApp();
   const myCompany = useMyCompany();
   const myPlatoons = useMyPlatoons();
   const allAlerts = useAlertsForCompany();
   const activePeriod = useActivePeriod();
 
-  const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
 
   // Soldiers attached to a platoon via their squad (squad.platoonId)
@@ -59,31 +58,22 @@ function CompanyCommanderDashboard() {
     return soldiers.filter((s) => s.squadId && ids.includes(s.squadId));
   };
 
-  const onLeaveIds = useMemo(() => {
-    const ids = new Set<string>();
-    leaves.forEach((lv) => {
-      if (today < lv.startDate || today > lv.endDate) return;
-      if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
-      else if (lv.scope === 'squad') soldiers.filter((s) => s.squadId === lv.squadId).forEach((s) => ids.add(s.id));
-      else soldiers.forEach((s) => ids.add(s.id));
-    });
-    return ids;
-  }, [leaves, soldiers, today]);
-
-  // Per-platoon stats
+  // Per-platoon stats — speak the same operational vocabulary the soldier
+  // and platoon commander see. currentStatus is the source of truth.
   const platoonStats = myPlatoons.map((p) => {
     const ps = soldiersInPlatoon(p.id);
-    const onBase = ps.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
-    const atHome = ps.filter((s) => onLeaveIds.has(s.id)).length;
+    const inBase   = ps.filter((s) => s.currentStatus === 'in-base').length;
+    const atHome   = ps.filter((s) => s.currentStatus === 'home').length;
+    const inactive = ps.filter((s) => s.currentStatus === 'inactive-temp').length;
     const requiredMin = p.minSoldiersOnBase ?? Math.ceil((myCompany?.settings.minSoldiersOnBase ?? 0) / Math.max(1, myPlatoons.length));
     const status: 'ready' | 'warning' | 'critical' =
-      onBase < requiredMin              ? 'critical' :
-      onBase < requiredMin + 1          ? 'warning'  :
+      inBase < requiredMin              ? 'critical' :
+      inBase < requiredMin + 1          ? 'warning'  :
       'ready';
-    return { platoon: p, total: ps.length, onBase, atHome, requiredMin, status };
+    return { platoon: p, total: ps.length, inBase, atHome, inactive, requiredMin, status };
   });
 
-  const totalOnBase = platoonStats.reduce((sum, ps) => sum + ps.onBase, 0);
+  const totalInBase   = platoonStats.reduce((sum, ps) => sum + ps.inBase, 0);
   const totalSoldiers = platoonStats.reduce((sum, ps) => sum + ps.total, 0);
 
   // Cross-company timeline (no pending approvals — CC doesn't approve)
@@ -94,8 +84,9 @@ function CompanyCommanderDashboard() {
     soldiers,
     pendingApprovals: 0,
     recentAlerts: allAlerts,
+    statusEvents: soldierStatusEvents,
     horizonHours: 12,
-  }), [now, activePeriod, leaves, soldiers, allAlerts]);
+  }), [now, activePeriod, leaves, soldiers, allAlerts, soldierStatusEvents]);
 
   // Recent activity (override alerts, regardless of status, demoted to collapsible)
   const [showActivity, setShowActivity] = useState(false);
@@ -116,7 +107,7 @@ function CompanyCommanderDashboard() {
         <Section label="עכשיו">
           <Card>
             <div className="px-5 py-4 flex items-baseline gap-2">
-              <Metric>{totalOnBase}</Metric>
+              <Metric>{totalInBase}</Metric>
               <Hint className="self-end pb-1.5">/ {totalSoldiers}</Hint>
               <Body className="self-end pb-1.5 mr-1">בבסיס</Body>
               <Muted className="mr-auto">{platoonStats.length} מחלקות</Muted>
@@ -136,12 +127,13 @@ function CompanyCommanderDashboard() {
                       <StatusDot status={ps.status} />
                     </div>
                     <Body>
-                      <span className="font-extrabold text-mil-text">{ps.onBase}</span>
+                      <span className="font-extrabold text-mil-text">{ps.inBase}</span>
                       <Hint as="span" className="mx-0.5">/ {ps.total}</Hint>
                       <span className="mr-1">בבסיס</span>
                     </Body>
-                    {ps.atHome > 0 && <Hint className="text-mil-sand mt-0.5">{ps.atHome} בבית</Hint>}
-                    {ps.platoon.isSpecialPlatoon && <Hint className="mt-1 tracking-wide">מיוחדת</Hint>}
+                    {ps.atHome > 0   && <Hint className="text-mil-sand mt-0.5">{ps.atHome} בבית</Hint>}
+                    {ps.inactive > 0 && <Hint className="text-mil-ghost mt-0.5">{ps.inactive} לא פעיל</Hint>}
+                    {ps.platoon.kind === 'forward-command' && <Hint className="mt-1 tracking-wide">מיוחדת</Hint>}
                   </div>
                 </Card>
               ))}
@@ -240,7 +232,7 @@ function SettingsRow({ title, detail }: { title: string; detail: string }) {
 
 function PlatoonCommanderDashboard() {
   const navigate = useNavigate();
-  const { soldiers, leaves, platoons, currentUser } = useApp();
+  const { soldiers, leaves, platoons, currentUser, soldierStatusEvents } = useApp();
   const activePeriod = useActivePeriod();
   const approvableRequests = useApprovableLeaveRequests();
   const myAlerts = useAlertsForCompany();           // platoon-tier sees only their own platoon's alerts
@@ -248,21 +240,15 @@ function PlatoonCommanderDashboard() {
   const myPlatoon = platoons.find((g) => g.id === currentUser?.commandedPlatoonId)
     ?? platoons.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
 
-  // "Now" stats strip
   const today = new Date().toISOString().slice(0, 10);
-  const onLeaveIds = useMemo(() => {
-    const ids = new Set<string>();
-    leaves.forEach((lv) => {
-      if (today < lv.startDate || today > lv.endDate) return;
-      if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
-      else if (lv.scope === 'squad') soldiers.filter((s) => s.squadId === lv.squadId).forEach((s) => ids.add(s.id));
-      else soldiers.forEach((s) => ids.add(s.id));
-    });
-    return ids;
-  }, [leaves, soldiers, today]);
-  const onBase     = soldiers.filter((s) => s.availability && !onLeaveIds.has(s.id)).length;
-  const atHome     = onLeaveIds.size;
-  const unavail    = soldiers.filter((s) => !s.availability && !onLeaveIds.has(s.id)).length;
+  // Speak the same operational vocabulary the soldier sees.
+  // currentStatus is the source of truth — Leave records only inform why,
+  // not whether. A soldier with status 'home' is at home regardless of
+  // which Leave document describes it; a soldier with status 'in-base'
+  // is in-base even if a leave starts later today.
+  const inBase     = soldiers.filter((s) => s.currentStatus === 'in-base').length;
+  const atHome     = soldiers.filter((s) => s.currentStatus === 'home').length;
+  const inactive   = soldiers.filter((s) => s.currentStatus === 'inactive-temp').length;
 
   // Currently running missions (compact list)
   const now = new Date();
@@ -291,8 +277,9 @@ function PlatoonCommanderDashboard() {
     soldiers,
     pendingApprovals,
     recentAlerts: myAlerts,
+    statusEvents: soldierStatusEvents,
     horizonHours: 12,
-  }), [now, activePeriod, leaves, soldiers, pendingApprovals, myAlerts]);
+  }), [now, activePeriod, leaves, soldiers, pendingApprovals, myAlerts, soldierStatusEvents]);
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
@@ -310,9 +297,9 @@ function PlatoonCommanderDashboard() {
           <Card>
             <div className="px-5 py-4">
               <div className="flex items-baseline gap-4 flex-wrap">
-                <StatGroup metric={onBase} label="בבסיס" tone="olive" />
-                <StatGroup metric={atHome} label="בבית"   tone="sand"  />
-                <StatGroup metric={unavail} label="לא זמין" tone="ghost" />
+                <StatGroup metric={inBase}   label="בבסיס"   tone="olive" />
+                <StatGroup metric={atHome}   label="בבית"     tone="sand"  />
+                <StatGroup metric={inactive} label="לא פעיל" tone="ghost" />
               </div>
               {activeMissions.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-mil-border space-y-2">
