@@ -110,27 +110,29 @@ function CompanyCommanderDashboard() {
       <PageMain>
 
         {/* ── 1. STATUS NOW — typographic hero, no card chrome ───────────── */}
-        <header className="pt-1">
-          <div className="flex items-baseline gap-1.5 text-sm text-mil-muted">
+        <header>
+          <div className="flex items-baseline gap-1.5 text-tiny text-mil-muted">
             {myCompany?.unitName && (
               <>
                 <span>{myCompany.unitName}</span>
                 <span className="text-mil-ghost">·</span>
               </>
             )}
-            <span><span className="tabular-nums font-semibold text-mil-text">{platoonStats.length}</span> מחלקות</span>
+            <span>
+              <span className="tabular-nums font-semibold text-mil-text">{platoonStats.length}</span> מחלקות
+            </span>
           </div>
 
-          <div className="mt-3.5 flex items-baseline gap-2 flex-wrap">
-            <span className="text-[44px] leading-none font-extrabold tabular-nums text-mil-text">
+          <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
+            <span className="text-[48px] leading-[0.9] font-extrabold tabular-nums tracking-tight text-mil-text">
               {totalInBase}
             </span>
-            <span className="text-mil-ghost text-base self-end pb-1.5 tabular-nums">
+            <span className="text-mil-ghost text-lg tabular-nums">
               / {totalSoldiers}
             </span>
-            <Body className="self-end pb-1.5 mr-1.5 font-semibold">בבסיס עכשיו</Body>
+            <span className="text-sm font-semibold text-mil-text mr-1">בבסיס עכשיו</span>
 
-            <div className="mr-auto self-end pb-1.5 flex items-baseline gap-3">
+            <div className="mr-auto flex items-baseline gap-3">
               {totalAtHome > 0 && (
                 <span className="text-tiny text-mil-muted">
                   <span className="tabular-nums font-bold text-mil-text">{totalAtHome}</span> בבית
@@ -147,7 +149,7 @@ function CompanyCommanderDashboard() {
           <ReadinessBar pct={readinessPct} health={companyHealth} />
 
           {criticalCount > 0 && (
-            <div className="mt-3 inline-flex items-center gap-1.5 text-mil-alert font-semibold text-sm">
+            <div className="mt-3 inline-flex items-center gap-2 text-mil-alert font-semibold text-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-mil-alert" aria-hidden />
               <span>
                 {criticalCount === 1
@@ -160,7 +162,7 @@ function CompanyCommanderDashboard() {
 
         {/* ── 2. PLATOON HEALTH — compact scannable rows ──────────────────── */}
         <Section label="מחלקות">
-          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden shadow-card">
+          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
             {platoonStats.map((ps) => (
               <PlatoonHealthRow key={ps.platoon.id} ps={ps} />
             ))}
@@ -170,14 +172,12 @@ function CompanyCommanderDashboard() {
         {/* ── 3. UPCOMING — next 12 hours ─────────────────────────────────── */}
         <Section label="ב-12 השעות הקרובות">
           {events.length === 0 ? (
-            <Card variant="muted">
-              <div className="px-5 py-7 text-center">
-                <Body className="font-bold text-mil-olive-dim">הכל רגוע</Body>
-                <Muted className="mt-1.5">אין שינויים מתוכננים</Muted>
-              </div>
-            </Card>
+            <div className="py-8 text-center">
+              <p className="text-sm font-bold text-mil-olive-dim">הכל רגוע</p>
+              <p className="text-tiny text-mil-muted mt-1">אין שינויים מתוכננים</p>
+            </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {events.map((ev) => <TimelineCard key={ev.id} event={ev} onCta={() => ev.ctaHref && navigate(ev.ctaHref)} />)}
             </div>
           )}
@@ -260,7 +260,7 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
   const hasSubline = ps.gap > 0 || ps.atHome > 0 || ps.inactive > 0;
 
   return (
-    <div className="px-4 py-3.5 flex items-center gap-3">
+    <div className="px-5 py-4 flex items-center gap-3 hover:bg-mil-card-warm/40 transition-colors duration-150">
       <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0`} aria-hidden />
 
       <div className="flex-1 min-w-0">
@@ -270,7 +270,7 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
         </div>
 
         {hasSubline && (
-          <div className="mt-0.5 flex items-baseline gap-1.5 flex-wrap text-tiny">
+          <div className="mt-1 flex items-baseline gap-1.5 flex-wrap text-tiny">
             {ps.gap > 0 && (
               <span className="text-mil-alert font-semibold">חסר {ps.gap} לבסיס</span>
             )}
@@ -295,7 +295,7 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
       </div>
 
       <div className="flex items-baseline flex-shrink-0 tabular-nums">
-        <span className={`text-2xl font-extrabold ${numTone}`}>{ps.inBase}</span>
+        <span className={`text-xl font-extrabold ${numTone}`}>{ps.inBase}</span>
         <span className="text-mil-ghost text-sm">/{ps.total}</span>
       </div>
     </div>
@@ -440,7 +440,7 @@ function TimelineCard({ event, onCta }: { event: OpsEvent; onCta: () => void }) 
     'text-mil-muted';
 
   return (
-    <div className="bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden shadow-card">
+    <div className="bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden">
       <div className={`w-1 ${edge} flex-shrink-0`} />
       <div className="flex-1 px-4 py-3.5">
         <p className={`text-tiny font-bold tracking-wide ${labelTone}`}>{event.whenLabel}</p>
