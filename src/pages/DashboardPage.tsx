@@ -6,9 +6,9 @@ import { isPlatoonLeadership, isCompanyLeadership } from '../utils/permissions';
 import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
 import {
   Card, Button, StatusPill, StatusDot, Section, PageMain, CollapsibleSection,
-  PageTitle, HeroTitle, CardTitle, Body, Muted, Hint, Metric,
+  PageTitle, CardTitle, Body, Muted, Hint, Metric,
 } from '../components/ui';
-import type { TimeSlot, MissionType, Soldier } from '../types';
+import type { TimeSlot, MissionType, Soldier, SoldierStatus } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -421,7 +421,7 @@ function StatGroup({ metric, label, tone }: { metric: number; label: string; ton
 // ─── Soldier Dashboard ────────────────────────────────────────────────────────
 
 function SoldierDashboard() {
-  const { soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest } = useApp();
+  const { soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest, updateSoldierStatus } = useApp();
   const activePeriod = useActivePeriod();
   const myPlatoon = platoons.find((p) => p.id === currentUser?.platoonId);
 
@@ -433,6 +433,8 @@ function SoldierDashboard() {
   const [showRoster,  setShowRoster]  = useState(false);
   const [leaveOpen,   setLeaveOpen]   = useState(false);
   const [leaveSaved,  setLeaveSaved]  = useState(false);
+  const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
+  const [statusToastMsg,   setStatusToastMsg]   = useState('');
 
   // Current wall-clock time (in minutes since midnight of "today")
   const now = new Date();
@@ -535,7 +537,7 @@ function SoldierDashboard() {
       <Header title="המחלקה שלי" />
       <PageMain>
 
-        {/* Toast on successful leave-request submit */}
+        {/* Transient toasts */}
         {leaveSaved && (
           <Card variant="muted" className="!border-mil-success/40 bg-mil-success-bg">
             <div className="px-4 py-3 flex items-center gap-2">
@@ -544,8 +546,16 @@ function SoldierDashboard() {
             </div>
           </Card>
         )}
+        {statusToastMsg && (
+          <Card variant="muted" className="!border-mil-olive/40 bg-mil-olive-bg">
+            <div className="px-4 py-3 flex items-center gap-2">
+              <span className="text-mil-olive-dim font-bold">✓</span>
+              <Body className="text-mil-olive-dim">{statusToastMsg}</Body>
+            </div>
+          </Card>
+        )}
 
-        {/* Greeting — name dominates, context muted underneath */}
+        {/* Subtle greeting — name + context, no card chrome */}
         <div>
           <PageTitle>שלום, {currentUser?.name?.split(' ')[0]}</PageTitle>
           <Muted className="mt-1.5">
@@ -555,22 +565,14 @@ function SoldierDashboard() {
           </Muted>
         </div>
 
-        {/* HERO: my next shift (or fallback if none) */}
-        {myNextShift ? (
-          <NextShiftCard
-            mission={myNextShift.mt}
-            slot={myNextShift.ts}
-            minsTo={myNextShift.minsTo}
-            teammates={teammates}
-            onSetReminder={(mins) => setReminder({ timeSlotId: myNextShift.ts.id, minutesBefore: mins, enabled: true })}
+        {/* OPERATIONAL STATE SPINE — current state · next transition · next shift */}
+        {myProfile && (
+          <OperationalStateCard
+            soldier={myProfile}
+            nextShift={myNextShift ? { mission: myNextShift.mt, slot: myNextShift.ts, minsTo: myNextShift.minsTo, teammates } : null}
+            onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.ts.id, minutesBefore: mins, enabled: true })}
+            onOpenStatusUpdate={() => setStatusUpdateOpen(true)}
           />
-        ) : (
-          <Card variant="muted">
-            <div className="px-5 py-8 text-center">
-              <Body className="text-mil-muted">אין שיבוץ עתידי</Body>
-              <Hint className="mt-1.5">תקבל הודעה כשהמ״מ יפרסם סידור חדש</Hint>
-            </div>
-          </Card>
         )}
 
         {/* Compact "מי על שמירה כרגע" — only if something is running */}
@@ -661,6 +663,24 @@ function SoldierDashboard() {
         <LeaveRequestModal
           onClose={() => setLeaveOpen(false)}
           onSubmit={submitLeaveRequest}
+        />
+      )}
+
+      {/* Operational state update modal */}
+      {statusUpdateOpen && myProfile && (
+        <StatusUpdateModal
+          soldier={myProfile}
+          onClose={() => setStatusUpdateOpen(false)}
+          onSubmit={(next, expectedUntil) => {
+            updateSoldierStatus({ soldierId: myProfile.id, next, expectedUntil });
+            setStatusUpdateOpen(false);
+            setStatusToastMsg(
+              next === 'home'    ? 'עדכנת: יצאת הביתה' :
+              next === 'in-base' ? 'עדכנת: חזרת לבסיס' :
+                                   'עדכנת: לא פעיל כרגע'
+            );
+            setTimeout(() => setStatusToastMsg(''), 3500);
+          }}
         />
       )}
     </div>
@@ -760,76 +780,217 @@ function CollapsibleCard({
   );
 }
 
-// ─── NextShiftCard with Wake-me-up ────────────────────────────────────────────
+// NextShiftCard was absorbed into OperationalStateCard above.
 
-function NextShiftCard({
-  mission, slot, minsTo, teammates, onSetReminder,
+
+// ─── OperationalStateCard ────────────────────────────────────────────────────
+// The soldier's operational spine. Reads as state + transition, not stats.
+//   1. Current state (calm, large, present-tense)
+//   2. "מאז" timestamp + leave/home context (when not currently home)
+//   3. Next operational transition (next shift if relevant, with reminder)
+//   4. One action: עדכן מצב
+//
+// Architecture-ready: the "next transition" slot can later show a combat
+// clock block OR an escalation directive — currently it shows next shift.
+
+function OperationalStateCard({
+  soldier, nextShift, onSetReminder, onOpenStatusUpdate,
 }: {
-  mission: MissionType; slot: TimeSlot; minsTo: number;
-  teammates: Soldier[];
+  soldier: Soldier;
+  nextShift: { mission: MissionType; slot: TimeSlot; minsTo: number; teammates: Soldier[] } | null;
   onSetReminder: (mins: 5 | 15 | 30 | 60) => void;
+  onOpenStatusUpdate: () => void;
 }) {
-  const [activeReminder, setActiveReminder] = useState<5 | 15 | 30 | 60 | null>(null);
+  const status = soldier.currentStatus;
+  const since = formatSinceShort(soldier.statusSetAt);
+  const expectedUntil = soldier.statusExpectedUntil ? formatExpectedReturn(soldier.statusExpectedUntil) : null;
 
-  const handleReminder = (mins: 5 | 15 | 30 | 60) => {
-    onSetReminder(mins);
-    setActiveReminder(mins);
-  };
+  // Status presentation — operational language, not metrics
+  const presentation = {
+    'in-base':         { label: 'אתה בבסיס',     tone: 'olive' as const, accentClass: 'text-mil-olive-dim' },
+    'home':            { label: 'אתה בבית',       tone: 'sand'  as const, accentClass: 'text-mil-sand' },
+    'inactive-temp':   { label: 'לא פעיל כרגע',   tone: 'muted' as const, accentClass: 'text-mil-muted' },
+  }[status];
+
+  const [activeReminder, setActiveReminder] = useState<5 | 15 | 30 | 60 | null>(null);
+  const handleReminder = (m: 5 | 15 | 30 | 60) => { onSetReminder(m); setActiveReminder(m); };
 
   return (
     <Card variant="hero">
-      <div className="bg-mil-olive px-5 py-3 flex items-center justify-between">
-        <span className="text-tiny font-bold tracking-wider text-white uppercase">המשמרת הבאה שלך</span>
-        <span className="text-tiny font-bold text-white">{formatRelative(minsTo)}</span>
-      </div>
-      <div className="px-5 py-5 space-y-4">
+      <div className="px-5 py-5 space-y-5">
+
+        {/* — Current state — */}
         <div>
-          <HeroTitle>{mission.name}</HeroTitle>
-          <Muted className="mt-1">
-            <span className="font-mono font-semibold text-mil-text">{slot.startTime}–{slot.endTime}</span>
-            <span className="mx-2 text-mil-ghost">·</span>
-            <span>{slot.date}</span>
+          <Hint className="tracking-widest">המצב שלך</Hint>
+          <p className={`text-hero font-extrabold leading-tight mt-1.5 ${presentation.accentClass}`}>
+            {presentation.label}
+          </p>
+          <Muted className="mt-1.5">
+            מאז {since}
+            {expectedUntil && status === 'home' && (
+              <>  ·  חזרה מתוכננת ל-{expectedUntil}</>
+            )}
           </Muted>
         </div>
 
-        {teammates.length > 0 && (
-          <Card variant="muted">
-            <div className="px-3 py-2.5">
-              <Hint className="mb-1">יחד עם</Hint>
-              <Body className="font-semibold">{teammates.map((s) => s.name).join(' · ')}</Body>
-            </div>
-          </Card>
-        )}
+        {/* — Next operational transition — */}
+        {nextShift && status === 'in-base' && (
+          <div className="pt-4 border-t border-mil-border">
+            <Hint className="tracking-widest">המשמרת הבאה</Hint>
+            <p className="text-lg font-bold text-mil-text mt-1.5 leading-snug">{nextShift.mission.name}</p>
+            <Muted className="mt-1">
+              <span className="font-mono font-semibold text-mil-text">{nextShift.slot.startTime}–{nextShift.slot.endTime}</span>
+              <span className="mx-2 text-mil-ghost">·</span>
+              <span>{formatRelative(nextShift.minsTo)}</span>
+            </Muted>
+            {nextShift.teammates.length > 0 && (
+              <Muted className="mt-1">
+                יחד עם: {nextShift.teammates.map((t) => t.name).join(' · ')}
+              </Muted>
+            )}
 
-        {/* Wake me up */}
-        <div className="border-t border-mil-border pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <Body className="font-bold flex items-center gap-2">
-              <span className="text-mil-warn text-lg leading-none">●</span>
-              תעיר אותי
-            </Body>
+            {/* Inline wake-me-up — no separate card, part of the same flow */}
+            <div className="mt-3.5 grid grid-cols-4 gap-2">
+              {([5, 15, 30, 60] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => handleReminder(m)}
+                  className={`py-2.5 rounded-lg text-tiny font-bold transition-all active:scale-95 ${
+                    activeReminder === m
+                      ? 'bg-mil-olive text-white shadow-card-hover'
+                      : 'bg-mil-bg border border-mil-border text-mil-text hover:border-mil-olive'
+                  }`}
+                >
+                  {m === 60 ? 'שעה' : `${m} דק׳`}
+                </button>
+              ))}
+            </div>
             {activeReminder && (
-              <Hint className="text-mil-success font-bold">✓ {activeReminder} דק׳ לפני</Hint>
+              <Hint className="text-mil-success mt-2 font-semibold">✓ תזכורת {activeReminder} דק׳ לפני</Hint>
             )}
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {([5, 15, 30, 60] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => handleReminder(m)}
-                className={`py-3 rounded-xl text-tiny font-bold transition-all active:scale-95 ${
-                  activeReminder === m
-                    ? 'bg-mil-olive text-white shadow-card-hover'
-                    : 'bg-mil-bg border border-mil-border text-mil-text hover:border-mil-olive hover:bg-mil-olive-bg'
-                }`}
-              >
-                {m === 60 ? 'שעה' : `${m} דק׳`}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
+
+        {/* — Single action — */}
+        <button
+          onClick={onOpenStatusUpdate}
+          className="w-full bg-mil-card border border-mil-border hover:border-mil-olive text-mil-text font-semibold py-3 rounded-xl text-sm transition-all active:scale-[0.98]"
+        >
+          עדכן מצב
+        </button>
       </div>
     </Card>
   );
+}
+
+// ─── StatusUpdateModal ───────────────────────────────────────────────────────
+// Operational state transitions. Three options shaped by current state.
+
+function StatusUpdateModal({
+  soldier, onClose, onSubmit,
+}: {
+  soldier: Soldier;
+  onClose: () => void;
+  onSubmit: (next: SoldierStatus, expectedUntil?: string) => void;
+}) {
+  const [returnDate, setReturnDate] = useState('');
+  const [returnTime, setReturnTime] = useState('08:00');
+
+  const goHome = () => {
+    const iso = returnDate ? `${returnDate}T${returnTime}:00` : undefined;
+    onSubmit('home', iso);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
+      <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl">
+        <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3">
+          <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
+          <h2 className="text-white font-bold flex-1">עדכון מצב</h2>
+        </div>
+
+        <div className="px-5 py-5 space-y-3">
+          {soldier.currentStatus === 'in-base' && (
+            <>
+              <Body className="text-mil-muted">דווח/י על שינוי בסטטוס המבצעי שלך.</Body>
+
+              <Card>
+                <div className="px-4 py-4 space-y-3">
+                  <CardTitle>אני יוצא הביתה</CardTitle>
+                  <Muted>הוסף תאריך ושעת חזרה צפויים כדי שהמ״מ יידע מתי אתה חוזר.</Muted>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Hint className="mb-1.5 block">תאריך חזרה</Hint>
+                      <input type="date" className={modalInp} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
+                    </div>
+                    <div>
+                      <Hint className="mb-1.5 block">שעה</Hint>
+                      <input type="time" className={modalInp} value={returnTime} onChange={(e) => setReturnTime(e.target.value)} />
+                    </div>
+                  </div>
+                  <Button variant="primary" size="md" fullWidth onClick={goHome} disabled={!returnDate}>
+                    אישור — אני יוצא
+                  </Button>
+                </div>
+              </Card>
+
+              <Card variant="muted">
+                <button
+                  onClick={() => onSubmit('inactive-temp')}
+                  className="w-full px-4 py-3.5 text-right hover:bg-mil-card-hover transition-colors"
+                >
+                  <Body className="font-semibold">לא פעיל כרגע</Body>
+                  <Muted className="mt-0.5">בבסיס אבל לא זמין לשיבוץ.</Muted>
+                </button>
+              </Card>
+            </>
+          )}
+
+          {soldier.currentStatus === 'home' && (
+            <>
+              <Body className="text-mil-muted">חזרת לבסיס?</Body>
+              <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
+                כן — חזרתי לבסיס
+              </Button>
+            </>
+          )}
+
+          {soldier.currentStatus === 'inactive-temp' && (
+            <>
+              <Body className="text-mil-muted">חזרת לפעילות?</Body>
+              <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
+                כן — אני פעיל
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Operational time helpers (calm, present-tense Hebrew) ────────────────────
+
+function formatSinceShort(iso: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  const hh = d.getHours().toString().padStart(2, '0');
+  const mm = d.getMinutes().toString().padStart(2, '0');
+  if (sameDay)    return `היום ${hh}:${mm}`;
+  if (isYesterday) return `אתמול ${hh}:${mm}`;
+  const days = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'שבת'];
+  return `${days[d.getDay()]}, ${d.getDate()}/${d.getMonth() + 1}`;
+}
+
+function formatExpectedReturn(iso: string): string {
+  const d = new Date(iso);
+  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const hh = d.getHours().toString().padStart(2, '0');
+  const mm = d.getMinutes().toString().padStart(2, '0');
+  return `יום ${days[d.getDay()]} ${hh}:${mm}`;
 }
 
