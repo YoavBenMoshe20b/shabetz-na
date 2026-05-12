@@ -5,8 +5,8 @@ import Header from '../components/Header';
 import { isPlatoonLeadership, isCompanyLeadership } from '../utils/permissions';
 import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
 import {
-  Card, Button, StatusPill, StatusDot, Section, PageMain, CollapsibleSection,
-  PageTitle, CardTitle, Body, Muted, Hint, Metric,
+  Card, Button, StatusPill, Section, PageMain, CollapsibleSection,
+  PageTitle, CardTitle, Body, Muted, Hint,
 } from '../components/ui';
 import type { TimeSlot, MissionType, Soldier, SoldierStatus } from '../types';
 
@@ -36,11 +36,14 @@ export default function DashboardPage() {
   return <SoldierDashboard />;                                                  // hero-led personal
 }
 
-// ─── Company Commander Dashboard (operational overview) ──────────────────────
-// Reads as: עכשיו → השעות הקרובות → פעילות אחרונה (collapsed) → הגדרות.
-// The company commander does NOT see leave queues here per spec — those
-// belong to platoon commanders. Override alerts are demoted to a collapsed
-// section, never the headline.
+// ─── Company Commander Dashboard (command overview) ──────────────────────────
+// Designed as a COMMAND PICTURE, not a card list. Reads top-to-bottom as:
+//   1. Status now            — typographic hero (total in-base + readiness bar)
+//   2. Platoon health        — compact rows, one per platoon, red where weak
+//   3. Upcoming (12h)        — timeline of next transitions
+//   4. Recent changes        — collapsed by default
+// No settings, no greeting card, no 2-col grid. The header bar already shows
+// the company name; the first thing the eye lands on is the live readiness.
 
 function CompanyCommanderDashboard() {
   const navigate = useNavigate();
@@ -52,31 +55,41 @@ function CompanyCommanderDashboard() {
 
   const now = new Date();
 
-  // Soldiers attached to a platoon via their squad (squad.platoonId)
   const soldiersInPlatoon = (platoonId: string): Soldier[] => {
     const ids = squads.filter((s) => s.platoonId === platoonId).map((s) => s.id);
     return soldiers.filter((s) => s.squadId && ids.includes(s.squadId));
   };
 
-  // Per-platoon stats — speak the same operational vocabulary the soldier
-  // and platoon commander see. currentStatus is the source of truth.
+  // Per-platoon health computed from currentStatus (single source of truth).
+  // `gap` = how many more soldiers are needed to reach the platoon floor.
   const platoonStats = myPlatoons.map((p) => {
     const ps = soldiersInPlatoon(p.id);
     const inBase   = ps.filter((s) => s.currentStatus === 'in-base').length;
     const atHome   = ps.filter((s) => s.currentStatus === 'home').length;
     const inactive = ps.filter((s) => s.currentStatus === 'inactive-temp').length;
-    const requiredMin = p.minSoldiersOnBase ?? Math.ceil((myCompany?.settings.minSoldiersOnBase ?? 0) / Math.max(1, myPlatoons.length));
+    const requiredMin = p.minSoldiersOnBase
+      ?? Math.ceil((myCompany?.settings.minSoldiersOnBase ?? 0) / Math.max(1, myPlatoons.length));
+    const gap = Math.max(0, requiredMin - inBase);
     const status: 'ready' | 'warning' | 'critical' =
-      inBase < requiredMin              ? 'critical' :
-      inBase < requiredMin + 1          ? 'warning'  :
+      gap > 0                 ? 'critical' :
+      inBase === requiredMin  ? 'warning'  :
       'ready';
-    return { platoon: p, total: ps.length, inBase, atHome, inactive, requiredMin, status };
+    return { platoon: p, total: ps.length, inBase, atHome, inactive, requiredMin, gap, status };
   });
 
-  const totalInBase   = platoonStats.reduce((sum, ps) => sum + ps.inBase, 0);
-  const totalSoldiers = platoonStats.reduce((sum, ps) => sum + ps.total, 0);
+  const totalInBase   = platoonStats.reduce((s, ps) => s + ps.inBase, 0);
+  const totalAtHome   = platoonStats.reduce((s, ps) => s + ps.atHome, 0);
+  const totalInactive = platoonStats.reduce((s, ps) => s + ps.inactive, 0);
+  const totalSoldiers = platoonStats.reduce((s, ps) => s + ps.total, 0);
 
-  // Cross-company timeline (no pending approvals — CC doesn't approve)
+  const criticalCount = platoonStats.filter((ps) => ps.status === 'critical').length;
+  const warningCount  = platoonStats.filter((ps) => ps.status === 'warning').length;
+  const companyHealth: 'ready' | 'warning' | 'critical' =
+    criticalCount > 0 ? 'critical' :
+    warningCount  > 0 ? 'warning'  :
+    'ready';
+  const readinessPct = totalSoldiers > 0 ? (totalInBase / totalSoldiers) * 100 : 0;
+
   const events = useMemo(() => buildPlatoonTimeline({
     now,
     period: activePeriod ?? null,
@@ -88,7 +101,6 @@ function CompanyCommanderDashboard() {
     horizonHours: 12,
   }), [now, activePeriod, leaves, soldiers, allAlerts, soldierStatusEvents]);
 
-  // Recent activity (override alerts, regardless of status, demoted to collapsible)
   const [showActivity, setShowActivity] = useState(false);
   const openAlertCount = overrideAlerts.filter((a) => a.companyId === myCompany?.id && a.status === 'open').length;
 
@@ -97,57 +109,71 @@ function CompanyCommanderDashboard() {
       <Header title={myCompany?.name ?? 'פלוגה'} />
       <PageMain>
 
-        {/* Greeting — establishes page identity at the top of the scroll */}
-        <div>
-          <PageTitle>{myCompany?.name ?? 'פלוגה'}</PageTitle>
-          {myCompany?.unitName && <Muted className="mt-1">{myCompany.unitName}</Muted>}
-        </div>
+        {/* ── 1. STATUS NOW — typographic hero, no card chrome ───────────── */}
+        <header className="pt-1">
+          <div className="flex items-baseline gap-1.5 text-sm text-mil-muted">
+            {myCompany?.unitName && (
+              <>
+                <span>{myCompany.unitName}</span>
+                <span className="text-mil-ghost">·</span>
+              </>
+            )}
+            <span><span className="tabular-nums font-semibold text-mil-text">{platoonStats.length}</span> מחלקות</span>
+          </div>
 
-        {/* ── עכשיו ──────────────────────────────────── */}
-        <Section label="עכשיו">
-          <Card>
-            <div className="px-5 py-4 flex items-baseline gap-2">
-              <Metric>{totalInBase}</Metric>
-              <Hint className="self-end pb-1.5">/ {totalSoldiers}</Hint>
-              <Body className="self-end pb-1.5 mr-1">בבסיס</Body>
-              <Muted className="mr-auto">{platoonStats.length} מחלקות</Muted>
+          <div className="mt-3.5 flex items-baseline gap-2 flex-wrap">
+            <span className="text-[44px] leading-none font-extrabold tabular-nums text-mil-text">
+              {totalInBase}
+            </span>
+            <span className="text-mil-ghost text-base self-end pb-1.5 tabular-nums">
+              / {totalSoldiers}
+            </span>
+            <Body className="self-end pb-1.5 mr-1.5 font-semibold">בבסיס עכשיו</Body>
+
+            <div className="mr-auto self-end pb-1.5 flex items-baseline gap-3">
+              {totalAtHome > 0 && (
+                <span className="text-tiny text-mil-muted">
+                  <span className="tabular-nums font-bold text-mil-text">{totalAtHome}</span> בבית
+                </span>
+              )}
+              {totalInactive > 0 && (
+                <span className="text-tiny text-mil-muted">
+                  <span className="tabular-nums font-bold text-mil-text">{totalInactive}</span> לא פעיל
+                </span>
+              )}
             </div>
-          </Card>
+          </div>
 
-          {platoonStats.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              {platoonStats.map((ps) => (
-                <Card
-                  key={ps.platoon.id}
-                  variant={ps.status === 'critical' ? 'critical' : 'default'}
-                >
-                  <div className="px-4 py-3.5 text-right">
-                    <div className="flex items-start justify-between mb-2">
-                      <CardTitle>{ps.platoon.name}</CardTitle>
-                      <StatusDot status={ps.status} />
-                    </div>
-                    <Body>
-                      <span className="font-extrabold text-mil-text">{ps.inBase}</span>
-                      <Hint as="span" className="mx-0.5">/ {ps.total}</Hint>
-                      <span className="mr-1">בבסיס</span>
-                    </Body>
-                    {ps.atHome > 0   && <Hint className="text-mil-sand mt-0.5">{ps.atHome} בבית</Hint>}
-                    {ps.inactive > 0 && <Hint className="text-mil-ghost mt-0.5">{ps.inactive} לא פעיל</Hint>}
-                    {ps.platoon.kind === 'forward-command' && <Hint className="mt-1 tracking-wide">מיוחדת</Hint>}
-                  </div>
-                </Card>
-              ))}
+          <ReadinessBar pct={readinessPct} health={companyHealth} />
+
+          {criticalCount > 0 && (
+            <div className="mt-3 inline-flex items-center gap-1.5 text-mil-alert font-semibold text-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-mil-alert" aria-hidden />
+              <span>
+                {criticalCount === 1
+                  ? 'מחלקה אחת מתחת לסף המינימום'
+                  : `${criticalCount} מחלקות מתחת לסף המינימום`}
+              </span>
             </div>
           )}
+        </header>
+
+        {/* ── 2. PLATOON HEALTH — compact scannable rows ──────────────────── */}
+        <Section label="מחלקות">
+          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden shadow-card">
+            {platoonStats.map((ps) => (
+              <PlatoonHealthRow key={ps.platoon.id} ps={ps} />
+            ))}
+          </div>
         </Section>
 
-        {/* ── השעות הקרובות בפלוגה ───────────────── */}
-        <Section label="השעות הקרובות בפלוגה">
+        {/* ── 3. UPCOMING — next 12 hours ─────────────────────────────────── */}
+        <Section label="ב-12 השעות הקרובות">
           {events.length === 0 ? (
             <Card variant="muted">
-              <div className="px-5 py-8 text-center">
+              <div className="px-5 py-7 text-center">
                 <Body className="font-bold text-mil-olive-dim">הכל רגוע</Body>
-                <Muted className="mt-1.5">אין שינויים מתוכננים ב-12 השעות הקרובות</Muted>
+                <Muted className="mt-1.5">אין שינויים מתוכננים</Muted>
               </div>
             </Card>
           ) : (
@@ -157,18 +183,14 @@ function CompanyCommanderDashboard() {
           )}
         </Section>
 
-        {/* ── פעילות מחלקות אחרונה (collapsed) ─────── */}
-        <CollapsibleSection
-          label="פעילות מחלקות אחרונה"
-          open={showActivity}
-          onToggle={() => setShowActivity((v) => !v)}
-          count={openAlertCount}
-        >
-          {allAlerts.length === 0 ? (
-            <Card>
-              <Body className="px-4 py-3 text-mil-muted">אין פעילות לתעד</Body>
-            </Card>
-          ) : (
+        {/* ── 4. RECENT CHANGES — collapsed; only when there's something ──── */}
+        {allAlerts.length > 0 && (
+          <CollapsibleSection
+            label="שינויים אחרונים"
+            open={showActivity}
+            onToggle={() => setShowActivity((v) => !v)}
+            count={openAlertCount}
+          >
             <div className="space-y-2">
               {allAlerts.slice(0, 8).map((a) => (
                 <Card key={a.id}>
@@ -185,42 +207,97 @@ function CompanyCommanderDashboard() {
                 </Card>
               ))}
             </div>
-          )}
-        </CollapsibleSection>
-
-        {/* ── הגדרות פלוגה ──────────────────────────── */}
-        <Section label="הגדרות פלוגה">
-          <Card>
-            <div className="divide-y divide-mil-border">
-              <SettingsRow
-                title="מינימום בבסיס"
-                detail={`${myCompany?.settings.minSoldiersOnBase ?? '—'} חיילים`}
-              />
-              <SettingsRow
-                title="מבנה החברה"
-                detail={`${myPlatoons.length} מחלקות · ${squads.filter((s) => myPlatoons.some((p) => p.id === s.platoonId)).length} כיתות`}
-              />
-              <SettingsRow
-                title="משתמשים והרשאות"
-                detail="ניהול חברי פלוגה"
-              />
-            </div>
-          </Card>
-        </Section>
+          </CollapsibleSection>
+        )}
 
       </PageMain>
     </div>
   );
 }
 
-function SettingsRow({ title, detail }: { title: string; detail: string }) {
+// ─── Readiness bar — thin, single horizontal integral of company state ──────
+// Color tracks the company's health, not a per-platoon detail. Width is the
+// percentage of active soldiers currently in-base. No labels — the numbers
+// above the bar carry the meaning; this is purely a visual signal.
+
+function ReadinessBar({ pct, health }: { pct: number; health: 'ready' | 'warning' | 'critical' }) {
+  const tone =
+    health === 'critical' ? 'bg-mil-alert' :
+    health === 'warning'  ? 'bg-mil-warn'  :
+    'bg-mil-olive';
+  return (
+    <div className="mt-3 h-1 rounded-full bg-mil-border/60 overflow-hidden">
+      <div
+        className={`h-full ${tone} transition-[width] duration-500`}
+        style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+      />
+    </div>
+  );
+}
+
+// ─── Platoon health row — one compact scannable row per platoon ─────────────
+// Reads as: status-dot · platoon name · gap/at-home/inactive notes · X/N
+// Red is used ONLY when the platoon is below its minimum. Otherwise quiet.
+
+interface PlatoonHealthRowData {
+  platoon: { id: string; name: string; kind?: string };
+  total: number;
+  inBase: number;
+  atHome: number;
+  inactive: number;
+  requiredMin: number;
+  gap: number;
+  status: 'ready' | 'warning' | 'critical';
+}
+
+function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
+  const dot =
+    ps.status === 'critical' ? 'bg-mil-alert' :
+    ps.status === 'warning'  ? 'bg-mil-warn'  :
+    'bg-mil-olive';
+  const numTone = ps.status === 'critical' ? 'text-mil-alert' : 'text-mil-text';
+  const isSpecial = ps.platoon.kind === 'forward-command';
+  const hasSubline = ps.gap > 0 || ps.atHome > 0 || ps.inactive > 0;
+
   return (
     <div className="px-4 py-3.5 flex items-center gap-3">
-      <div className="flex-1">
-        <Body className="font-semibold">{title}</Body>
-        <Muted className="mt-0.5">{detail}</Muted>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0`} aria-hidden />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <Body className="font-semibold truncate">{ps.platoon.name}</Body>
+          {isSpecial && <Hint className="text-mil-muted">מיוחדת</Hint>}
+        </div>
+
+        {hasSubline && (
+          <div className="mt-0.5 flex items-baseline gap-1.5 flex-wrap text-tiny">
+            {ps.gap > 0 && (
+              <span className="text-mil-alert font-semibold">חסר {ps.gap} לבסיס</span>
+            )}
+            {ps.gap > 0 && (ps.atHome > 0 || ps.inactive > 0) && (
+              <span className="text-mil-ghost">·</span>
+            )}
+            {ps.atHome > 0 && (
+              <span className="text-mil-muted">
+                <span className="tabular-nums font-semibold text-mil-text">{ps.atHome}</span> בבית
+              </span>
+            )}
+            {ps.atHome > 0 && ps.inactive > 0 && (
+              <span className="text-mil-ghost">·</span>
+            )}
+            {ps.inactive > 0 && (
+              <span className="text-mil-muted">
+                <span className="tabular-nums font-semibold text-mil-text">{ps.inactive}</span> לא פעיל
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      <Hint>בקרוב</Hint>
+
+      <div className="flex items-baseline flex-shrink-0 tabular-nums">
+        <span className={`text-2xl font-extrabold ${numTone}`}>{ps.inBase}</span>
+        <span className="text-mil-ghost text-sm">/{ps.total}</span>
+      </div>
     </div>
   );
 }
