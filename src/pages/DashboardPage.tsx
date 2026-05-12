@@ -569,6 +569,7 @@ function SoldierDashboard() {
         {myProfile && (
           <OperationalStateCard
             soldier={myProfile}
+            leaves={leaves}
             nextShift={myNextShift ? { mission: myNextShift.mt, slot: myNextShift.ts, minsTo: myNextShift.minsTo, teammates } : null}
             onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.ts.id, minutesBefore: mins, enabled: true })}
             onOpenStatusUpdate={() => setStatusUpdateOpen(true)}
@@ -785,31 +786,38 @@ function CollapsibleCard({
 
 // ─── OperationalStateCard ────────────────────────────────────────────────────
 // The soldier's operational spine. Reads as state + transition, not stats.
-//   1. Current state (calm, large, present-tense)
-//   2. "מאז" timestamp + leave/home context (when not currently home)
-//   3. Next operational transition (next shift if relevant, with reminder)
-//   4. One action: עדכן מצב
+// Temporal/operational language only — no dates that read as "history."
+//
+//   1. Current state (calm, present-tense: "אתה בבסיס")
+//   2. Duration in that state ("כבר 3 ימים בפנים")
+//   3. Forward transition ("עוד 4 ימים לבית" / "עוד יומיים לחזרה")
+//   4. Next shift (when in-base)
+//   5. One contextual action verb ("יצאתי הביתה" / "חזרתי לבסיס" / ...)
 //
 // Architecture-ready: the "next transition" slot can later show a combat
 // clock block OR an escalation directive — currently it shows next shift.
 
 function OperationalStateCard({
-  soldier, nextShift, onSetReminder, onOpenStatusUpdate,
+  soldier, leaves, nextShift, onSetReminder, onOpenStatusUpdate,
 }: {
   soldier: Soldier;
+  leaves: import('../types').Leave[];
   nextShift: { mission: MissionType; slot: TimeSlot; minsTo: number; teammates: Soldier[] } | null;
   onSetReminder: (mins: 5 | 15 | 30 | 60) => void;
   onOpenStatusUpdate: () => void;
 }) {
   const status = soldier.currentStatus;
-  const since = formatSinceShort(soldier.statusSetAt);
-  const expectedUntil = soldier.statusExpectedUntil ? formatExpectedReturn(soldier.statusExpectedUntil) : null;
+  const now = new Date();
+  const durationLabel = formatDurationInState(soldier.statusSetAt, status, now);
+  const nextLeaveDays = status === 'in-base' ? findDaysToNextLeave(soldier, leaves, now) : null;
+  const daysToReturn  = status === 'home' && soldier.statusExpectedUntil
+    ? daysBetweenIso(now, soldier.statusExpectedUntil)
+    : null;
 
-  // Status presentation — operational language, not metrics
   const presentation = {
-    'in-base':         { label: 'אתה בבסיס',     tone: 'olive' as const, accentClass: 'text-mil-olive-dim' },
-    'home':            { label: 'אתה בבית',       tone: 'sand'  as const, accentClass: 'text-mil-sand' },
-    'inactive-temp':   { label: 'לא פעיל כרגע',   tone: 'muted' as const, accentClass: 'text-mil-muted' },
+    'in-base':       { label: 'אתה בבסיס',     accentClass: 'text-mil-olive-dim',  verb: 'יצאתי הביתה'    },
+    'home':          { label: 'אתה בבית',       accentClass: 'text-mil-sand',       verb: 'חזרתי לבסיס'    },
+    'inactive-temp': { label: 'לא פעיל כרגע',   accentClass: 'text-mil-muted',      verb: 'חזרתי לפעילות'  },
   }[status];
 
   const [activeReminder, setActiveReminder] = useState<5 | 15 | 30 | 60 | null>(null);
@@ -825,12 +833,21 @@ function OperationalStateCard({
           <p className={`text-hero font-extrabold leading-tight mt-1.5 ${presentation.accentClass}`}>
             {presentation.label}
           </p>
-          <Muted className="mt-1.5">
-            מאז {since}
-            {expectedUntil && status === 'home' && (
-              <>  ·  חזרה מתוכננת ל-{expectedUntil}</>
+          <Body className="mt-1.5 text-mil-text font-semibold">
+            {durationLabel}
+            {nextLeaveDays != null && (
+              <>
+                <span className="text-mil-ghost mx-2">·</span>
+                <span className="text-mil-muted font-medium">{formatDaysCountdown(nextLeaveDays, 'home')}</span>
+              </>
             )}
-          </Muted>
+            {daysToReturn != null && (
+              <>
+                <span className="text-mil-ghost mx-2">·</span>
+                <span className="text-mil-muted font-medium">{formatDaysCountdown(daysToReturn, 'base')}</span>
+              </>
+            )}
+          </Body>
         </div>
 
         {/* — Next operational transition — */}
@@ -871,12 +888,12 @@ function OperationalStateCard({
           </div>
         )}
 
-        {/* — Single action — */}
+        {/* — Single action — past-tense operational verb, not "update state" — */}
         <button
           onClick={onOpenStatusUpdate}
-          className="w-full bg-mil-card border border-mil-border hover:border-mil-olive text-mil-text font-semibold py-3 rounded-xl text-sm transition-all active:scale-[0.98]"
+          className="w-full bg-mil-card border border-mil-border hover:border-mil-olive text-mil-text font-bold py-3 rounded-xl text-sm transition-all active:scale-[0.98]"
         >
-          עדכן מצב
+          {presentation.verb}
         </button>
       </div>
     </Card>
@@ -884,7 +901,10 @@ function OperationalStateCard({
 }
 
 // ─── StatusUpdateModal ───────────────────────────────────────────────────────
-// Operational state transitions. Three options shaped by current state.
+// Operational confirmation, not "edit a record."
+// - in-base  → "אני יוצא הביתה" with return picker, primary "יצאתי הביתה"
+// - home     → confirm "חזרתי לבסיס"
+// - inactive → confirm "חזרתי לפעילות"
 
 function StatusUpdateModal({
   soldier, onClose, onSubmit,
@@ -901,65 +921,55 @@ function StatusUpdateModal({
     onSubmit('home', iso);
   };
 
+  const headline = {
+    'in-base':       'יציאה הביתה',
+    'home':          'חזרה לבסיס',
+    'inactive-temp': 'חזרה לפעילות',
+  }[soldier.currentStatus];
+
   return (
     <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
       <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl">
         <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3">
           <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
-          <h2 className="text-white font-bold flex-1">עדכון מצב</h2>
+          <h2 className="text-white font-bold flex-1">{headline}</h2>
         </div>
 
-        <div className="px-5 py-5 space-y-3">
+        <div className="px-5 py-5 space-y-4">
           {soldier.currentStatus === 'in-base' && (
             <>
-              <Body className="text-mil-muted">דווח/י על שינוי בסטטוס המבצעי שלך.</Body>
-
-              <Card>
-                <div className="px-4 py-4 space-y-3">
-                  <CardTitle>אני יוצא הביתה</CardTitle>
-                  <Muted>הוסף תאריך ושעת חזרה צפויים כדי שהמ״מ יידע מתי אתה חוזר.</Muted>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Hint className="mb-1.5 block">תאריך חזרה</Hint>
-                      <input type="date" className={modalInp} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-                    </div>
-                    <div>
-                      <Hint className="mb-1.5 block">שעה</Hint>
-                      <input type="time" className={modalInp} value={returnTime} onChange={(e) => setReturnTime(e.target.value)} />
-                    </div>
-                  </div>
-                  <Button variant="primary" size="md" fullWidth onClick={goHome} disabled={!returnDate}>
-                    אישור — אני יוצא
-                  </Button>
+              <Body className="text-mil-muted">מתי אתה צפוי לחזור?</Body>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Hint className="mb-1.5 block">תאריך</Hint>
+                  <input type="date" className={modalInp} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
                 </div>
-              </Card>
-
-              <Card variant="muted">
-                <button
-                  onClick={() => onSubmit('inactive-temp')}
-                  className="w-full px-4 py-3.5 text-right hover:bg-mil-card-hover transition-colors"
-                >
-                  <Body className="font-semibold">לא פעיל כרגע</Body>
-                  <Muted className="mt-0.5">בבסיס אבל לא זמין לשיבוץ.</Muted>
-                </button>
-              </Card>
+                <div>
+                  <Hint className="mb-1.5 block">שעה</Hint>
+                  <input type="time" className={modalInp} value={returnTime} onChange={(e) => setReturnTime(e.target.value)} />
+                </div>
+              </div>
+              <Button variant="primary" size="lg" fullWidth onClick={goHome} disabled={!returnDate}>
+                יצאתי הביתה
+              </Button>
+              <Hint className="text-center">המ״מ יראה מתי אתה צפוי לחזור.</Hint>
             </>
           )}
 
           {soldier.currentStatus === 'home' && (
             <>
-              <Body className="text-mil-muted">חזרת לבסיס?</Body>
+              <Body className="text-mil-muted">לאשר: אתה בבסיס מעכשיו?</Body>
               <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
-                כן — חזרתי לבסיס
+                חזרתי לבסיס
               </Button>
             </>
           )}
 
           {soldier.currentStatus === 'inactive-temp' && (
             <>
-              <Body className="text-mil-muted">חזרת לפעילות?</Body>
+              <Body className="text-mil-muted">לאשר: אתה פעיל ומוכן לשיבוץ?</Body>
               <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
-                כן — אני פעיל
+                חזרתי לפעילות
               </Button>
             </>
           )}
@@ -969,28 +979,71 @@ function StatusUpdateModal({
   );
 }
 
-// ── Operational time helpers (calm, present-tense Hebrew) ────────────────────
+// ── Operational temporal helpers ─────────────────────────────────────────────
+// Durations and countdowns. NO date displays. Soldiers think in
+// "how long" and "how many days until", not "since X/Y."
 
-function formatSinceShort(iso: string): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const now = new Date();
-  const sameDay = d.toDateString() === now.toDateString();
-  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-  const isYesterday = d.toDateString() === yesterday.toDateString();
-  const hh = d.getHours().toString().padStart(2, '0');
-  const mm = d.getMinutes().toString().padStart(2, '0');
-  if (sameDay)    return `היום ${hh}:${mm}`;
-  if (isYesterday) return `אתמול ${hh}:${mm}`;
-  const days = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'שבת'];
-  return `${days[d.getDay()]}, ${d.getDate()}/${d.getMonth() + 1}`;
+function formatDurationInState(since: string, status: SoldierStatus, now: Date): string {
+  if (!since) return '';
+  const diffMs   = Math.max(0, now.getTime() - new Date(since).getTime());
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHrs  = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  // Phrase tail per status — uses Israeli soldier vernacular for in-base
+  const tail = {
+    'in-base':       'בפנים',
+    'home':          'בבית',
+    'inactive-temp': 'לא פעיל',
+  }[status];
+
+  if (diffDays >= 1) {
+    const n = diffDays;
+    if (n === 1) return `כבר יום ${tail}`;
+    if (n === 2) return `כבר יומיים ${tail}`;
+    return `כבר ${n} ימים ${tail}`;
+  }
+  if (diffHrs >= 1) {
+    const n = diffHrs;
+    if (n === 1) return `כבר שעה ${tail}`;
+    if (n === 2) return `כבר שעתיים ${tail}`;
+    return `כבר ${n} שעות ${tail}`;
+  }
+  if (diffMins >= 1) return `כבר ${diffMins} דקות ${tail}`;
+  return `הרגע ${tail}`;
 }
 
-function formatExpectedReturn(iso: string): string {
-  const d = new Date(iso);
-  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-  const hh = d.getHours().toString().padStart(2, '0');
-  const mm = d.getMinutes().toString().padStart(2, '0');
-  return `יום ${days[d.getDay()]} ${hh}:${mm}`;
+function formatDaysCountdown(days: number, target: 'home' | 'base'): string {
+  const label = target === 'home' ? 'לבית' : 'לבסיס';
+  if (days <= 0)  return target === 'home' ? 'יציאה היום' : 'חזרה היום';
+  if (days === 1) return target === 'home' ? 'יציאה מחר'  : 'חזרה מחר';
+  if (days === 2) return `עוד יומיים ${label}`;
+  return `עוד ${days} ימים ${label}`;
+}
+
+// Whole-day distance from `from` to `toIso` (e.g. status expected-until).
+function daysBetweenIso(from: Date, toIso: string): number | null {
+  const to = new Date(toIso); if (isNaN(to.getTime())) return null;
+  const startOfFrom = new Date(from); startOfFrom.setHours(0, 0, 0, 0);
+  const startOfTo   = new Date(to);   startOfTo.setHours(0, 0, 0, 0);
+  return Math.round((startOfTo.getTime() - startOfFrom.getTime()) / 86400000);
+}
+
+// Days until this soldier's NEXT scheduled leave starts (any matching scope).
+// Returns null if no upcoming leave is on file.
+function findDaysToNextLeave(soldier: Soldier, leaves: import('../types').Leave[], now: Date): number | null {
+  const upcoming = leaves
+    .filter((lv) => {
+      const startTs = Date.parse(`${lv.startDate}T${lv.startTime || '00:00'}`);
+      if (isNaN(startTs) || startTs <= now.getTime()) return false;
+      if (lv.scope === 'individual') return lv.soldierIds.includes(soldier.id);
+      if (lv.scope === 'squad')      return soldier.squadId && soldier.squadId === lv.squadId;
+      return true; // machlaka / company-wide includes everyone
+    })
+    .sort((a, b) =>
+      `${a.startDate}T${a.startTime || '00:00'}`.localeCompare(`${b.startDate}T${b.startTime || '00:00'}`),
+    );
+  if (upcoming.length === 0) return null;
+  return daysBetweenIso(now, `${upcoming[0].startDate}T${upcoming[0].startTime || '00:00'}`);
 }
 
