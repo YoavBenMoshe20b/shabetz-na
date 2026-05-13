@@ -11,7 +11,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useApp, useMyCompany, useMyPlatoons } from '../context/AppContext';
-import { isCompanyLeadership } from '../utils/permissions';
+import { getMissionCreateScope, canCreateMission, isCompanyLeadership } from '../utils/permissions';
 import { MISSION_TEMPLATES, type MissionTemplate } from '../utils/missionTemplates';
 import { buildMissionSummary, rankLabel, intensityLabel } from '../utils/missionSummary';
 import Header from '../components/Header';
@@ -71,18 +71,52 @@ export default function MissionWizardPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderIdFromQuery = searchParams.get('orderId') ?? undefined;
+  const editMissionId    = searchParams.get('missionId') ?? null;
   const {
-    currentRole, currentUser, addMission, addMissionNote,
-    qualifications, equipmentItems, platoons,
+    currentRole, currentUser, addMission, addMissionNote, updateMission,
+    qualifications, equipmentItems, platoons, delegations, missions,
   } = useApp();
   const myCompany = useMyCompany();
   const myPlatoons = useMyPlatoons();
 
-  if (!isCompanyLeadership(currentRole)) return <Navigate to="/home" replace />;
-  if (!myCompany || !currentUser)        return <Navigate to="/home" replace />;
+  if (!currentUser || !myCompany) return <Navigate to="/home" replace />;
+  if (!canCreateMission(currentUser, delegations)) return <Navigate to="/home" replace />;
+
+  const scope = getMissionCreateScope(currentUser, delegations);
+  const isCompanyTier = isCompanyLeadership(currentRole);
+  const platoonsPickable = scope.companyWide
+    ? myPlatoons
+    : myPlatoons.filter((p) => scope.allowedPlatoonIds.includes(p.id));
+
+  // Edit mode — when missionId is in the URL, the wizard prefills from
+  // an existing mission and writes back via updateMission on save.
+  const editingMission = editMissionId
+    ? missions.find((m) => m.id === editMissionId)
+    : null;
+  const isEditing = !!editingMission;
 
   const [step, setStep] = useState<WizardStep>(1);
   const [draft, setDraft] = useState<WizardDraft>(() => {
+    // Edit mode wins over sessionStorage: editing seeds the draft from the
+    // canonical mission, not a stale wizard session.
+    if (editingMission) {
+      return {
+        name:               editingMission.name,
+        description:        editingMission.description ?? '',
+        assignedPlatoonIds: editingMission.assignedPlatoonIds,
+        orderId:            editingMission.orderId,
+        timeModel:          editingMission.timeModel,
+        manpower:           editingMission.manpower,
+        command:            editingMission.command,
+        rotation:           editingMission.rotation,
+        fatigue:            editingMission.fatigue,
+        cycleProfile:       editingMission.cycleProfile,
+        overlapPolicy:      editingMission.overlapPolicy,
+        qualifications:     editingMission.qualifications,
+        equipment:          editingMission.equipment,
+        logisticsAlerts:    editingMission.logisticsAlerts ?? [],
+      };
+    }
     try {
       const raw = sessionStorage.getItem(SESSION_KEY);
       if (raw) {
@@ -95,8 +129,10 @@ export default function MissionWizardPage() {
   });
 
   useEffect(() => {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(draft));
-  }, [draft]);
+    // Don't pollute sessionStorage with edit drafts — they should never
+    // come back as a "draft new mission" later.
+    if (!isEditing) sessionStorage.setItem(SESSION_KEY, JSON.stringify(draft));
+  }, [draft, isEditing]);
 
   const patch = (p: Partial<WizardDraft>) => setDraft((d) => ({ ...d, ...p }));
 
@@ -119,14 +155,47 @@ export default function MissionWizardPage() {
     if (!draft.timeModel || !draft.manpower || !draft.command || !draft.rotation || !draft.fatigue) {
       return;                                                   // step 6 wouldn't be reachable
     }
+
+    const assignedPlatoonIds = scope.companyWide
+      ? draft.assignedPlatoonIds
+      : draft.assignedPlatoonIds.filter((id) => scope.allowedPlatoonIds.includes(id));
+
+    if (isEditing && editingMission) {
+      // Edit path — patch only the policy fields. id, companyId,
+      // createdAt, createdByUserId stay frozen.
+      updateMission(editingMission.id, {
+        name:               draft.name,
+        description:        draft.description || undefined,
+        orderId:            draft.orderId,
+        assignedPlatoonIds,
+        timeModel:          draft.timeModel,
+        manpower:           draft.manpower,
+        command:            draft.command,
+        rotation:           draft.rotation,
+        fatigue:            draft.fatigue,
+        cycleProfile:       draft.cycleProfile,
+        overlapPolicy:      draft.overlapPolicy,
+        qualifications:     draft.qualifications,
+        equipment:          draft.equipment,
+        logisticsAlerts:    draft.logisticsAlerts.length > 0 ? draft.logisticsAlerts : undefined,
+        status,
+      });
+      // companyNotes on edit are handled via the detail page note composer,
+      // not the wizard — leaving existing notes untouched is safer.
+      navigate(`/mission/${editingMission.id}`);
+      return;
+    }
+
     const created = addMission({
       companyId:          myCompany.id,
       name:               draft.name,
       description:        draft.description || undefined,
       createdByUserId:    currentUser.id,
-      ownerRole:          'company',
+      // Non-CC publishers can only own platoon-scoped missions; CC keeps
+      // the broader 'company' authority over policy decisions.
+      ownerRole:          isCompanyTier ? 'company' : 'platoon',
       orderId:            draft.orderId,
-      assignedPlatoonIds: draft.assignedPlatoonIds,
+      assignedPlatoonIds,
       timeModel:          draft.timeModel,
       manpower:           draft.manpower,
       command:            draft.command,
@@ -159,7 +228,7 @@ export default function MissionWizardPage() {
 
   return (
     <div className="min-h-screen bg-mil-bg flex flex-col" dir="rtl">
-      <Header title="משימה חדשה" />
+      <Header title={isEditing ? 'עריכת משימה' : 'משימה חדשה'} />
 
       {/* Progress + back row */}
       <div className="px-5 pt-4 pb-2 max-w-xl mx-auto w-full">
@@ -180,7 +249,7 @@ export default function MissionWizardPage() {
       <main className="flex-1 px-5 pb-32 max-w-xl mx-auto w-full pt-2">
         {step === 1 && (
           <Step1Identity
-            draft={draft} patch={patch} myPlatoons={myPlatoons}
+            draft={draft} patch={patch} myPlatoons={platoonsPickable}
             onApplyTemplate={(t) => patch({
               ...t.draft,
               templateId:         t.id,
@@ -195,13 +264,14 @@ export default function MissionWizardPage() {
         {step === 2 && <Step2Character draft={draft} patch={patch} />}
         {step === 3 && <Step3Timing    draft={draft} patch={patch} />}
         {step === 4 && <Step4Command   draft={draft} patch={patch} />}
-        {step === 5 && <Step5Rotation  draft={draft} patch={patch} qualifications={qualifications} equipmentItems={equipmentItems} myPlatoons={myPlatoons} />}
+        {step === 5 && <Step5Rotation  draft={draft} patch={patch} qualifications={qualifications} equipmentItems={equipmentItems} myPlatoons={platoonsPickable} />}
         {step === 6 && (
           <Step6Review
             draft={draft}
             platoons={platoons}
             qualifications={qualifications}
             equipmentItems={equipmentItems}
+            isEditing={isEditing}
             onPublish={() => publish('active')}
             onSaveDraft={() => publish('draft')}
           />
@@ -1099,12 +1169,13 @@ function OverlapPolicyEditor({
 // ─── Step 6 — Review (operational prose) ───────────────────────────────────
 
 function Step6Review({
-  draft, platoons, qualifications, equipmentItems, onPublish, onSaveDraft,
+  draft, platoons, qualifications, equipmentItems, isEditing, onPublish, onSaveDraft,
 }: {
   draft: WizardDraft;
   platoons: ReturnType<typeof useApp>['platoons'];
   qualifications: ReturnType<typeof useApp>['qualifications'];
   equipmentItems: ReturnType<typeof useApp>['equipmentItems'];
+  isEditing: boolean;
   onPublish: () => void;
   onSaveDraft: () => void;
 }) {
@@ -1138,7 +1209,19 @@ function Step6Review({
 
   return (
     <div className="space-y-5">
-      <QuestionHeader title="בדיקה אחרונה" subtitle="כך המשימה תופיע במנוע השיבוץ." />
+      <QuestionHeader
+        title={isEditing ? 'בדיקת שינויים' : 'בדיקה אחרונה'}
+        subtitle={isEditing ? 'השינויים יחולו מיד על השיבוץ.' : 'כך המשימה תופיע במנוע השיבוץ.'}
+      />
+
+      {isEditing && (
+        <div className="bg-mil-olive-bg/40 border border-mil-olive/30 rounded-xl px-4 py-3">
+          <Body className="text-mil-olive-dim font-semibold">מצב עריכה</Body>
+          <Muted className="mt-1 text-tiny">
+            הפעולות הבאות יעדכנו משימה קיימת. הסטטוס שתבחר ייכנס לתוקף מיד.
+          </Muted>
+        </div>
+      )}
 
       <div className="bg-mil-card border border-mil-border rounded-2xl px-5 py-5 space-y-2.5">
         {lines.length === 0 ? (
@@ -1158,13 +1241,13 @@ function Step6Review({
 
       <div className="flex flex-col gap-2.5 pt-2">
         <Button variant="primary" size="lg" fullWidth onClick={onPublish}>
-          פרסם משימה
+          {isEditing ? 'שמור שינויים' : 'פרסם משימה'}
         </Button>
         <button
           onClick={onSaveDraft}
           className="w-full py-3 text-mil-muted hover:text-mil-text font-semibold text-sm"
         >
-          שמור כטיוטה
+          {isEditing ? 'שמור כטיוטה (השהה משימה)' : 'שמור כטיוטה'}
         </button>
       </div>
     </div>

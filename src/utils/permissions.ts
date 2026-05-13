@@ -149,7 +149,6 @@ export function hasPermission(
 
 // ─── Role-only helpers (legacy API kept for existing call sites) ─────────────
 
-export const canCreateMission    = (role: UserRole) => isPlatoonLeadership(role);
 export const canEditSchedule     = (role: UserRole) => isPlatoonLeadership(role);
 export const canPublishSchedule  = (role: UserRole) => isPlatoonLeadership(role);
 export const canTriggerEmergency = (role: UserRole) => isPlatoonLeadership(role);
@@ -232,6 +231,112 @@ export function canSoldierSeeSchedule(user: MockUser): boolean {
 /** Manual-override on slots: anyone who can manage the platoon. */
 export function canManuallyOverride(user: MockUser, platoon: Platoon): boolean {
   return canManagePlatoon(user, platoon);
+}
+
+// ─── Mission create / edit scope ─────────────────────────────────────────────
+//
+// Two concerns share a scope model:
+//   1. Who can CREATE a mission and against what platoon(s)?
+//   2. Who can EDIT a given existing mission?
+//
+// Resolution order is the same:
+//   • CC/Deputy → unbounded
+//   • PC/PS     → their commanded platoon's missions only (ownerRole='platoon'
+//                 AND assignedPlatoonIds ⊆ their platoon)
+//   • Anyone with an active Delegation (mission.create.platoon or
+//                 mission.create.company) — within the delegation's scope
+//   • Soldiers / other roles by default: no.
+
+import type { Mission } from '../types';
+
+export interface MissionCreateScope {
+  /** When CC: empty array allowed (means "any platoon"). When PC: forced
+   *  to the commanded platoon. When delegated: limited to delegation scope. */
+  allowedPlatoonIds: string[];
+  /** True when the viewer can publish company-wide (multiple platoons). */
+  companyWide: boolean;
+  /** Why the viewer has this scope — useful for surface UX. */
+  reason: 'company-leadership' | 'platoon-leadership' | 'delegation' | 'none';
+}
+
+export function getMissionCreateScope(
+  user: MockUser,
+  delegations: Delegation[] = [],
+): MissionCreateScope {
+  // CC / Deputy → full
+  if (isCompanyLeadership(user.role)) {
+    return { allowedPlatoonIds: [], companyWide: true, reason: 'company-leadership' };
+  }
+
+  // PC / PS → their commanded platoon
+  const isPlatoon = user.role === 'platoonCommander' || user.role === 'platoonSergeant' || user.role === 'manager';
+  if (isPlatoon && user.commandedPlatoonId) {
+    return {
+      allowedPlatoonIds: [user.commandedPlatoonId],
+      companyWide:       false,
+      reason:            'platoon-leadership',
+    };
+  }
+
+  // Delegation grants (active, non-expired)
+  const now = Date.now();
+  const grants = delegations.filter((d) => {
+    if (d.permission !== 'mission.create.platoon' && d.permission !== 'mission.create.company') return false;
+    if (d.expiresAt && Date.parse(d.expiresAt) < now) return false;
+    if (d.grantedToUserId && d.grantedToUserId !== user.id) return false;
+    if (d.grantedToRole && d.grantedToRole !== user.role) return false;
+    return true;
+  });
+
+  if (grants.length === 0) {
+    return { allowedPlatoonIds: [], companyWide: false, reason: 'none' };
+  }
+
+  const companyWide = grants.some((d) =>
+    d.scope.kind === 'company' || d.permission === 'mission.create.company'
+  );
+  if (companyWide) {
+    return { allowedPlatoonIds: [], companyWide: true, reason: 'delegation' };
+  }
+  const allowedPlatoonIds = grants
+    .map((d) => d.scope.kind === 'platoon' ? d.scope.platoonId : null)
+    .filter((id): id is string => !!id);
+  return { allowedPlatoonIds, companyWide: false, reason: 'delegation' };
+}
+
+export function canCreateMission(user: MockUser, delegations: Delegation[] = []): boolean {
+  const scope = getMissionCreateScope(user, delegations);
+  return scope.reason !== 'none';
+}
+
+/** Can THIS user edit THIS mission's structured fields (manpower / hours /
+ *  command / rotation / etc.)? Notes are governed separately on the detail
+ *  page — author can edit own, CC can edit any. */
+export function canEditMission(
+  user: MockUser,
+  mission: Mission,
+  delegations: Delegation[] = [],
+): boolean {
+  // CC / Deputy can edit any mission in their company.
+  if (isCompanyLeadership(user.role) && user.companyId === mission.companyId) {
+    return true;
+  }
+  // PC / PS can edit missions assigned to their commanded platoon, but
+  // only platoon-owned missions — they can't override company-wide policy.
+  const isPlatoon = user.role === 'platoonCommander' || user.role === 'platoonSergeant' || user.role === 'manager';
+  if (isPlatoon && user.commandedPlatoonId) {
+    if (mission.ownerRole === 'platoon' && mission.assignedPlatoonIds.includes(user.commandedPlatoonId)) {
+      return true;
+    }
+  }
+  // Active delegation for mission.create within the mission's scope
+  // implies edit. (Same token covers both; future slice may split.)
+  const scope = getMissionCreateScope(user, delegations);
+  if (scope.companyWide) return true;
+  if (scope.allowedPlatoonIds.some((pid) => mission.assignedPlatoonIds.includes(pid))) {
+    return true;
+  }
+  return false;
 }
 
 // ─── Soldier-detail visibility scopes ────────────────────────────────────────

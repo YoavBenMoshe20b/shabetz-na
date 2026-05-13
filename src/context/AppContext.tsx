@@ -158,6 +158,11 @@ interface AppContextType {
    *  inside the action itself yet — gated by route in slice E2). */
   addMission:             (data: Omit<Mission, 'id' | 'createdAt'>) => Mission;
   setMissionStatus:       (id: string, status: Mission['status']) => void;
+  /** Apply a partial patch to an existing mission. The id/companyId/
+   *  createdAt fields are immutable; everything else is patchable.
+   *  Materialization runs every render — downstream surfaces update
+   *  automatically on the next paint. */
+  updateMission:          (id: string, patch: Partial<Omit<Mission, 'id' | 'companyId' | 'createdAt'>>) => void;
 
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
@@ -443,6 +448,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setMissionStatus = (id: string, status: Mission['status']) => {
     setMissions((prev) => prev.map((m) => m.id === id ? { ...m, status } : m));
+  };
+
+  const updateMission = (
+    id: string,
+    patch: Partial<Omit<Mission, 'id' | 'companyId' | 'createdAt'>>,
+  ) => {
+    setMissions((prev) => prev.map((m) => m.id === id ? { ...m, ...patch } : m));
   };
 
   // ── Operational orders ─────────────────────────────────────────────
@@ -1088,7 +1100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
-      missions, addMission, setMissionStatus,
+      missions, addMission, setMissionStatus, updateMission,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,

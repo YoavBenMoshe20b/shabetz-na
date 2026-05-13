@@ -112,7 +112,7 @@ export default function SchedulePage() {
         {selectedOrder && (
           <Section
             label={`משימות · ${selectedOrder.name}`}
-            action={isCC && (
+            action={(
               <button
                 onClick={() => navigate(`/missions/new?orderId=${selectedOrder.id}`)}
                 className="text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"

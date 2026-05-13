@@ -17,7 +17,7 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useApp, useMyCompany } from '../context/AppContext';
-import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
+import { isCompanyLeadership, isPlatoonLeadership, canEditMission } from '../utils/permissions';
 import { buildMissionSummary } from '../utils/missionSummary';
 import { materializeWeek } from '../utils/materialize';
 import Header from '../components/Header';
@@ -32,7 +32,7 @@ export default function MissionDetailPage() {
   const {
     currentUser, currentRole,
     missions, missionNotes, platoons, squads, soldiers, leaves, dutyExclusions,
-    qualifications, equipmentItems,
+    qualifications, equipmentItems, delegations,
     addMissionNote, editMissionNote, deleteMissionNote,
     setMissionStatus,
   } = useApp();
@@ -65,6 +65,7 @@ export default function MissionDetailPage() {
 
   const isCC = isCompanyLeadership(currentRole);
   const isPC = isPlatoonLeadership(currentRole);
+  const canEdit = canEditMission(currentUser, mission, delegations);
 
   // Notes the viewer is allowed to see:
   //   • All company-scope notes for this mission
@@ -160,6 +161,24 @@ export default function MissionDetailPage() {
             )}
           </Hint>
         </header>
+
+        {/* Edit entry point — scope-aware. CC for any company mission;
+            PC/PS for missions in their commanded platoon; delegated users
+            within their grant. Navigates into the wizard in edit mode. */}
+        {canEdit && (
+          <Section label="פעולות">
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => navigate(`/missions/new?missionId=${mission.id}`)}
+            >
+              ערוך משימה
+            </Button>
+            <Hint className="block mt-2 text-mil-muted">
+              עריכה תשנה את ההגדרה המבצעית. שינויים יחולו מיד על השבצ״ק.
+            </Hint>
+          </Section>
+        )}
 
         {/* CC-only status toggle — pause/activate/archive */}
         {isCC && (

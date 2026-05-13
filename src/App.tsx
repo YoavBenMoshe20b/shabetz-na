@@ -143,7 +143,7 @@ function AppRoutes() {
           <ProtectedRoute minRole="companyCommander"><MissionsPage /></ProtectedRoute>
         } />
         <Route path="/missions/new" element={
-          <ProtectedRoute minRole="companyCommander"><MissionWizardPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander"><MissionWizardPage /></ProtectedRoute>
         } />
         <Route path="/mission/:id" element={currentUser ? <MissionDetailPage /> : auth} />
         <Route path="/coverage"     element={
