@@ -67,14 +67,15 @@ function CompanyHierarchyView() {
 
   return (
     <>
-      {/* Hierarchy hero: battalion → company */}
-      <header>
+      <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
         <Eyebrow>{myCompany?.unitName ?? 'גדוד'}</Eyebrow>
-        <PageTitle className="mt-1">{myCompany?.name ?? 'פלוגה'}</PageTitle>
-        <Muted className="mt-1.5 tabular-nums">
-          {myPlatoons.length} מחלקות · {soldiers.length} חיילים
-        </Muted>
-      </header>
+        <h1 className="text-hero font-extrabold text-mil-text tracking-tightish mt-1.5">{myCompany?.name ?? 'פלוגה'}</h1>
+        <div className="mt-2 flex items-baseline gap-2 text-tiny text-mil-muted">
+          <span><span className="tabular-nums font-semibold text-mil-text">{myPlatoons.length}</span> מחלקות</span>
+          <span className="text-mil-ghost">·</span>
+          <span><span className="tabular-nums font-semibold text-mil-text">{soldiers.length}</span> חיילים</span>
+        </div>
+      </section>
 
       {myPlatoons.map((platoon) => {
         const psoldiers = platoonSoldiers(platoon.id);
@@ -84,17 +85,19 @@ function CompanyHierarchyView() {
           <section key={platoon.id}>
             <button
               onClick={() => togglePlatoon(platoon.id)}
-              className="w-full flex items-baseline gap-3 text-right py-2"
+              className="w-full flex items-baseline gap-3 text-right py-2 px-1 group"
             >
               <Body className="font-semibold">{platoon.name}</Body>
-              {platoon.kind === 'forward-command' && <Hint className="text-mil-muted">מיוחדת</Hint>}
+              {platoon.kind === 'forward-command' && (
+                <span className="text-xxs font-semibold text-mil-sand bg-mil-sand-bg border border-mil-sand/30 rounded-md px-1.5 py-0.5">מיוחדת</span>
+              )}
               <Hint className="mr-auto tabular-nums">
                 <span className="font-bold text-mil-text">{inBase}</span>/{psoldiers.length} בבסיס
               </Hint>
-              <span className="text-mil-ghost text-tiny">{isOpen ? '▲' : '▼'}</span>
+              <span className={`text-mil-muted transition-transform duration-200 ease-out-soft ${isOpen ? 'rotate-180' : ''}`}>▾</span>
             </button>
             {isOpen && (
-              <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+              <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card overflow-hidden">
                 {platoonSquads(platoon.id).length === 0 ? (
                   <div className="px-5 py-4">
                     <Muted className="text-tiny">אין כיתות מוגדרות</Muted>
@@ -121,7 +124,7 @@ function CompanyHierarchyView() {
 
       {unassigned.length > 0 && (
         <Section label="ללא שיוך כיתה">
-          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+          <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card divide-y divide-mil-border overflow-hidden">
             {unassigned.map((s) => (
               <SoldierRow key={s.id} soldier={s} onClick={() => navigate(`/soldier/${s.id}`)} />
             ))}
@@ -170,19 +173,30 @@ function PlatoonRosterView() {
 
   return (
     <>
-      <header>
+      <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
         {myPlatoon.unitName && <Eyebrow>{myPlatoon.unitName}</Eyebrow>}
-        <PageTitle className="mt-1">{myPlatoon.name}</PageTitle>
-        <Muted className="mt-1.5 tabular-nums">
-          {inBase} בבסיס · {atHome} בבית{inactive > 0 ? ` · ${inactive} לא פעיל` : ''}
-        </Muted>
-      </header>
+        <h1 className="text-hero font-extrabold text-mil-text tracking-tightish mt-1.5">{myPlatoon.name}</h1>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <div className="bg-mil-bg-alt/70 border border-mil-border/70 rounded-xl-soft px-3.5 py-3">
+            <span className="text-2xl font-bold tabular-nums text-mil-success tracking-tightish">{inBase}</span>
+            <Hint className="text-tiny font-medium text-mil-muted mt-0.5">בבסיס</Hint>
+          </div>
+          <div className="bg-mil-bg-alt/70 border border-mil-border/70 rounded-xl-soft px-3.5 py-3">
+            <span className={`text-2xl font-bold tabular-nums tracking-tightish ${atHome === 0 ? 'text-mil-ghost' : 'text-mil-sand'}`}>{atHome}</span>
+            <Hint className="text-tiny font-medium text-mil-muted mt-0.5">בבית</Hint>
+          </div>
+          <div className="bg-mil-bg-alt/70 border border-mil-border/70 rounded-xl-soft px-3.5 py-3">
+            <span className={`text-2xl font-bold tabular-nums tracking-tightish ${inactive === 0 ? 'text-mil-ghost' : 'text-mil-rest'}`}>{inactive}</span>
+            <Hint className="text-tiny font-medium text-mil-muted mt-0.5">לא פעיל</Hint>
+          </div>
+        </div>
+      </section>
 
       <Section label="כיתות">
         {mySquads.length === 0 ? (
           <Muted className="text-tiny">אין כיתות מוגדרות</Muted>
         ) : (
-          <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+          <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card overflow-hidden">
             {mySquads.map((squad, idx) => {
               const ss = soldiers.filter((s) => s.squadId === squad.id);
               return (
@@ -214,9 +228,9 @@ function SquadBlock({
 }) {
   return (
     <div className={isFirst ? '' : 'border-t border-mil-border'}>
-      <div className="px-5 py-2.5 bg-mil-card-warm/40 flex items-baseline gap-2">
-        <Body className="font-semibold">{squad.name}</Body>
-        <Hint className="mr-auto tabular-nums">{soldiers.length}</Hint>
+      <div className="px-5 py-2.5 bg-mil-bg-alt/60 flex items-baseline gap-2">
+        <span className="text-xxs font-bold tracking-wide uppercase text-mil-muted">{squad.name}</span>
+        <span className="mr-auto text-tiny tabular-nums font-semibold text-mil-text bg-mil-card border border-mil-border/70 rounded-md px-1.5">{soldiers.length}</span>
       </div>
       {soldiers.length === 0 ? (
         <div className="px-5 py-3">
@@ -235,17 +249,23 @@ function SquadBlock({
 
 function SoldierRow({ soldier, onClick }: { soldier: Soldier; onClick: () => void }) {
   const dot =
-    soldier.currentStatus === 'in-base'        ? 'bg-mil-olive' :
-    soldier.currentStatus === 'home'           ? 'bg-mil-sand'  :
-    soldier.currentStatus === 'inactive-temp'  ? 'bg-mil-ghost' :
+    soldier.currentStatus === 'in-base'        ? 'bg-mil-success' :
+    soldier.currentStatus === 'home'           ? 'bg-mil-sand'    :
+    soldier.currentStatus === 'inactive-temp'  ? 'bg-mil-rest'    :
     'bg-mil-ghost';
+  const initials = soldier.name.split(' ').map((p) => p[0]).slice(0, 2).join('');
 
   return (
     <button
       onClick={onClick}
-      className="w-full text-right px-5 py-3 flex items-center gap-3 hover:bg-mil-card-warm/40 transition-colors"
+      className="w-full text-right px-5 py-3 flex items-center gap-3.5 hover:bg-mil-card-hover transition-colors duration-200 ease-out-soft"
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0`} aria-hidden />
+      <div className="relative flex-shrink-0">
+        <div className="w-9 h-9 rounded-full bg-mil-bg-alt border border-mil-border text-mil-muted flex items-center justify-center text-xs font-semibold">
+          {initials}
+        </div>
+        <span className={`absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full ${dot} ring-2 ring-mil-card`} aria-hidden />
+      </div>
       <div className="flex-1 min-w-0">
         <Body className="font-semibold truncate">{soldier.name}</Body>
         {soldier.operationalRoles.length > 0 && (
@@ -254,7 +274,7 @@ function SoldierRow({ soldier, onClick }: { soldier: Soldier; onClick: () => voi
           </Hint>
         )}
       </div>
-      <Hint className="text-mil-ghost text-tiny">{STATUS_LABEL[soldier.currentStatus]}</Hint>
+      <span className="text-xxs font-semibold text-mil-muted">{STATUS_LABEL[soldier.currentStatus]}</span>
       <span className="text-mil-ghost">←</span>
     </button>
   );

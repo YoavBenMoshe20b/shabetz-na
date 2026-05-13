@@ -69,7 +69,7 @@ export default function SchedulePage() {
         {/* ── Hero ─────────────────────────────────────────────────── */}
         <header>
           <Eyebrow>{myCompany?.unitName ?? ''} · {myCompany?.name ?? ''}</Eyebrow>
-          <PageTitle className="mt-1">שבצ״ק פלוגתי</PageTitle>
+          <PageTitle className="mt-1.5">שבצ״ק</PageTitle>
           <Muted className="mt-1.5">
             {myOrders.length === 0 ? 'אין צו פעיל — צור צו חדש כדי להתחיל' :
               `${myOrders.length} צווים · ${orderMissions.length} משימות בצו הנבחר`}
@@ -82,19 +82,19 @@ export default function SchedulePage() {
           action={isCC && (
             <button
               onClick={() => setAddOrderOpen(true)}
-              className="text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
+              className="text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
             >
               + הוספת צו חדש
             </button>
           )}
         >
           {myOrders.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm font-bold text-mil-olive-dim">אין צווים</p>
+            <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card py-10 text-center">
+              <p className="text-sm font-semibold text-mil-text">אין צווים</p>
               <p className="text-tiny text-mil-muted mt-1">פתח צו חדש כדי להגדיר את משימות התקופה</p>
             </div>
           ) : (
-            <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+            <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
               {myOrders.map((order) => (
                 <OrderRow
                   key={order.id}
@@ -198,8 +198,8 @@ function OrderRow({
   onSelect: () => void;
 }) {
   const statusTone =
-    order.status === 'published' ? 'bg-mil-olive' :
-    order.status === 'planning'  ? 'bg-mil-warn'  :
+    order.status === 'published' ? 'bg-mil-success' :
+    order.status === 'planning'  ? 'bg-mil-warn'    :
     'bg-mil-ghost';
   const statusLabel =
     order.status === 'published' ? 'פעיל' :
@@ -209,23 +209,27 @@ function OrderRow({
   return (
     <button
       onClick={onSelect}
-      className={`w-full text-right px-5 py-4 flex items-start gap-3 transition-colors ${
-        isSelected ? 'bg-mil-olive-bg/40' : 'hover:bg-mil-card-warm/40'
+      className={`w-full text-right px-5 py-4 flex items-start gap-3.5 transition-all duration-200 ease-out-soft ${
+        isSelected ? 'bg-mil-olive-bg/60' : 'hover:bg-mil-card-hover'
       }`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${statusTone} flex-shrink-0 mt-2.5`} aria-hidden />
+      <span className={`w-2 h-2 rounded-full ${statusTone} flex-shrink-0 mt-2 ring-4 ${isSelected ? 'ring-mil-olive-bg' : 'ring-mil-card'}`} aria-hidden />
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-baseline gap-2 flex-wrap">
           <Body className="font-semibold truncate">{order.name}</Body>
-          <Hint className="text-mil-ghost">{statusLabel}</Hint>
+          <span className="text-xxs font-semibold text-mil-muted tracking-wide uppercase">{statusLabel}</span>
         </div>
-        <Muted className="mt-0.5 text-tiny">
+        <Muted className="mt-1 text-tiny">
           {formatRange(order.startDate, order.endDate)}
           <span className="text-mil-ghost mx-1.5">·</span>
-          <span className="tabular-nums">{missionCount}</span> משימות
+          <span className="tabular-nums font-semibold text-mil-text">{missionCount}</span> משימות
         </Muted>
       </div>
-      {isSelected && <span className="text-mil-olive-dim text-tiny mt-3">●</span>}
+      {isSelected && (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-mil-olive mt-2 flex-shrink-0">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      )}
     </button>
   );
 }

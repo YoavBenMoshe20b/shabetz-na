@@ -117,81 +117,82 @@ function CompanyCommanderDashboard() {
       <Header title={myCompany?.name ?? 'פלוגה'} />
       <PageMain>
 
-        {/* ── 1. STATUS NOW — typographic hero, no card chrome ───────────── */}
-        <header>
+        {/* ── 1. HERO — operational readiness card ──────────────────────── */}
+        <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
           <div className="flex items-baseline gap-1.5 text-tiny text-mil-muted">
             {myCompany?.unitName && (
               <>
-                <span>{myCompany.unitName}</span>
+                <span className="font-medium">{myCompany.unitName}</span>
                 <span className="text-mil-ghost">·</span>
               </>
             )}
-            <span>
-              <span className="tabular-nums font-semibold text-mil-text">{platoonStats.length}</span> מחלקות
+            <span className="tabular-nums">
+              <span className="font-semibold text-mil-text">{platoonStats.length}</span> מחלקות
             </span>
+            <span className="text-mil-ghost mr-auto">{formatTimeNow(now)}</span>
           </div>
 
-          <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
-            <span className="text-[48px] leading-[0.9] font-extrabold tabular-nums tracking-tight text-mil-text">
+          <div className="mt-3 flex items-end gap-2.5 flex-wrap">
+            <span className="text-[56px] leading-[0.9] font-extrabold tabular-nums tracking-tightish text-mil-text">
               {totalInBase}
             </span>
-            <span className="text-mil-ghost text-lg tabular-nums">
-              / {totalSoldiers}
-            </span>
-            <span className="text-sm font-semibold text-mil-text mr-1">בבסיס עכשיו</span>
-
-            <div className="mr-auto flex items-baseline gap-3">
-              {totalAtHome > 0 && (
-                <span className="text-tiny text-mil-muted">
-                  <span className="tabular-nums font-bold text-mil-text">{totalAtHome}</span> בבית
-                </span>
-              )}
-              {totalInactive > 0 && (
-                <span className="text-tiny text-mil-muted">
-                  <span className="tabular-nums font-bold text-mil-text">{totalInactive}</span> לא פעיל
-                </span>
-              )}
+            <div className="pb-1.5">
+              <Body className="font-semibold leading-tight">בבסיס עכשיו</Body>
+              <Hint className="text-tiny mt-0.5">
+                <span className="tabular-nums font-semibold text-mil-text">{totalSoldiers}</span> סה״כ
+                · <span className="tabular-nums font-semibold text-mil-text">{Math.round(readinessPct)}%</span> כשירות
+              </Hint>
             </div>
           </div>
 
           <ReadinessBar pct={readinessPct} health={companyHealth} />
 
+          {/* KPI strip — sub-metrics with refined composition */}
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <Kpi label="בבסיס"   value={totalInBase}   tone="success" />
+            <Kpi label="בבית"    value={totalAtHome}   tone="sand"   muted={totalAtHome === 0} />
+            <Kpi label="לא פעיל" value={totalInactive} tone="rest"   muted={totalInactive === 0} />
+          </div>
+
           {criticalCount > 0 && (
-            <div className="mt-3 inline-flex items-center gap-2 text-mil-alert font-semibold text-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-mil-alert" aria-hidden />
-              <span>
+            <div className="mt-5 flex items-center gap-2.5 bg-mil-alert-bg border border-mil-alert-border rounded-xl-soft px-4 py-3">
+              <span className="relative flex-shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-mil-alert block" />
+                <span className="absolute inset-0 w-1.5 h-1.5 rounded-full bg-mil-alert animate-ping opacity-60" />
+              </span>
+              <p className="text-sm font-semibold text-mil-alert">
                 {criticalCount === 1
                   ? 'מחלקה אחת מתחת לסף המינימום'
                   : `${criticalCount} מחלקות מתחת לסף המינימום`}
-              </span>
+              </p>
             </div>
           )}
-        </header>
+        </section>
 
-        {/* ── 2. PLATOON HEALTH — compact scannable rows ──────────────────── */}
+        {/* ── 2. PLATOON HEALTH — refined operational table ─────────────── */}
         <Section label="מחלקות">
-          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+          <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
             {platoonStats.map((ps) => (
               <PlatoonHealthRow key={ps.platoon.id} ps={ps} />
             ))}
           </div>
         </Section>
 
-        {/* ── 3. UPCOMING — next 12 hours ─────────────────────────────────── */}
+        {/* ── 3. UPCOMING — next 12 hours ─────────────────────────────── */}
         <Section label="ב-12 השעות הקרובות">
           {events.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm font-bold text-mil-olive-dim">הכל רגוע</p>
+            <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card py-10 text-center">
+              <p className="text-sm font-semibold text-mil-success">הכל רגוע</p>
               <p className="text-tiny text-mil-muted mt-1">אין שינויים מתוכננים</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {events.map((ev) => <TimelineCard key={ev.id} event={ev} onCta={() => ev.ctaHref && navigate(ev.ctaHref)} />)}
             </div>
           )}
         </Section>
 
-        {/* ── 4. RECENT CHANGES — collapsed; only when there's something ──── */}
+        {/* ── 4. RECENT CHANGES — collapsed; only when there's something ── */}
         {allAlerts.length > 0 && (
           <CollapsibleSection
             label="שינויים אחרונים"
@@ -220,43 +221,111 @@ function CompanyCommanderDashboard() {
 
         {/* ── 5. CC operational destinations ── */}
         <Section label="ניהול">
-          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
-            <button
+          <div className="grid grid-cols-1 gap-2.5">
+            <NavTile
+              label="ניהול משימות"
+              hint="הגדרת משימות פעילות וטיוטות"
               onClick={() => navigate('/missions')}
-              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
-            >
-              <div className="flex-1">
-                <Body className="font-semibold">ניהול משימות</Body>
-                <Hint className="block mt-0.5">הגדרת משימות פעילות וטיוטות</Hint>
-              </div>
-              <span className="text-mil-ghost">←</span>
-            </button>
-            <button
+              icon="missions"
+            />
+            <NavTile
+              label="יציאות וכיסוי"
+              hint="מי בבית, מי בבסיס, אירועי כיסוי"
               onClick={() => navigate('/coverage')}
-              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
-            >
-              <div className="flex-1">
-                <Body className="font-semibold">יציאות וכיסוי</Body>
-                <Hint className="block mt-0.5">מי בבית, מי בבסיס, אירועי כיסוי</Hint>
-              </div>
-              <span className="text-mil-ghost">←</span>
-            </button>
-            <button
+              icon="coverage"
+            />
+            <NavTile
+              label="פיקוד זמני"
+              hint="הענקת סמכויות לתקופה מוגדרת"
               onClick={() => navigate('/delegations')}
-              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
-            >
-              <div className="flex-1">
-                <Body className="font-semibold">פיקוד זמני</Body>
-                <Hint className="block mt-0.5">הענקת סמכויות לתקופה מוגדרת</Hint>
-              </div>
-              <span className="text-mil-ghost">←</span>
-            </button>
+              icon="delegate"
+            />
           </div>
         </Section>
 
       </PageMain>
     </div>
   );
+}
+
+// ─── KPI tile — used in the company hero ─────────────────────────────────
+
+function Kpi({
+  label, value, tone, muted = false,
+}: {
+  label: string;
+  value: number;
+  tone: 'success' | 'sand' | 'rest';
+  muted?: boolean;
+}) {
+  const toneClass =
+    tone === 'success' ? 'text-mil-success' :
+    tone === 'sand'    ? 'text-mil-sand'    :
+    'text-mil-rest';
+  return (
+    <div className="bg-mil-bg-alt/70 border border-mil-border/70 rounded-xl-soft px-3.5 py-3">
+      <div className="flex items-baseline gap-1.5">
+        <span className={`text-2xl font-bold tabular-nums tracking-tightish ${muted ? 'text-mil-ghost' : toneClass}`}>
+          {value}
+        </span>
+      </div>
+      <Hint className="text-tiny font-medium text-mil-muted mt-0.5">{label}</Hint>
+    </div>
+  );
+}
+
+// ─── Operational nav tile — premium destination row ──────────────────────
+
+function NavTile({
+  label, hint, onClick, icon,
+}: {
+  label: string;
+  hint: string;
+  onClick: () => void;
+  icon: 'missions' | 'coverage' | 'delegate';
+}) {
+  const stroke = 1.6;
+  const Glyph = {
+    missions: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+        <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+        <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+        <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+      </svg>
+    ),
+    coverage: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3 L4 6.5 V13 c0 4.5 3.5 7 8 8 4.5-1 8-3.5 8-8 V6.5 Z" />
+      </svg>
+    ),
+    delegate: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 6 c2-2 5-2 7 0 s2 5 0 7 l-2 2" />
+        <path d="M15 18 c-2 2-5 2-7 0 s-2-5 0-7 l2-2" />
+      </svg>
+    ),
+  }[icon];
+
+  return (
+    <button
+      onClick={onClick}
+      className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card hover:shadow-card-hover hover:border-mil-border-strong transition-all duration-200 ease-out-soft px-5 py-4 flex items-center gap-3.5 text-right"
+    >
+      <span className="w-9 h-9 rounded-xl-soft bg-mil-olive-bg text-mil-olive flex items-center justify-center flex-shrink-0">
+        {Glyph}
+      </span>
+      <div className="flex-1 min-w-0">
+        <Body className="font-semibold leading-tight">{label}</Body>
+        <Hint className="block mt-0.5 text-mil-muted">{hint}</Hint>
+      </div>
+      <span className="text-mil-ghost">←</span>
+    </button>
+  );
+}
+
+function formatTimeNow(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 // ─── Readiness bar — thin, single horizontal integral of company state ──────
@@ -268,11 +337,11 @@ function ReadinessBar({ pct, health }: { pct: number; health: 'ready' | 'warning
   const tone =
     health === 'critical' ? 'bg-mil-alert' :
     health === 'warning'  ? 'bg-mil-warn'  :
-    'bg-mil-olive';
+    'bg-mil-success';
   return (
-    <div className="mt-3 h-1 rounded-full bg-mil-border/60 overflow-hidden">
+    <div className="mt-4 h-1.5 rounded-full bg-mil-bg-alt overflow-hidden border border-mil-border/40">
       <div
-        className={`h-full ${tone} transition-[width] duration-500`}
+        className={`h-full ${tone} transition-[width] duration-700 ease-out`}
         style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
       />
     </div>
@@ -298,14 +367,19 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
   const dot =
     ps.status === 'critical' ? 'bg-mil-alert' :
     ps.status === 'warning'  ? 'bg-mil-warn'  :
-    'bg-mil-olive';
+    'bg-mil-success';
+  const barTone =
+    ps.status === 'critical' ? 'bg-mil-alert' :
+    ps.status === 'warning'  ? 'bg-mil-warn'  :
+    'bg-mil-success';
   const numTone = ps.status === 'critical' ? 'text-mil-alert' : 'text-mil-text';
   const isSpecial = ps.platoon.kind === 'forward-command';
   const hasSubline = ps.gap > 0 || ps.atHome > 0 || ps.inactive > 0;
+  const pct = ps.total > 0 ? (ps.inBase / ps.total) * 100 : 0;
 
   return (
-    <div className="px-5 py-4 flex items-center gap-3 hover:bg-mil-card-warm/40 transition-colors duration-150">
-      <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0`} aria-hidden />
+    <div className="px-5 py-4 flex items-center gap-4 hover:bg-mil-card-hover transition-colors duration-150">
+      <span className={`w-2 h-2 rounded-full ${dot} flex-shrink-0 ring-4 ring-mil-card`} aria-hidden />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 min-w-0">
@@ -313,8 +387,16 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
           {isSpecial && <Hint className="text-mil-muted">מיוחדת</Hint>}
         </div>
 
+        {/* Micro readiness bar — visual integral of platoon state */}
+        <div className="mt-2 h-1 rounded-full bg-mil-bg-alt overflow-hidden">
+          <div
+            className={`h-full ${barTone} transition-[width] duration-500 ease-out`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
         {hasSubline && (
-          <div className="mt-1 flex items-baseline gap-1.5 flex-wrap text-tiny">
+          <div className="mt-2 flex items-baseline gap-1.5 flex-wrap text-tiny">
             {ps.gap > 0 && (
               <span className="text-mil-alert font-semibold">חסר {ps.gap} לבסיס</span>
             )}
@@ -323,7 +405,7 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
             )}
             {ps.atHome > 0 && (
               <span className="text-mil-muted">
-                <span className="tabular-nums font-semibold text-mil-text">{ps.atHome}</span> בבית
+                <span className="tabular-nums font-semibold text-mil-sand">{ps.atHome}</span> בבית
               </span>
             )}
             {ps.atHome > 0 && ps.inactive > 0 && (
@@ -331,7 +413,7 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
             )}
             {ps.inactive > 0 && (
               <span className="text-mil-muted">
-                <span className="tabular-nums font-semibold text-mil-text">{ps.inactive}</span> לא פעיל
+                <span className="tabular-nums font-semibold text-mil-rest">{ps.inactive}</span> לא פעיל
               </span>
             )}
           </div>
@@ -339,7 +421,7 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
       </div>
 
       <div className="flex items-baseline flex-shrink-0 tabular-nums">
-        <span className={`text-xl font-extrabold ${numTone}`}>{ps.inBase}</span>
+        <span className={`text-xl font-bold tracking-tightish ${numTone}`}>{ps.inBase}</span>
         <span className="text-mil-ghost text-sm">/{ps.total}</span>
       </div>
     </div>
@@ -565,29 +647,32 @@ function PlatoonCommanderDashboard() {
 // ─── Timeline rendering ─────────────────────────────────────────────────────
 
 function TimelineCard({ event, onCta }: { event: OpsEvent; onCta: () => void }) {
-  const edge =
+  const dot =
     event.severity === 'alert' ? 'bg-mil-alert' :
     event.severity === 'warn'  ? 'bg-mil-warn'  :
     'bg-mil-olive';
   const labelTone =
     event.severity === 'alert' ? 'text-mil-alert' :
     event.severity === 'warn'  ? 'text-mil-warn'  :
-    'text-mil-muted';
+    'text-mil-olive';
 
   return (
-    <div className="bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden">
-      <div className={`w-1 ${edge} flex-shrink-0`} />
-      <div className="flex-1 px-4 py-3.5">
-        <p className={`text-tiny font-bold tracking-wide ${labelTone}`}>{event.whenLabel}</p>
-        <Body className="font-semibold mt-1">{event.title}</Body>
-        {event.detail && <Muted className="mt-1">{event.detail}</Muted>}
-        {event.ctaLabel && (
-          <div className="mt-2.5">
-            <Button variant="ghost" size="sm" onClick={onCta}>
+    <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card hover:shadow-card-hover transition-shadow duration-200 ease-out-soft">
+      <div className="px-4 py-3.5 flex items-start gap-3">
+        <span className={`w-2 h-2 rounded-full ${dot} flex-shrink-0 mt-2 ring-4 ring-mil-card`} aria-hidden />
+        <div className="flex-1 min-w-0">
+          <p className={`text-xxs font-semibold tracking-wide uppercase ${labelTone}`}>{event.whenLabel}</p>
+          <Body className="font-semibold mt-1 leading-tight">{event.title}</Body>
+          {event.detail && <Muted className="mt-1">{event.detail}</Muted>}
+          {event.ctaLabel && (
+            <button
+              onClick={onCta}
+              className="mt-2.5 text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim transition-colors"
+            >
               {event.ctaLabel} ←
-            </Button>
-          </div>
-        )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -717,20 +802,16 @@ function SoldierDashboard() {
 
         {/* Transient toasts */}
         {leaveSaved && (
-          <Card variant="muted" className="!border-mil-success/40 bg-mil-success-bg">
-            <div className="px-4 py-3 flex items-center gap-2">
-              <span className="text-mil-success font-bold">✓</span>
-              <Body className="text-mil-success">בקשת היציאה הוגשה למ״מ</Body>
-            </div>
-          </Card>
+          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
+            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
+            <Body className="text-mil-success font-semibold">בקשת היציאה הוגשה למ״מ</Body>
+          </div>
         )}
         {statusToastMsg && (
-          <Card variant="muted" className="!border-mil-olive/40 bg-mil-olive-bg">
-            <div className="px-4 py-3 flex items-center gap-2">
-              <span className="text-mil-olive-dim font-bold">✓</span>
-              <Body className="text-mil-olive-dim">{statusToastMsg}</Body>
-            </div>
-          </Card>
+          <div className="bg-mil-olive-bg border border-mil-olive/20 rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
+            <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" aria-hidden />
+            <Body className="text-mil-olive font-semibold">{statusToastMsg}</Body>
+          </div>
         )}
 
         {/* Subtle greeting — name + context, no card chrome */}
@@ -848,10 +929,12 @@ function SoldierDashboard() {
           so it reads as the persistent action affordance, not a decoration. */}
       <button
         onClick={() => setLeaveOpen(true)}
-        className="fixed bottom-24 left-5 z-20 bg-mil-olive hover:bg-mil-olive-light active:bg-mil-olive-dim text-white font-bold px-5 py-4 rounded-full shadow-hero flex items-center gap-2 transition-all active:scale-95"
+        className="fixed bottom-24 left-5 z-20 bg-mil-olive hover:bg-mil-olive-light active:bg-mil-olive-dim text-white font-semibold px-5 py-3.5 rounded-2xl shadow-pop flex items-center gap-2 transition-all duration-200 ease-out-soft active:scale-95 hover:shadow-hero"
       >
-        <span className="text-xl leading-none">+</span>
-        <span className="text-sm tracking-wide">בקשת יציאה</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        <span className="text-sm">בקשת יציאה</span>
       </button>
 
       {/* Leave-request modal */}
@@ -1010,36 +1093,39 @@ function OperationalStateCard({
     : null;
 
   const presentation = {
-    'in-base':       { label: 'אתה בבסיס',     accentClass: 'text-mil-olive-dim',  verb: 'יצאתי הביתה'    },
-    'home':          { label: 'אתה בבית',       accentClass: 'text-mil-sand',       verb: 'חזרתי לבסיס'    },
-    'inactive-temp': { label: 'לא פעיל כרגע',   accentClass: 'text-mil-muted',      verb: 'חזרתי לפעילות'  },
+    'in-base':       { label: 'אתה בבסיס',     accentClass: 'text-mil-success',  dotBg: 'bg-mil-success',  verb: 'יצאתי הביתה'    },
+    'home':          { label: 'אתה בבית',       accentClass: 'text-mil-sand',     dotBg: 'bg-mil-sand',     verb: 'חזרתי לבסיס'    },
+    'inactive-temp': { label: 'לא פעיל כרגע',   accentClass: 'text-mil-rest',     dotBg: 'bg-mil-rest',     verb: 'חזרתי לפעילות'  },
   }[status];
 
   const [activeReminder, setActiveReminder] = useState<5 | 15 | 30 | 60 | null>(null);
   const handleReminder = (m: 5 | 15 | 30 | 60) => { onSetReminder(m); setActiveReminder(m); };
 
   return (
-    <Card variant="hero">
-      <div className="px-5 py-5 space-y-5">
+    <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero overflow-hidden">
+      <div className="px-6 py-6 space-y-5">
 
         {/* — Current state — */}
         <div>
-          <Hint>המצב שלך</Hint>
-          <p className={`text-hero font-extrabold leading-tight mt-1.5 ${presentation.accentClass}`}>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${presentation.dotBg}`} aria-hidden />
+            <Hint className="font-semibold tracking-wide uppercase">המצב שלך</Hint>
+          </div>
+          <p className={`text-hero font-extrabold leading-tight mt-2 tracking-tightish ${presentation.accentClass}`}>
             {presentation.label}
           </p>
-          <Body className="mt-1.5 text-mil-text font-semibold">
+          <Body className="mt-1.5 text-mil-muted">
             {durationLabel}
             {nextLeaveDays != null && (
               <>
                 <span className="text-mil-ghost mx-2">·</span>
-                <span className="text-mil-muted font-medium">{formatDaysCountdown(nextLeaveDays, 'home')}</span>
+                <span>{formatDaysCountdown(nextLeaveDays, 'home')}</span>
               </>
             )}
             {daysToReturn != null && (
               <>
                 <span className="text-mil-ghost mx-2">·</span>
-                <span className="text-mil-muted font-medium">{formatDaysCountdown(daysToReturn, 'base')}</span>
+                <span>{formatDaysCountdown(daysToReturn, 'base')}</span>
               </>
             )}
           </Body>
@@ -1047,59 +1133,65 @@ function OperationalStateCard({
 
         {/* — Next operational transition — */}
         {nextShift && status === 'in-base' && (
-          <div className="pt-4 border-t border-mil-border">
+          <div className="pt-5 border-t border-mil-border">
             <div className="flex items-baseline gap-3">
-              <Hint>המשמרת הבאה</Hint>
+              <Hint className="font-semibold tracking-wide uppercase">המשמרת הבאה</Hint>
               <button
                 onClick={() => onOpenMission(nextShift.missionId)}
-                className="mr-auto text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
+                className="mr-auto text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
               >
-                פרטים →
+                פרטים ←
               </button>
             </div>
-            <p className="text-lg font-bold text-mil-text mt-1.5 leading-snug">{nextShift.name}</p>
-            <Muted className="mt-1">
-              <span className="font-mono font-semibold text-mil-text">{nextShift.startTime}–{nextShift.endTime}</span>
-              <span className="mx-2 text-mil-ghost">·</span>
-              <span>{formatRelative(nextShift.minsTo)}</span>
-            </Muted>
+            <p className="text-lg font-bold text-mil-text mt-2 leading-snug">{nextShift.name}</p>
+            <div className="mt-1.5 flex items-baseline gap-2 flex-wrap">
+              <span className="text-base font-bold tabular-nums text-mil-text">{nextShift.startTime}–{nextShift.endTime}</span>
+              <Hint className="text-mil-muted">·</Hint>
+              <Hint className="text-mil-muted">{formatRelative(nextShift.minsTo)}</Hint>
+            </div>
             {nextShift.teammates.length > 0 && (
-              <Muted className="mt-1">
+              <Muted className="mt-1.5">
                 יחד עם: {nextShift.teammates.map((t) => t.name).join(' · ')}
               </Muted>
             )}
 
-            {/* Inline wake-me-up — no separate card, part of the same flow */}
-            <div className="mt-3.5 grid grid-cols-4 gap-2">
-              {([5, 15, 30, 60] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => handleReminder(m)}
-                  className={`py-2.5 rounded-lg text-tiny font-bold transition-all active:scale-95 ${
-                    activeReminder === m
-                      ? 'bg-mil-olive text-white shadow-card-hover'
-                      : 'bg-mil-bg border border-mil-border text-mil-text hover:border-mil-olive'
-                  }`}
-                >
-                  {m === 60 ? 'שעה' : `${m} דק׳`}
-                </button>
-              ))}
+            {/* Inline reminder picker — refined chip row */}
+            <div className="mt-4">
+              <Hint className="text-mil-muted block mb-2">הער אותי לפני</Hint>
+              <div className="grid grid-cols-4 gap-2">
+                {([5, 15, 30, 60] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => handleReminder(m)}
+                    className={`py-2.5 rounded-lg text-tiny font-semibold transition-all duration-200 ease-out-soft active:scale-95 ${
+                      activeReminder === m
+                        ? 'bg-mil-olive text-white shadow-card'
+                        : 'bg-mil-bg-alt border border-mil-border text-mil-text hover:border-mil-border-strong'
+                    }`}
+                  >
+                    {m === 60 ? 'שעה' : `${m} דק׳`}
+                  </button>
+                ))}
+              </div>
+              {activeReminder && (
+                <Hint className="text-mil-success mt-2 font-semibold flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-mil-success" aria-hidden />
+                  תזכורת {activeReminder} דק׳ לפני
+                </Hint>
+              )}
             </div>
-            {activeReminder && (
-              <Hint className="text-mil-success mt-2 font-semibold">✓ תזכורת {activeReminder} דק׳ לפני</Hint>
-            )}
           </div>
         )}
 
-        {/* — Single action — past-tense operational verb, not "update state" — */}
+        {/* — Single action — past-tense operational verb — */}
         <button
           onClick={onOpenStatusUpdate}
-          className="w-full bg-mil-card border border-mil-border hover:border-mil-olive text-mil-text font-bold py-3 rounded-xl text-sm transition-all active:scale-[0.98]"
+          className="w-full bg-mil-bg-alt border border-mil-border hover:bg-mil-card hover:border-mil-olive text-mil-text font-semibold py-3 rounded-xl-soft text-sm transition-all duration-200 ease-out-soft active:scale-[0.985]"
         >
           {presentation.verb}
         </button>
       </div>
-    </Card>
+    </section>
   );
 }
 

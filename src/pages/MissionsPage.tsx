@@ -32,30 +32,31 @@ export default function MissionsPage() {
       <Header title="ניהול משימות" />
       <PageMain>
 
-        {/* Header — same typographic treatment as CC Home for consistency */}
-        <header>
-          <div className="text-tiny text-mil-muted">{myCompany?.name ?? '—'}</div>
-          <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
-            <span className="text-[44px] leading-[0.9] font-extrabold tabular-nums text-mil-text tracking-tight">
+        <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
+          <div className="text-tiny text-mil-muted font-medium">{myCompany?.name ?? '—'}</div>
+          <div className="mt-2 flex items-end gap-2.5 flex-wrap">
+            <span className="text-[56px] leading-[0.9] font-extrabold tabular-nums text-mil-text tracking-tightish">
               {myMissions.length}
             </span>
-            <Body className="self-end pb-1 font-semibold">משימות</Body>
-            {activeCount > 0 && activeCount !== myMissions.length && (
-              <Hint className="self-end pb-1 mr-auto">
-                <span className="tabular-nums font-bold text-mil-text">{activeCount}</span> פעילות
-              </Hint>
-            )}
+            <div className="pb-1.5">
+              <Body className="font-semibold leading-tight">משימות מוגדרות</Body>
+              {activeCount > 0 && (
+                <Hint className="text-tiny mt-0.5">
+                  <span className="tabular-nums font-semibold text-mil-success">{activeCount}</span> פעילות
+                </Hint>
+              )}
+            </div>
           </div>
-        </header>
+        </section>
 
         <Section label="הגדרות פעילות">
           {myMissions.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm font-bold text-mil-olive-dim">אין משימות מוגדרות</p>
+            <div className="bg-mil-card border border-mil-border rounded-xl-soft py-10 text-center">
+              <p className="text-sm font-semibold text-mil-text">אין משימות מוגדרות</p>
               <p className="text-tiny text-mil-muted mt-1">צור את המשימה הראשונה</p>
             </div>
           ) : (
-            <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+            <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
               {myMissions.map((m) => (
                 <MissionRow
                   key={m.id}
@@ -92,9 +93,9 @@ function MissionRow({ mission, platoons, qualifications, equipmentItems, onClick
   const lines = buildMissionSummary({ mission, platoons, qualifications, equipmentItems });
   const preview = lines.slice(1, 3).join(' ');                  // skip the identity line
   const statusTone =
-    mission.status === 'active'   ? 'bg-mil-olive' :
-    mission.status === 'draft'    ? 'bg-mil-ghost' :
-    mission.status === 'paused'   ? 'bg-mil-warn'  :
+    mission.status === 'active'   ? 'bg-mil-success' :
+    mission.status === 'draft'    ? 'bg-mil-ghost'   :
+    mission.status === 'paused'   ? 'bg-mil-warn'    :
     'bg-mil-ghost';
   const statusLabel = {
     active:   'פעילה',
@@ -106,13 +107,13 @@ function MissionRow({ mission, platoons, qualifications, equipmentItems, onClick
   return (
     <button
       onClick={onClick}
-      className="w-full text-right px-5 py-4 flex items-start gap-3 hover:bg-mil-card-warm/40 transition-colors"
+      className="w-full text-right px-5 py-4 flex items-start gap-3.5 hover:bg-mil-card-hover transition-colors duration-200 ease-out-soft"
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${statusTone} flex-shrink-0 mt-2.5`} aria-hidden />
+      <span className={`w-2 h-2 rounded-full ${statusTone} flex-shrink-0 mt-2 ring-4 ring-mil-card`} aria-hidden />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 min-w-0">
           <Body className="font-semibold truncate">{mission.name}</Body>
-          <Hint className="text-mil-ghost">{statusLabel}</Hint>
+          <span className="text-xxs font-semibold tracking-wide uppercase text-mil-muted">{statusLabel}</span>
         </div>
         {preview && <Muted className="mt-1 line-clamp-2">{preview}</Muted>}
       </div>

@@ -144,41 +144,48 @@ export default function MissionDetailPage() {
       <Header title="משימה" />
       <PageMain>
 
-        {/* Identity hero */}
-        <header>
-          <button onClick={() => navigate(-1)} className="text-tiny font-bold text-mil-muted hover:text-mil-text">
-            → חזרה
+        {/* Identity hero — premium composition */}
+        <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="text-tiny font-semibold text-mil-muted hover:text-mil-text inline-flex items-center gap-1.5 transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            חזרה
           </button>
-          <div className="mt-2 flex items-baseline gap-3 flex-wrap">
-            <PageTitle>{mission.name}</PageTitle>
+          <div className="mt-3 flex items-baseline gap-3 flex-wrap">
+            <h1 className="text-hero font-extrabold text-mil-text tracking-tightish leading-[1.1]">{mission.name}</h1>
             <MissionStatusPill status={mission.status} />
           </div>
-          {mission.description && <Muted className="mt-1.5">{mission.description}</Muted>}
-          <Hint className="mt-2 block">
-            {myCompany?.name ?? '—'}
+          {mission.description && <Muted className="mt-2">{mission.description}</Muted>}
+          <div className="mt-3 flex items-baseline gap-2 text-tiny text-mil-muted flex-wrap">
+            <span className="font-medium">{myCompany?.name ?? '—'}</span>
             {mission.assignedPlatoonIds.length > 0 && (
-              <> · {mission.assignedPlatoonIds.map((pid) => platoons.find((p) => p.id === pid)?.name).filter(Boolean).join(' · ')}</>
+              <>
+                <span className="text-mil-ghost">·</span>
+                <span>{mission.assignedPlatoonIds.map((pid) => platoons.find((p) => p.id === pid)?.name).filter(Boolean).join(' · ')}</span>
+              </>
             )}
-          </Hint>
-        </header>
+          </div>
 
-        {/* Edit entry point — scope-aware. CC for any company mission;
-            PC/PS for missions in their commanded platoon; delegated users
-            within their grant. Navigates into the wizard in edit mode. */}
-        {canEdit && (
-          <Section label="פעולות">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => navigate(`/missions/new?missionId=${mission.id}`)}
-            >
-              ערוך משימה
-            </Button>
-            <Hint className="block mt-2 text-mil-muted">
-              עריכה תשנה את ההגדרה המבצעית. שינויים יחולו מיד על השבצ״ק.
-            </Hint>
-          </Section>
-        )}
+          {canEdit && (
+            <div className="mt-5 pt-5 border-t border-mil-border flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <Hint className="font-semibold tracking-wide uppercase text-mil-muted">עריכה מבצעית</Hint>
+                <Muted className="text-tiny mt-1">שינויים יחולו מיד על השבצ״ק.</Muted>
+              </div>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => navigate(`/missions/new?missionId=${mission.id}`)}
+              >
+                ערוך משימה
+              </Button>
+            </div>
+          )}
+        </section>
 
         {/* CC-only status toggle — pause/activate/archive */}
         {isCC && (
@@ -195,8 +202,7 @@ export default function MissionDetailPage() {
           </Section>
         )}
 
-        {/* Current rotation owner — shows today's responsible platoon
-            for rotating missions; static for fixed-platoon. */}
+        {/* Current rotation owner — shows today's responsible platoon */}
         {mission.status === 'active' && weekSlots.length > 0 && (() => {
           const todayIso = new Date().toISOString().slice(0, 10);
           const todaySlots = weekSlots.filter((s) => s.start.slice(0, 10) === todayIso);
@@ -206,10 +212,10 @@ export default function MissionDetailPage() {
           if (owners.length === 0) return null;
           return (
             <Section label="אחריות היום">
-              <div className="bg-mil-card border border-mil-border rounded-2xl px-5 py-3.5 flex items-baseline gap-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0 self-center" aria-hidden />
+              <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card px-5 py-4 flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-mil-success flex-shrink-0 ring-4 ring-mil-card" aria-hidden />
                 <Body className="font-semibold">{owners.join(' · ')}</Body>
-                <Hint className="mr-auto">{todaySlots.length} משמרות</Hint>
+                <Hint className="mr-auto tabular-nums font-semibold text-mil-text">{todaySlots.length} משמרות</Hint>
               </div>
             </Section>
           );
@@ -217,8 +223,8 @@ export default function MissionDetailPage() {
 
         {/* Structured summary (operational prose) */}
         <Section label="הגדרה מבצעית">
-          <div className="bg-mil-card border border-mil-border rounded-2xl px-5 py-4 space-y-2">
-            {summaryLines.slice(1).map((line, i) => (        /* slice(1) drops the identity line */
+          <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card px-5 py-5 space-y-2.5">
+            {summaryLines.slice(1).map((line, i) => (
               <Body key={i} className="leading-relaxed">{line}</Body>
             ))}
           </div>
@@ -417,10 +423,10 @@ function StatusToggleBtn({ active, onClick, children }: { active: boolean; onCli
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-sm font-bold transition-colors ${
+      className={`px-3.5 py-1.5 rounded-full text-tiny font-semibold border transition-all duration-200 ease-out-soft ${
         active
-          ? 'bg-mil-olive text-white'
-          : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+          ? 'bg-mil-olive text-white border-mil-olive shadow-card'
+          : 'bg-mil-card text-mil-muted border-mil-border hover:text-mil-text hover:border-mil-border-strong'
       }`}
     >
       {children}
@@ -432,8 +438,10 @@ function ScopeBtn({ active, onClick, children }: { active: boolean; onClick: () 
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${
-        active ? 'bg-mil-text text-mil-card' : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+      className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold border transition-all duration-200 ease-out-soft ${
+        active
+          ? 'bg-mil-olive-bg text-mil-olive border-mil-olive/30'
+          : 'bg-mil-card text-mil-muted border-mil-border hover:text-mil-text hover:border-mil-border-strong'
       }`}
     >
       {children}

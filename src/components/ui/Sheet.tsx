@@ -1,19 +1,9 @@
 // Sheet — the canonical modal/dialog surface.
 //
-// Reused by every page that opens a modal (new order, leave request,
-// delegation grant, equipment defect, etc.). One primitive, one
-// visual language: glass backdrop, dark sheet with a subtle sticky
-// header, soft pop shadow. No coloured header strips — the calm
-// dark surface IS the language.
-//
-// Behaviour:
-//   • Mobile: sheet slides from bottom (`items-end`).
-//   • Desktop (sm+): centred dialog (`sm:items-center`).
-//   • Click on backdrop closes (via the dedicated close button only
-//     when an explicit handler is passed; the surface intentionally
-//     does not steal taps from the children).
-//   • Title is sticky inside the sheet so it stays in view while the
-//     body scrolls.
+// Premium light language: a soft frosted backdrop, a clean white sheet
+// with a strong long-cast shadow, and a sticky header that reads as part
+// of the surface (not a coloured strip). On mobile the sheet slides up
+// from the bottom; on tablet+ it centres as a dialog.
 
 import type { ReactNode } from 'react';
 
@@ -21,12 +11,9 @@ interface SheetProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  /** Optional subtitle under the title. */
   subtitle?: string;
-  /** Optional inline action on the right of the header (e.g. "ערוך"). */
   headerAction?: ReactNode;
   children: ReactNode;
-  /** Tighter max-width when the content is intentionally narrow. */
   size?: 'md' | 'lg';
 }
 
@@ -37,13 +24,12 @@ export function Sheet({
   const maxW = size === 'lg' ? 'max-w-2xl' : 'max-w-md';
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-mil-bg/70 backdrop-blur-glass animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-mil-text/20 backdrop-blur-glass-strong animate-fade-in"
       role="dialog"
       aria-modal="true"
       aria-label={title}
       dir="rtl"
     >
-      {/* Backdrop catcher */}
       <button
         onClick={onClose}
         className="absolute inset-0 cursor-default"
@@ -52,12 +38,12 @@ export function Sheet({
       />
 
       <div
-        className={`relative w-full ${maxW} bg-mil-card border border-mil-border-strong rounded-t-2xl sm:rounded-2xl shadow-pop max-h-[90vh] flex flex-col sm:mx-4 overflow-hidden`}
+        className={`relative w-full ${maxW} bg-mil-card border border-mil-border rounded-t-2xl-soft sm:rounded-2xl-soft shadow-pop max-h-[92vh] flex flex-col sm:mx-4 overflow-hidden animate-sheet-in`}
       >
-        {/* Sticky sheet header — calm, not coloured. */}
-        <header className="sticky top-0 z-10 bg-mil-card/95 backdrop-blur-glass border-b border-mil-border px-5 py-3.5 flex items-center gap-3">
+        {/* Sticky sheet header — refined, not a coloured strip */}
+        <header className="sticky top-0 z-10 bg-mil-card/95 backdrop-blur-glass border-b border-mil-border px-5 py-4 flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-bold text-mil-text leading-tight truncate">
+            <h2 className="text-base font-bold text-mil-text leading-tight truncate tracking-tightish">
               {title}
             </h2>
             {subtitle && (
@@ -69,14 +55,15 @@ export function Sheet({
           {headerAction}
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-mil-muted hover:text-mil-text hover:bg-mil-card-hover transition-colors duration-200 ease-out-soft"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-mil-muted hover:text-mil-text hover:bg-mil-bg-alt transition-colors duration-200 ease-out-soft"
             aria-label="סגור חלונית"
           >
-            ✕
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 3 L11 11 M11 3 L3 11" />
+            </svg>
           </button>
         </header>
 
-        {/* Scrollable body */}
         <div className="overflow-y-auto flex-1">
           {children}
         </div>

@@ -13,7 +13,7 @@ import type {
   EquipmentGapKind,
 } from '../types';
 import {
-  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Button, Sheet,
+  Eyebrow, Section, PageMain, Body, Muted, Hint, Button, Sheet,
 } from '../components/ui';
 
 export default function EquipmentPage() {
@@ -76,14 +76,18 @@ export default function EquipmentPage() {
       <Header title="ציוד אישי" />
       <PageMain>
 
-        <header>
+        <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
           <Eyebrow>{currentUser.name}</Eyebrow>
-          <PageTitle className="mt-1">ציוד חתום</PageTitle>
-          <Muted className="mt-1.5 tabular-nums">{totalActive} פריטים פעילים</Muted>
-        </header>
+          <h1 className="text-hero font-extrabold text-mil-text tracking-tightish mt-1.5">ציוד חתום</h1>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tabular-nums text-mil-text tracking-tightish">{totalActive}</span>
+            <Muted className="text-sm">פריטים פעילים</Muted>
+          </div>
+        </section>
 
         {reportSaved && (
-          <div className="bg-mil-success-bg border border-mil-success/40 rounded-xl px-4 py-3">
+          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
+            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
             <Body className="text-mil-success font-semibold">הדיווח נשלח לסמל המחלקה</Body>
           </div>
         )}
@@ -91,15 +95,15 @@ export default function EquipmentPage() {
         {/* Gaps reported by this soldier */}
         {myGaps.length > 0 && (
           <Section label="דיווחים פתוחים">
-            <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+            <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card divide-y divide-mil-border overflow-hidden">
               {myGaps.map((g) => (
-                <div key={g.id} className="px-5 py-3">
+                <div key={g.id} className="px-5 py-3.5">
                   <div className="flex items-baseline gap-2">
                     <Body className="font-semibold flex-1 truncate">{g.itemName}</Body>
-                    <Hint className="text-mil-muted">{GAP_KIND_LABEL[g.kind]}</Hint>
-                    <Hint className="text-mil-olive-dim font-bold">{GAP_STATUS_LABEL[g.status]}</Hint>
+                    <span className="text-xxs font-semibold text-mil-muted">{GAP_KIND_LABEL[g.kind]}</span>
+                    <span className="text-xxs font-semibold text-mil-olive bg-mil-olive-bg border border-mil-olive/20 rounded-md px-1.5 py-0.5">{GAP_STATUS_LABEL[g.status]}</span>
                   </div>
-                  {g.description && <Muted className="mt-1 text-tiny">{g.description}</Muted>}
+                  {g.description && <Muted className="mt-1.5 text-tiny">{g.description}</Muted>}
                 </div>
               ))}
             </div>
@@ -107,8 +111,8 @@ export default function EquipmentPage() {
         )}
 
         {myEquipment.length === 0 ? (
-          <div className="py-10 text-center">
-            <p className="text-sm font-bold text-mil-olive-dim">אין ציוד חתום</p>
+          <div className="bg-mil-card border border-mil-border rounded-xl-soft py-10 text-center">
+            <p className="text-sm font-semibold text-mil-text">אין ציוד חתום</p>
             <p className="text-tiny text-mil-muted mt-1">לא נחתם עליך ציוד עדיין</p>
           </div>
         ) : (
@@ -118,7 +122,7 @@ export default function EquipmentPage() {
               if (items.length === 0) return null;
               return (
                 <Section key={cat} label={CATEGORY_LABEL[cat]}>
-                  <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+                  <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card divide-y divide-mil-border overflow-hidden">
                     {items.map((e) => (
                       <EquipmentRow
                         key={e.id}
@@ -158,9 +162,9 @@ export default function EquipmentPage() {
 
 function EquipmentRow({ item, onReport }: { item: SignedEquipment; onReport: () => void }) {
   const dot =
-    item.status === 'active'    ? 'bg-mil-olive' :
-    item.status === 'in-repair' ? 'bg-mil-warn'  :
-    item.status === 'lost'      ? 'bg-mil-alert' :
+    item.status === 'active'    ? 'bg-mil-success' :
+    item.status === 'in-repair' ? 'bg-mil-warn'    :
+    item.status === 'lost'      ? 'bg-mil-alert'   :
     'bg-mil-ghost';
   const dateLabel = (() => {
     const d = new Date(item.signedAt);

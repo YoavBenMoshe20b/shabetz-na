@@ -15,7 +15,7 @@ import { useApp, useMyCompany } from '../context/AppContext';
 import { isCompanyLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import {
-  Section, PageMain, Body, Muted, Hint,
+  Section, PageMain, Body, Muted, Hint, Segment,
 } from '../components/ui';
 import {
   buildWeekPicture, computePreviewNotes, buildDayRows,
@@ -84,37 +84,38 @@ export default function CoveragePage() {
       <Header title="יציאות וכיסוי" />
       <PageMain>
 
-        {/* ── Shared hero — today's 5-second readout, relevant in both tabs ─ */}
-        <header>
-          <div className="text-tiny text-mil-muted">{myCompany?.name ?? '—'}</div>
-          <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
-            <span className="text-[44px] leading-[0.9] font-extrabold tabular-nums text-mil-text tracking-tight">
+        {/* ── Hero card — coverage readout ─────────────────────────────── */}
+        <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
+          <div className="text-tiny text-mil-muted font-medium">{myCompany?.name ?? '—'}</div>
+          <div className="mt-3 flex items-end gap-2.5 flex-wrap">
+            <span className="text-[56px] leading-[0.9] font-extrabold tabular-nums text-mil-text tracking-tightish">
               {todayPicture.onBase.length}
             </span>
-            <span className="text-mil-ghost text-lg tabular-nums">
-              / {todayPicture.totalSoldiers}
-            </span>
-            <span className="text-sm font-semibold text-mil-text mr-1">בבסיס היום</span>
-            <div className="mr-auto flex items-baseline gap-3">
-              {todayPicture.atHome.length > 0 && (
-                <span className="text-tiny text-mil-muted">
-                  <span className="tabular-nums font-bold text-mil-text">{todayPicture.atHome.length}</span> בבית
-                </span>
-              )}
-              {todayPicture.excluded.length > 0 && (
-                <span className="text-tiny text-mil-muted">
-                  <span className="tabular-nums font-bold text-mil-text">{todayPicture.excluded.length}</span> מחוץ לספירה
-                </span>
-              )}
+            <div className="pb-1.5">
+              <Body className="font-semibold leading-tight">בבסיס היום</Body>
+              <Hint className="text-tiny mt-0.5">
+                <span className="tabular-nums font-semibold text-mil-text">{todayPicture.totalSoldiers}</span> סה״כ
+              </Hint>
             </div>
           </div>
-        </header>
 
-        {/* ── Tab toggle — week is the new planning view; today is L2 ─────── */}
-        <div className="flex gap-1.5">
-          <TabButton active={tab === 'week'}  onClick={() => setTab('week')}>השבוע</TabButton>
-          <TabButton active={tab === 'today'} onClick={() => setTab('today')}>היום</TabButton>
-        </div>
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <CovKpi label="בבסיס"        value={todayPicture.onBase.length}   tone="success" />
+            <CovKpi label="בבית"          value={todayPicture.atHome.length}   tone="sand"   muted={todayPicture.atHome.length === 0} />
+            <CovKpi label="מחוץ לספירה" value={todayPicture.excluded.length} tone="rest"   muted={todayPicture.excluded.length === 0} />
+          </div>
+        </section>
+
+        {/* ── Tab toggle ────────────────────────────────────────────────── */}
+        <Segment
+          value={tab}
+          onChange={setTab}
+          fullWidth
+          options={[
+            { value: 'week',  label: 'השבוע' },
+            { value: 'today', label: 'היום' },
+          ]}
+        />
 
         {/* ── WEEK — single combined timeline (one block per day) ─────────── */}
         {tab === 'week' && (
@@ -170,22 +171,29 @@ export default function CoveragePage() {
 
 // ─── Tab toggle ───────────────────────────────────────────────────────────
 
-function TabButton({
-  active, onClick, children,
+// ─── KPI tile for the hero ─────────────────────────────────────────────────
+
+function CovKpi({
+  label, value, tone, muted = false,
 }: {
-  active: boolean; onClick: () => void; children: React.ReactNode;
+  label: string;
+  value: number;
+  tone: 'success' | 'sand' | 'rest';
+  muted?: boolean;
 }) {
+  const toneClass =
+    tone === 'success' ? 'text-mil-success' :
+    tone === 'sand'    ? 'text-mil-sand'    :
+    'text-mil-rest';
   return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-out-soft ${
-        active
-          ? 'bg-mil-olive-bg text-mil-olive-light border border-mil-olive/40'
-          : 'bg-mil-bg-alt border border-mil-border text-mil-muted hover:border-mil-border-strong hover:text-mil-text'
-      }`}
-    >
-      {children}
-    </button>
+    <div className="bg-mil-bg-alt/70 border border-mil-border/70 rounded-xl-soft px-3.5 py-3">
+      <div className="flex items-baseline">
+        <span className={`text-2xl font-bold tabular-nums tracking-tightish ${muted ? 'text-mil-ghost' : toneClass}`}>
+          {value}
+        </span>
+      </div>
+      <Hint className="text-tiny font-medium text-mil-muted mt-0.5">{label}</Hint>
+    </div>
   );
 }
 
@@ -198,10 +206,10 @@ function DayRowView({ row }: { row: DayRow }) {
   const dayName  = HE_DAY_LONG[row.date.getDay()];
   const dateLine = `${row.date.getDate()} ב${HE_MONTHS[row.date.getMonth()]}`;
   return (
-    <section className={row.isToday ? 'border-r-2 border-mil-olive-light pr-3' : ''}>
-      <div className="flex items-baseline gap-2 mb-2.5">
+    <section className={row.isToday ? 'border-r-2 border-mil-olive pr-4 -mr-1' : ''}>
+      <div className="flex items-baseline gap-2 mb-3">
         {row.isToday && (
-          <span className="text-xxs font-bold text-mil-olive-light bg-mil-olive-bg px-1.5 py-0.5 rounded-md border border-mil-olive/40">היום</span>
+          <span className="text-xxs font-bold text-white bg-mil-olive px-2 py-0.5 rounded-md shadow-card">היום</span>
         )}
         <Body className="font-semibold">{dayName}</Body>
         <Muted className="text-tiny">· {dateLine}</Muted>

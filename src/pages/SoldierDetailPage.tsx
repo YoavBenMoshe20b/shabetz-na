@@ -143,28 +143,41 @@ export default function SoldierDetailPage() {
       <Header title="חייל" />
       <PageMain>
 
-        {/* Identity hero */}
-        <header>
-          <button onClick={() => navigate(-1)} className="text-tiny font-bold text-mil-muted hover:text-mil-text">
-            → חזרה
+        {/* Identity hero — premium personal card */}
+        <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="text-tiny font-semibold text-mil-muted hover:text-mil-text inline-flex items-center gap-1.5 transition-colors"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            חזרה
           </button>
-          <PageTitle className="mt-2">{target.name}</PageTitle>
-          <Muted className="mt-1.5">
-            {myPlatoon?.name ?? '—'}
-            {mySquad && ` · ${mySquad.name}`}
-            {age != null && ` · גיל ${age}`}
-          </Muted>
+          <div className="mt-3 flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-mil-olive-bg text-mil-olive flex items-center justify-center text-xl font-bold flex-shrink-0">
+              {target.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-mil-text tracking-tightish leading-tight">{target.name}</h1>
+              <Muted className="mt-1.5">
+                {myPlatoon?.name ?? '—'}
+                {mySquad && ` · ${mySquad.name}`}
+                {age != null && ` · גיל ${age}`}
+              </Muted>
+            </div>
+          </div>
           {scope === 'rasap' && (
-            <Hint className="mt-2 text-mil-warn font-semibold">
-              תצוגה לוגיסטית — ציוד ומידות בלבד
-            </Hint>
+            <div className="mt-4 bg-mil-warn-bg border border-mil-warn-border rounded-xl-soft px-3.5 py-2">
+              <p className="text-tiny text-mil-warn font-semibold">תצוגה לוגיסטית — ציוד ומידות בלבד</p>
+            </div>
           )}
           {scope === 'public' && (
-            <Hint className="mt-2 text-mil-warn font-semibold">
-              גישה מוגבלת
-            </Hint>
+            <div className="mt-4 bg-mil-warn-bg border border-mil-warn-border rounded-xl-soft px-3.5 py-2">
+              <p className="text-tiny text-mil-warn font-semibold">גישה מוגבלת</p>
+            </div>
           )}
-        </header>
+        </section>
 
         {/* Operational status */}
         {can('operational-status') && (

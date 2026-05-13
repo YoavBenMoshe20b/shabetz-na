@@ -1,17 +1,15 @@
-// Section primitive — a labelled vertical grouping. Used everywhere
-// the operational surfaces read "label · content" (עכשיו · השעות הקרובות
-// · פעילות מחלקות אחרונה · הגדרות פלוגה).
+// Section primitive — a labelled vertical grouping.
 //
-// Visual language: section labels are micro-eyebrows — short, quiet,
-// confident. They earn attention by tone, not size. The optional action
-// on the right uses the `quiet` button vocabulary so it never competes
-// with the section's content.
+// Labels are quiet eyebrows above their content — small, semi-bold,
+// muted, with light tracking. They earn attention by tone, not size.
+// The optional action on the right uses an indigo accent so it reads
+// as "clickable" without competing with the section content.
 
 import type { ReactNode } from 'react';
 
 interface SectionProps {
   label?: string;
-  action?: ReactNode;            // optional inline action on the right of the label
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
 }
@@ -20,12 +18,12 @@ export function Section({ label, action, children, className = '' }: SectionProp
   return (
     <section className={className}>
       {label && (
-        <div className="flex items-baseline justify-between mb-3 px-1">
-          <p className="text-tiny font-semibold text-mil-muted tracking-wide">
+        <div className="flex items-baseline justify-between mb-3 px-0.5">
+          <p className="text-tiny font-semibold text-mil-muted tracking-wide uppercase">
             {label}
           </p>
           {action && (
-            <div className="text-tiny font-semibold text-mil-olive-light">
+            <div className="text-tiny font-semibold text-mil-olive">
               {action}
             </div>
           )}
@@ -36,20 +34,17 @@ export function Section({ label, action, children, className = '' }: SectionProp
   );
 }
 
-// Page-level main container. Centralised mobile-first padding +
-// bottom-nav-clearing space + spacing rhythm between sections.
-// 28 px between sections gives the eye a clear "new topic" beat.
+// Page-level main container. 32 px between sections gives operational
+// breathing room — the deliberate "new topic" beat the user feels.
 export function PageMain({ children }: { children: ReactNode }) {
   return (
-    <main className="px-5 py-5 pb-32 max-w-xl mx-auto space-y-7">
+    <main className="px-5 py-6 pb-32 max-w-xl mx-auto space-y-8">
       {children}
     </main>
   );
 }
 
 // Collapsible section — header always visible, body toggles.
-// Used for low-priority detail that shouldn't push primary content
-// off the fold (per-platoon equipment breakdowns, advanced settings).
 interface CollapsibleProps {
   label: string;
   open: boolean;
@@ -63,11 +58,11 @@ export function CollapsibleSection({ label, open, onToggle, count, children }: C
     <section>
       <button
         onClick={onToggle}
-        className="w-full bg-mil-card border border-mil-border rounded-xl-soft px-4 py-3.5 flex items-center gap-2 hover:bg-mil-card-hover hover:border-mil-border-strong transition-all duration-200 ease-out-soft"
+        className="w-full bg-mil-card border border-mil-border rounded-xl-soft px-4 py-3.5 flex items-center gap-2 hover:border-mil-border-strong hover:bg-mil-card-hover shadow-card transition-all duration-200 ease-out-soft"
       >
-        <span className="text-sm font-bold text-mil-text">{label}</span>
+        <span className="text-sm font-semibold text-mil-text">{label}</span>
         {count != null && (
-          <span className="text-tiny font-semibold text-mil-muted bg-mil-bg-alt border border-mil-border/60 rounded-md px-1.5 py-0.5 tabular-nums">
+          <span className="text-tiny font-semibold text-mil-muted bg-mil-bg-alt border border-mil-border/70 rounded-md px-1.5 py-0.5 tabular-nums">
             {count}
           </span>
         )}

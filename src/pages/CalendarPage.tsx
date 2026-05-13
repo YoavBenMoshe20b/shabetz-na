@@ -21,7 +21,7 @@ import { buildDayEntries, type CalendarViewer, type CalendarSources } from '../u
 import { materializeWeek } from '../utils/materialize';
 import type { CalendarEntry, CalendarEntryKind } from '../types';
 import {
-  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Segment,
 } from '../components/ui';
 
 type Tab = 'day' | 'week' | 'month';
@@ -65,12 +65,17 @@ export default function CalendarPage() {
       <Header title="לוח" />
       <PageMain>
 
-        {/* ── Tabs ───────────────────────────────────────────────── */}
-        <div className="flex gap-1.5">
-          <TabBtn active={tab === 'day'}   onClick={() => setTab('day')}>יום</TabBtn>
-          <TabBtn active={tab === 'week'}  onClick={() => setTab('week')}>שבוע</TabBtn>
-          <TabBtn active={tab === 'month'} onClick={() => setTab('month')}>חודש</TabBtn>
-        </div>
+        {/* ── Tabs — segmented control ────────────────────────────── */}
+        <Segment
+          value={tab}
+          onChange={setTab}
+          fullWidth
+          options={[
+            { value: 'day',   label: 'יום' },
+            { value: 'week',  label: 'שבוע' },
+            { value: 'month', label: 'חודש' },
+          ]}
+        />
 
         {tab === 'day'   && <DayView day={viewedDay} viewer={viewer} sources={sources} today={today} />}
         {tab === 'week'  && <WeekView startDay={weekStart(viewedDay)} viewer={viewer} sources={sources} today={today} onPick={pickDay} />}
@@ -78,23 +83,6 @@ export default function CalendarPage() {
 
       </PageMain>
     </div>
-  );
-}
-
-// ─── Tab button ───────────────────────────────────────────────────────────
-
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-out-soft ${
-        active
-          ? 'bg-mil-olive-bg text-mil-olive-light border border-mil-olive/40'
-          : 'bg-mil-bg-alt border border-mil-border text-mil-muted hover:border-mil-border-strong hover:text-mil-text'
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -182,14 +170,14 @@ function DayBlock({
   const hasNothing = entries.length === 0;
 
   return (
-    <section className={isToday ? 'border-r-2 border-mil-olive-light pr-3' : ''}>
-      <button onClick={onOpen} className="w-full text-right flex items-baseline gap-2 mb-2.5 group">
+    <section className={isToday ? 'border-r-2 border-mil-olive pr-4 -mr-1' : ''}>
+      <button onClick={onOpen} className="w-full text-right flex items-baseline gap-2 mb-3 group">
         {isToday && (
-          <span className="text-xxs font-bold text-mil-olive-light bg-mil-olive-bg px-1.5 py-0.5 rounded-md border border-mil-olive/40">היום</span>
+          <span className="text-xxs font-bold text-white bg-mil-olive px-2 py-0.5 rounded-md shadow-card">היום</span>
         )}
         <Body className="font-semibold">{HE_DAYS[day.getDay()]}</Body>
         <Muted className="text-tiny">· {day.getDate()} ב{HE_MONTHS[day.getMonth()]}</Muted>
-        <Hint className="mr-auto text-mil-ghost group-hover:text-mil-muted transition-colors">פתח →</Hint>
+        <Hint className="mr-auto text-mil-ghost group-hover:text-mil-muted transition-colors">פתח ←</Hint>
       </button>
 
       {hasNothing ? (
@@ -209,9 +197,9 @@ function CompactRow({ entry }: { entry: CalendarEntry }) {
   const dot = ACCENT[entry.kind];
   const time = !entry.allDay ? `${formatTime(new Date(entry.start))}` : KIND_LABEL[entry.kind];
   return (
-    <div className="flex items-baseline gap-2.5">
+    <div className="flex items-baseline gap-2.5 py-1">
       <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0 self-center`} aria-hidden />
-      <span className="text-tiny font-mono tabular-nums text-mil-text font-semibold w-12 flex-shrink-0">
+      <span className="text-tiny tabular-nums text-mil-text font-bold w-12 flex-shrink-0">
         {time}
       </span>
       <span className="text-sm text-mil-text truncate">{entry.title}</span>
@@ -258,46 +246,55 @@ function MonthView({
         <PageTitle className="mt-1">{monthLabel}</PageTitle>
       </header>
 
-      <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden shadow-card">
+      <div className="bg-mil-card border border-mil-border rounded-2xl-soft overflow-hidden shadow-card">
         {/* Header row with day-of-week labels */}
-        <div className="grid grid-cols-7 bg-mil-bg-alt/60 border-b border-mil-border">
+        <div className="grid grid-cols-7 bg-mil-bg-alt/70 border-b border-mil-border">
           {HE_DAYS_SHORT.map((d) => (
-            <div key={d} className="px-1 py-2.5 text-center">
-              <span className="text-xxs font-semibold text-mil-muted tracking-wide">{d}</span>
+            <div key={d} className="px-1 py-3 text-center">
+              <span className="text-xxs font-bold text-mil-ghost tracking-wider uppercase">{d}</span>
             </div>
           ))}
         </div>
 
         {/* 6 weeks */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-mil-border/60">
+        <div className="grid grid-cols-7 divide-x divide-y divide-mil-border">
           {cells.map((d) => {
             const inMonth   = d.getMonth() === anchor.getMonth();
             const isToday   = d.getTime() === today.getTime();
             const info      = dayInfo.get(isoDate(d));
             const stateBg =
-              !inMonth                 ? 'bg-transparent' :
-              info?.state === 'home'   ? 'bg-mil-sand-bg/50' :
-              info?.state === 'mixed'  ? 'bg-mil-olive-bg/40' :
+              !inMonth                 ? 'bg-mil-bg-alt/40' :
+              info?.state === 'home'   ? 'bg-mil-sand-bg/60' :
+              info?.state === 'mixed'  ? 'bg-mil-olive-bg/45' :
               'bg-transparent';
+            const dotTone =
+              info?.state === 'home'  ? 'bg-mil-sand' :
+              info?.state === 'mixed' ? 'bg-mil-olive' :
+              'bg-mil-olive';
             return (
               <button
                 key={d.toISOString()}
                 onClick={() => onPick(d)}
-                className={`min-h-[60px] px-2 py-2 text-right transition-colors duration-200 ease-out-soft hover:bg-mil-card-hover ${stateBg} ${isToday ? 'ring-1 ring-inset ring-mil-olive/50' : ''}`}
+                className={`relative min-h-[68px] px-2 py-2.5 text-right transition-colors duration-200 ease-out-soft hover:bg-mil-card-hover ${stateBg}`}
               >
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-sm tabular-nums font-semibold ${
-                    !inMonth ? 'text-mil-ghost' :
-                    isToday  ? 'text-mil-olive-light font-extrabold' :
-                    'text-mil-text'
-                  }`}>
-                    {d.getDate()}
-                  </span>
+                <div className="flex items-baseline gap-1 justify-end">
+                  {isToday ? (
+                    <span className="w-7 h-7 rounded-full bg-mil-olive text-white text-sm tabular-nums font-bold flex items-center justify-center -mt-0.5 shadow-card">
+                      {d.getDate()}
+                    </span>
+                  ) : (
+                    <span className={`text-sm tabular-nums font-semibold ${
+                      !inMonth ? 'text-mil-ghost' :
+                      'text-mil-text'
+                    }`}>
+                      {d.getDate()}
+                    </span>
+                  )}
                 </div>
                 {info && info.eventCount > 0 && inMonth && (
-                  <div className="mt-1.5 flex items-center gap-0.5">
+                  <div className="mt-1.5 flex items-center gap-0.5 justify-end">
                     {[...Array(Math.min(3, info.eventCount))].map((_, i) => (
-                      <span key={i} className="w-1 h-1 rounded-full bg-mil-olive-light" aria-hidden />
+                      <span key={i} className={`w-1 h-1 rounded-full ${dotTone}`} aria-hidden />
                     ))}
                     {info.eventCount > 3 && <span className="text-[8px] text-mil-muted mr-0.5">+</span>}
                   </div>
@@ -324,33 +321,38 @@ function AgendaRow({ entry }: { entry: CalendarEntry }) {
   const clickable = !!entry.missionId;
 
   const inner = (
-    <>
-      <div className={`w-1 ${accent} flex-shrink-0`} aria-hidden />
-      <div className="flex-1 px-4 py-3">
-        <div className="flex items-baseline gap-2">
-          <span className="text-tiny font-mono tabular-nums text-mil-text font-semibold">
-            {formatTime(start)}–{formatTime(end)}
-          </span>
-          <span className="text-tiny text-mil-ghost">{label}</span>
-        </div>
-        <Body className="font-semibold mt-1">{entry.title}</Body>
-        {entry.detail && <Muted className="mt-0.5">{entry.detail}</Muted>}
+    <div className="flex w-full">
+      {/* Time column — left edge of the timeline */}
+      <div className="w-16 flex-shrink-0 px-3 py-3 bg-mil-bg-alt/50 border-l border-mil-border flex flex-col items-center justify-center">
+        <span className="text-sm font-bold tabular-nums text-mil-text leading-none">{formatTime(start)}</span>
+        <span className="text-xxs tabular-nums text-mil-muted mt-1">{formatTime(end)}</span>
       </div>
-    </>
+      <div className="flex-1 px-4 py-3 flex items-start gap-2.5 min-w-0">
+        <span className={`w-1 h-full self-stretch rounded-full ${accent} flex-shrink-0`} aria-hidden />
+        <div className="flex-1 min-w-0">
+          <span className="text-xxs font-semibold tracking-wide uppercase text-mil-muted">{label}</span>
+          <Body className="font-semibold mt-0.5 leading-tight">{entry.title}</Body>
+          {entry.detail && <Muted className="mt-1">{entry.detail}</Muted>}
+        </div>
+        {clickable && (
+          <span className="text-mil-ghost text-tiny mt-0.5">←</span>
+        )}
+      </div>
+    </div>
   );
 
   if (clickable) {
     return (
       <button
         onClick={() => navigate(`/mission/${entry.missionId}`)}
-        className="w-full text-right bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden hover:border-mil-olive/50 transition-colors"
+        className="w-full text-right bg-mil-card border border-mil-border rounded-xl-soft shadow-card flex overflow-hidden hover:border-mil-border-strong hover:shadow-card-hover transition-all duration-200 ease-out-soft"
       >
         {inner}
       </button>
     );
   }
   return (
-    <div className="bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden">
+    <div className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card flex overflow-hidden">
       {inner}
     </div>
   );

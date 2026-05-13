@@ -1,15 +1,11 @@
 // Active command delegation banner.
 //
 // When the current user is the TARGET of an active CommandDelegation
-// (i.e. someone has handed them temporary acting command), show a quiet
-// banner explaining the scope + remaining time. Tapping opens the
-// /delegations page where they can see the full record + acknowledge.
+// (someone has handed them temporary acting command), show a quiet
+// banner explaining scope + remaining time. Tapping opens /delegations.
 //
 // When the current user is the SOURCE of a delegation they haven't
-// revoked, the banner appears in a paler tone — operational reminder
-// that someone else is acting in their place.
-//
-// Banner is intentionally one short line — operational not promotional.
+// revoked, the banner appears in a quieter tone — operational reminder.
 
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -22,9 +18,6 @@ export default function DelegationBanner() {
   const active = activeCommandDelegations();
   if (active.length === 0) return null;
 
-  // Pick the most-relevant single delegation:
-  //   1. Where viewer is the acting commander (incoming authority)
-  //   2. Where viewer granted it (outgoing acknowledgement)
   const asActor = active.find((d) => d.toUserId === currentUser.id);
   const asGrantor = active.find((d) => d.fromUserId === currentUser.id);
   const relevant = asActor ?? asGrantor;
@@ -39,16 +32,16 @@ export default function DelegationBanner() {
       onClick={() => navigate('/delegations')}
       className={`w-full text-right px-5 py-2.5 border-b transition-all duration-200 ease-out-soft ${
         isActor
-          ? 'bg-mil-olive-bg/70 border-mil-olive/30 hover:bg-mil-olive-bg'
-          : 'bg-mil-card border-mil-border/60 hover:bg-mil-card-hover'
+          ? 'bg-mil-olive-bg/80 border-mil-olive/20 hover:bg-mil-olive-bg'
+          : 'bg-mil-card border-mil-border hover:bg-mil-card-hover'
       }`}
       dir="rtl"
     >
       <div className="flex items-baseline gap-2.5 max-w-xl mx-auto">
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 self-center ${
-          isActor ? 'bg-mil-olive-light' : 'bg-mil-muted'
+          isActor ? 'bg-mil-olive' : 'bg-mil-muted'
         }`} aria-hidden />
-        <span className={`text-tiny font-semibold ${isActor ? 'text-mil-olive-light' : 'text-mil-muted'}`}>
+        <span className={`text-tiny font-semibold ${isActor ? 'text-mil-olive' : 'text-mil-muted'}`}>
           {isActor
             ? `אתה משמש כממלא מקום של ${relevant.fromUserName}`
             : `${relevant.toUserName} משמש כממלא מקום עבורך`}

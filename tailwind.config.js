@@ -1,155 +1,177 @@
 /** @type {import('tailwindcss').Config} */
 //
-// ─── Design system: premium operational dark ────────────────────────────────
+// ─── Design system: premium operational light ──────────────────────────────
 //
-// Reference points: Linear, modern airline ops, calm SaaS. Not military,
-// not gaming, not ERP. The substrate is a deep slate with a confident
-// indigo accent used sparingly — colour is information, not decoration.
+// Reference points: Linear (light), Stripe Dashboard, Notion, Mantine.
+// Calm warm-neutral substrate with a confident deep-indigo / blurple
+// primary. Operational accents stay in jewel-tone family but on a light
+// canvas: mint/teal for active+base, coral/peach for home/leave, soft
+// blue for readiness, restrained warm-amber for warnings.
 //
-// Token names are kept under the `mil-*` namespace for compatibility with
-// the rest of the codebase (every page consumes `bg-mil-card`, `text-mil-
-// text`, etc.), but the values have been completely re-tuned. There is no
-// longer any "olive" / "sand" — those keys remain as aliases that point
-// into the new accent + neutral scales so existing JSX keeps working
-// while reading as modern.
+// Token names stay under the `mil-*` namespace for compatibility with
+// every consumer (`bg-mil-card`, `text-mil-text`, ...), but values are
+// completely re-tuned. There is no "olive" pigment anywhere — the
+// `mil-olive-*` keys now resolve to the deep-indigo primary, and
+// `mil-sand-*` to the coral/peach secondary, so existing JSX reads as
+// modern with zero rename churn.
 //
 // Surface ladder:
-//   bg          deepest — page substrate
-//   surface     elevated panels behind cards (e.g. sticky headers)
-//   card        the primary content container
-//   card-warm   a one-step-up surface used for emphasis (hero band)
-//   card-hover  interactive hover state
+//   bg          warm off-white substrate
+//   bg-alt      slightly warmer (split panes, secondary surfaces)
+//   card        clean white card (primary container)
+//   card-warm   barely-tinted white (hero / emphasised band)
+//   card-hover  hover interaction state
 //
 // Type ladder:
-//   text   high-contrast (titles, body)
-//   muted  secondary (metadata, labels)
-//   ghost  tertiary (separators, faint hint)
-//
-// Status colours are desaturated jewel tones so they read as signal not
-// noise. Every status has matching {-bg, -border} pairs for soft chips.
+//   text   primary ink (near-black with a hint of blue)
+//   muted  secondary (date / metadata)
+//   ghost  tertiary (separators, very faint hint)
 
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Heebo', 'Inter', 'Segoe UI', 'Arial', 'sans-serif'],
+        sans: ['Inter', 'Heebo', 'Segoe UI', 'Arial', 'sans-serif'],
       },
       fontSize: {
-        'xxs':    ['0.6875rem', { lineHeight: '1rem' }],
-        'tiny':   ['0.75rem',   { lineHeight: '1.1rem' }],
-        'metric': ['2.25rem',   { lineHeight: '2.5rem', letterSpacing: '-0.02em' }],
-        'hero':   ['1.75rem',   { lineHeight: '2rem',   letterSpacing: '-0.015em' }],
-        'display':['2.75rem',   { lineHeight: '2.9rem', letterSpacing: '-0.025em' }],
+        'xxs':     ['0.6875rem', { lineHeight: '1rem' }],
+        'tiny':    ['0.75rem',   { lineHeight: '1.1rem' }],
+        'metric':  ['2.25rem',   { lineHeight: '2.5rem', letterSpacing: '-0.025em' }],
+        'hero':    ['1.875rem',  { lineHeight: '2.125rem', letterSpacing: '-0.02em' }],
+        'display': ['2.75rem',   { lineHeight: '2.9rem',  letterSpacing: '-0.03em' }],
       },
       letterSpacing: {
-        'tightish': '-0.01em',
+        'tightish': '-0.012em',
       },
       borderRadius: {
-        // 14px feels softer than 12 and more modern than 16 for card
-        // chrome. We expose it as `xl-soft` so existing rounded-2xl
-        // usages (16px) continue to look intentional.
         'xl-soft': '14px',
+        '2xl-soft':'18px',
       },
+      // Light-mode shadow ladder. Subtle — premium reads as discipline,
+      // not as drop-shadow heavy. Hero earns one strong long-cast shadow;
+      // everything else stays close to the surface.
       boxShadow: {
-        // Shadows used on dark — very subtle, mostly inner highlights.
-        'card':       '0 1px 0 0 rgba(255,255,255,0.02) inset, 0 1px 2px 0 rgba(0,0,0,0.32)',
-        'card-hover': '0 1px 0 0 rgba(255,255,255,0.03) inset, 0 4px 16px -2px rgba(0,0,0,0.45)',
-        'hero':       '0 1px 0 0 rgba(255,255,255,0.04) inset, 0 12px 32px -8px rgba(0,0,0,0.55), 0 2px 6px -1px rgba(0,0,0,0.35)',
-        'pop':        '0 16px 40px -12px rgba(0,0,0,0.65), 0 4px 10px -2px rgba(0,0,0,0.4)',
-        'glow-accent':'0 0 0 1px rgba(125,140,224,0.35), 0 6px 24px -6px rgba(125,140,224,0.35)',
+        'card':       '0 1px 2px 0 rgba(28, 27, 33, 0.04), 0 1px 1px 0 rgba(28, 27, 33, 0.02)',
+        'card-hover': '0 4px 12px -2px rgba(28, 27, 33, 0.08), 0 2px 4px -1px rgba(28, 27, 33, 0.04)',
+        'hero':       '0 24px 40px -16px rgba(28, 27, 33, 0.12), 0 8px 16px -8px rgba(28, 27, 33, 0.06), 0 1px 2px 0 rgba(28, 27, 33, 0.04)',
+        'pop':        '0 32px 64px -24px rgba(28, 27, 33, 0.25), 0 12px 24px -12px rgba(28, 27, 33, 0.12), 0 4px 8px -2px rgba(28, 27, 33, 0.06)',
+        'inner-line': 'inset 0 0 0 1px rgba(28, 27, 33, 0.04)',
+        'focus':      '0 0 0 4px rgba(91, 95, 207, 0.18)',
+        'sticky':     '0 1px 0 0 rgba(28, 27, 33, 0.06), 0 2px 8px -2px rgba(28, 27, 33, 0.04)',
       },
       backdropBlur: {
-        'glass': '14px',
+        'glass': '12px',
+        'glass-strong': '20px',
       },
       colors: {
-        // ── Semantic neutral scale (raw access) ────────────────────
-        // Available as `bg-slate-deep`, `text-slate-200`, etc., when
-        // a primitive needs to step outside the `mil-*` semantic names.
+        // ── Raw neutral scale (warm-cast) ───────────────────────────
         ink: {
-          950: '#070a14',
-          900: '#0b1020',
-          850: '#10162a',
-          800: '#161d36',
-          700: '#1e2542',
-          600: '#2a3252',
-          500: '#3a4368',
-          400: '#5b6485',
-          300: '#8089a8',
-          200: '#a8b0c8',
-          100: '#d6dae8',
-          50:  '#eef0f8',
+          950: '#1c1b21',
+          900: '#252329',
+          800: '#363339',
+          700: '#4a464d',
+          600: '#605c66',
+          500: '#7d7986',
+          400: '#a09ca8',
+          300: '#c4c0cb',
+          200: '#dad6df',
+          150: '#e8e5dd',
+          100: '#efece5',
+          50:  '#f7f5f0',
+          25:  '#fafaf7',
         },
 
         mil: {
-          // ── Page substrate ───────────────────────────────────
-          bg:             '#070a14',   // deep slate — almost black with blue cast
-          'bg-alt':       '#0b1020',   // a step up for split panes
+          // ── Page substrate (warm off-white, not harsh) ───────────
+          bg:             '#fafaf7',
+          'bg-alt':       '#f4f3ee',
 
-          // ── Header / floating chrome ─────────────────────────
-          surface:        '#0b1020',
-          'surface-hover':'#10162a',
+          // ── Header / floating chrome ─────────────────────────────
+          surface:        '#ffffff',
+          'surface-hover':'#fafaf7',
 
-          // ── Cards ────────────────────────────────────────────
-          card:           '#10162a',   // primary container
-          'card-warm':    '#141b34',   // hero / emphasised band
-          'card-hover':   '#161d36',
+          // ── Cards ────────────────────────────────────────────────
+          card:           '#ffffff',
+          'card-warm':    '#fdfcf9',
+          'card-hover':   '#f7f6f1',
 
-          // ── Borders ──────────────────────────────────────────
-          border:         '#1e2542',
-          'border-strong':'#2a3252',
+          // ── Borders ──────────────────────────────────────────────
+          border:         '#e8e5dd',
+          'border-strong':'#d6d2c5',
 
-          // ── Accent (calm indigo — not military, not gaming) ──
-          // Used sparingly: primary actions, focus rings, active
-          // navigation, the "this is the live thing" signal.
-          olive:          '#7d8ce0',   // primary accent (kept under olive-* keys for compat)
-          'olive-light':  '#a4afea',
-          'olive-dim':    '#5d6dba',
-          'olive-bg':     '#1a2042',   // tinted background for selected/active states
+          // ── Primary accent (deep indigo / blurple) ───────────────
+          // Used for primary actions, focus rings, active navigation.
+          // Linear-style confidence. Sits under the legacy "olive"
+          // keys so existing JSX adopts it automatically.
+          olive:          '#5b5fcf',   // primary
+          'olive-light':  '#7e82e8',
+          'olive-dim':    '#4045a8',
+          'olive-bg':     '#eef0fd',   // very light tint for active
 
-          // ── Secondary accent (warm gold for "approved/sealed") ─
-          // Replaces the old "sand" — used VERY rarely, only for the
-          // single highest-priority sealed/published signal so it
-          // reads against the cool indigo as deliberate emphasis.
-          sand:           '#d4b572',
-          'sand-light':   '#e8ce96',
-          'sand-bg':      '#221c0e',
+          // ── Secondary accent (coral / peach for home & leave) ────
+          // Operationally: "soldier is at home / on leave / off-base".
+          // Warm but restrained — not a vacation orange, more like
+          // late-afternoon-light coral.
+          sand:           '#dc7b58',
+          'sand-light':   '#f0a283',
+          'sand-bg':      '#fbece4',
 
-          // ── Text ─────────────────────────────────────────────
-          text:           '#eef0f8',   // primary — off-white, never pure white
-          'text-inv':     '#070a14',   // for use on light surfaces (rare)
-          muted:          '#8089a8',
-          ghost:          '#5b6485',
+          // ── Text ─────────────────────────────────────────────────
+          text:           '#1c1b21',
+          'text-inv':     '#ffffff',
+          muted:          '#605c66',
+          ghost:          '#8e8a96',
 
-          // ── Status — desaturated jewel tones ──────────────────
-          alert:          '#e07a8c',
-          'alert-bg':     '#2a1a22',
-          'alert-border': '#5a2a38',
+          // ── Status palette ───────────────────────────────────────
+          // Mint/teal — active, in-base, healthy (the GOOD state)
+          success:        '#1a9b6f',
+          'success-bg':   '#e7f6ef',
+          'success-border':'#a6dec5',
 
-          warn:           '#e0b572',
-          'warn-bg':      '#2a2118',
-          'warn-border':  '#5a4528',
+          // Restrained warm amber — warning
+          warn:           '#b67632',
+          'warn-bg':      '#fbf2e6',
+          'warn-border':  '#e6c89b',
 
-          success:        '#6cc59a',
-          'success-bg':   '#152a22',
-          'success-border':'#2a5a45',
+          // Coral red — alert (live operational issue)
+          alert:          '#d44a5f',
+          'alert-bg':     '#fdeaee',
+          'alert-border': '#f1b9c0',
 
-          info:           '#7dc0e0',
-          'info-bg':      '#152332',
-          'info-border':  '#2a4d68',
+          // Soft blue — info / readiness (calm signal, not warning)
+          info:           '#3f7ee8',
+          'info-bg':      '#eaf1fd',
+          'info-border':  '#bdd1f4',
+
+          // Muted purple — rest / recovery (less common state)
+          rest:           '#7c6ad1',
+          'rest-bg':      '#efebfa',
+          'rest-border':  '#c8bdec',
         },
       },
       transitionTimingFunction: {
         'out-soft': 'cubic-bezier(0.22, 1, 0.36, 1)',
+        'in-out-soft': 'cubic-bezier(0.65, 0, 0.35, 1)',
       },
       keyframes: {
         'fade-in': {
-          '0%': { opacity: '0', transform: 'translateY(2px)' },
+          '0%':   { opacity: '0', transform: 'translateY(4px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'sheet-in': {
+          '0%':   { opacity: '0', transform: 'translateY(16px) scale(0.98)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'pulse-soft': {
+          '0%, 100%': { opacity: '1' },
+          '50%':      { opacity: '0.55' },
         },
       },
       animation: {
-        'fade-in': 'fade-in 220ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'fade-in':    'fade-in 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'sheet-in':   'sheet-in 280ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'pulse-soft': 'pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
     },
   },

@@ -1,31 +1,32 @@
-// Typography primitives. Use these instead of raw <h1>/<p> with inline
-// Tailwind. Lets us tune the whole product's reading rhythm in one place.
+// Typography primitives.
+//
+// Premium light language: deep ink for primary text, warm grays for
+// secondary, and a confident -0.02em letter-spacing on display titles
+// so the type lands with weight (Inter + Heebo both tighten beautifully).
+// Hebrew titles never carry `uppercase` (no case) and never
+// `tracking-widest` (spreads letters awkwardly).
 //
 // Hierarchy (top → bottom):
-//   Eyebrow        — small context tag above a PageTitle (company / order)
-//   PageTitle      — once per screen, biggest text on the page
+//   Eyebrow        — quiet context label (date, breadcrumb)
+//   PageTitle      — once per screen, biggest text
 //   HeroTitle      — the one card that's the action target
-//   SectionLabel   — quiet eyebrow above a section group
+//   SectionLabel   — same as Section's internal label
 //   CardTitle      — bold label inside a card row
 //   Body           — primary readable text
-//   Muted          — secondary info (time, dates, counts)
-//   Hint           — tertiary metadata (smallest, lowest contrast)
+//   Muted          — secondary (time, dates, counts)
+//   Hint           — tertiary metadata
 //   Metric         — big tabular numbers
-//
-// Premium dark language: Hebrew titles use slightly negative tracking
-// for confidence (Heebo tightens beautifully); muted/hint stay at default
-// for readability. Confidence comes from weight + tone, not letterspacing.
 
 import type { ReactNode, ElementType } from 'react';
 
 type AsProps = { as?: ElementType };
 
 const cls = {
-  eyebrow:       'text-tiny font-semibold text-mil-muted tracking-wide',
+  eyebrow:       'text-tiny font-semibold text-mil-muted tracking-wide uppercase',
   pageTitle:     'text-hero font-extrabold text-mil-text tracking-tightish',
   heroTitle:     'text-xl font-bold text-mil-text leading-snug tracking-tightish',
-  sectionLabel:  'text-tiny font-semibold text-mil-muted tracking-wide',
-  cardTitle:     'text-base font-bold text-mil-text leading-tight',
+  sectionLabel:  'text-tiny font-semibold text-mil-muted tracking-wide uppercase',
+  cardTitle:     'text-base font-semibold text-mil-text leading-tight',
   body:          'text-sm text-mil-text leading-relaxed',
   muted:         'text-tiny text-mil-muted leading-relaxed',
   hint:          'text-xxs text-mil-ghost',

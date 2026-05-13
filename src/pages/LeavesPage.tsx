@@ -106,14 +106,17 @@ export default function LeavesPage() {
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="יציאות" />
 
-      <main className="px-4 py-4 pb-28 max-w-xl mx-auto space-y-3">
+      <main className="px-5 py-5 pb-32 max-w-xl mx-auto space-y-4">
         {saved && (
-          <div className="bg-mil-success-bg border border-mil-success/40 text-mil-success rounded-xl px-4 py-3 text-sm">✓ היציאה נשמרה</div>
+          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
+            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
+            <p className="text-sm font-semibold text-mil-success">היציאה נשמרה</p>
+          </div>
         )}
 
         {/* Tabs (manager only — soldiers see leaves list inline on profile) */}
         {isManager && (
-          <div className="flex bg-mil-card border border-mil-border rounded-xl overflow-hidden">
+          <div className="flex bg-mil-bg-alt border border-mil-border rounded-xl-soft p-1 gap-1">
             <TabBtn label="יציאות מאושרות" active={tab === 'leaves'}   onClick={() => setTab('leaves')} />
             <TabBtn
               label={`בקשות יציאה${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
@@ -130,7 +133,7 @@ export default function LeavesPage() {
             {isManager && (
               <button
                 onClick={() => setShowForm((v) => !v)}
-                className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-3.5 rounded-xl text-sm transition-colors"
+                className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-semibold py-3 rounded-xl-soft text-sm transition-all duration-200 ease-out-soft shadow-card hover:shadow-card-hover active:scale-[0.985]"
               >
                 {showForm ? '✕ ביטול' : '+ הוסף יציאה'}
               </button>
@@ -138,23 +141,25 @@ export default function LeavesPage() {
 
             {/* Form */}
             {showForm && isManager && (
-              <form onSubmit={handleSave} className="bg-mil-card border border-mil-border rounded-xl overflow-hidden">
-                <div className="bg-mil-surface px-4 py-2.5 border-b border-mil-border">
-                  <p className="text-xs font-bold text-mil-text-inv/70">יציאה חדשה</p>
+              <form onSubmit={handleSave} className="bg-mil-card border border-mil-border rounded-2xl shadow-card overflow-hidden">
+                <div className="px-5 py-3 border-b border-mil-border bg-mil-bg-alt/50">
+                  <p className="text-xxs font-bold tracking-wide uppercase text-mil-muted">יציאה חדשה</p>
                 </div>
-                <div className="px-4 py-4 space-y-4">
+                <div className="px-5 py-5 space-y-4">
 
                   {/* Scope */}
                   <div>
-                    <label className="block text-xs text-mil-muted mb-2">סוג יציאה</label>
-                    <div className="flex gap-2">
+                    <label className="block text-tiny font-semibold text-mil-muted mb-2">סוג יציאה</label>
+                    <div className="flex gap-1 bg-mil-bg-alt border border-mil-border rounded-lg p-1">
                       {(['individual', 'squad', 'machlaka'] as LeaveScope[]).map((s) => (
                         <button
                           key={s}
                           type="button"
                           onClick={() => setForm((f) => ({ ...f, scope: s }))}
-                          className={`flex-1 py-2 rounded-lg text-xs border transition-colors ${
-                            form.scope === s ? 'bg-mil-olive border-mil-olive text-white' : 'bg-mil-bg border-mil-border text-mil-muted'
+                          className={`flex-1 py-2 rounded-md text-tiny font-semibold transition-all duration-200 ease-out-soft ${
+                            form.scope === s
+                              ? 'bg-mil-card text-mil-olive shadow-card'
+                              : 'text-mil-muted hover:text-mil-text'
                           }`}
                         >
                           {scopeLabel[s]}
@@ -166,22 +171,26 @@ export default function LeavesPage() {
                   {/* Who */}
                   {form.scope === 'individual' && (
                     <div>
-                      <label className="block text-xs text-mil-muted mb-2">בחר חיילים</label>
-                      <div className="max-h-40 overflow-y-auto border border-mil-border rounded-lg divide-y divide-mil-border">
+                      <label className="block text-tiny font-semibold text-mil-muted mb-2">בחר חיילים</label>
+                      <div className="max-h-48 overflow-y-auto border border-mil-border rounded-xl-soft divide-y divide-mil-border bg-mil-card">
                         {soldiers.map((s) => (
                           <button
                             key={s.id}
                             type="button"
                             onClick={() => toggleSoldier(s.id)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-right transition-colors ${
+                            className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-right transition-colors duration-200 ease-out-soft ${
                               form.soldierIds.includes(s.id) ? 'bg-mil-olive-bg' : 'hover:bg-mil-card-hover'
                             }`}
                           >
-                            <span className={`w-4 h-4 rounded border-2 flex items-center justify-center text-xs flex-shrink-0 ${form.soldierIds.includes(s.id) ? 'bg-mil-olive border-mil-olive text-white' : 'border-mil-border'}`}>
-                              {form.soldierIds.includes(s.id) && '✓'}
+                            <span className={`w-4 h-4 rounded-md border-2 flex items-center justify-center text-xs flex-shrink-0 transition-all duration-200 ease-out-soft ${form.soldierIds.includes(s.id) ? 'bg-mil-olive border-mil-olive text-white' : 'border-mil-border-strong'}`}>
+                              {form.soldierIds.includes(s.id) && (
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
                             </span>
-                            <span className="text-sm text-mil-text">{s.name}</span>
-                            <span className="text-xs text-mil-muted mr-auto">{s.teamClass}</span>
+                            <span className="text-sm text-mil-text font-medium">{s.name}</span>
+                            <span className="text-tiny text-mil-muted mr-auto">{s.teamClass}</span>
                           </button>
                         ))}
                       </div>
@@ -232,7 +241,7 @@ export default function LeavesPage() {
                     <input className={inp} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="יציאת סוף שבוע / טיול גדוד..." />
                   </div>
 
-                  <button type="submit" className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-3.5 rounded-xl text-base transition-colors">
+                  <button type="submit" className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-semibold py-3 rounded-xl-soft text-base transition-all duration-200 ease-out-soft shadow-card hover:shadow-card-hover active:scale-[0.985]">
                     שמור יציאה
                   </button>
                 </div>
@@ -240,8 +249,8 @@ export default function LeavesPage() {
             )}
 
             {/* Leaves list */}
-            <div className="space-y-2">
-              <p className="text-xs text-mil-muted px-1">{leaves.length} יציאות מוגדרות</p>
+            <div className="space-y-2.5">
+              <p className="text-tiny font-semibold text-mil-muted tracking-wide uppercase px-1">{leaves.length} יציאות מוגדרות</p>
               {leaves.map((lv) => {
                 const who = lv.scope === 'individual'
                   ? lv.soldierIds.map(getSoldierName).join(', ')
@@ -250,25 +259,25 @@ export default function LeavesPage() {
                   : 'כל המחלקה';
 
                 return (
-                  <div key={lv.id} className="bg-mil-card border border-mil-border rounded-xl p-4">
-                    <div className="flex items-start justify-between gap-2">
+                  <div key={lv.id} className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card p-4">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <span className="text-xs bg-mil-olive-bg text-mil-olive border border-mil-olive/30 px-1.5 py-0.5 rounded">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className="text-xxs font-semibold bg-mil-sand-bg text-mil-sand border border-mil-sand/30 px-1.5 py-0.5 rounded-md">
                             {scopeLabel[lv.scope]}
                           </span>
-                          <span className="text-mil-text text-sm font-medium truncate">{who}</span>
+                          <span className="text-mil-text text-sm font-semibold truncate">{who}</span>
                         </div>
-                        <p className="text-xs text-mil-muted">
+                        <p className="text-tiny text-mil-muted tabular-nums">
                           {lv.startDate} {lv.startTime} — {lv.endDate} {lv.endTime}
                         </p>
-                        {lv.note && <p className="text-xs text-mil-muted mt-0.5 italic">{lv.note}</p>}
-                        <p className="text-xs text-mil-ghost mt-1">נוצר ע״י {lv.createdByName}</p>
+                        {lv.note && <p className="text-tiny text-mil-muted mt-1 italic">{lv.note}</p>}
+                        <p className="text-xxs text-mil-ghost mt-1.5">נוצר ע״י {lv.createdByName}</p>
                       </div>
                       {isManager && (
                         <button
                           onClick={() => removeLeave(lv.id)}
-                          className="text-mil-alert hover:text-white hover:bg-mil-alert text-xs px-2 py-1 rounded border border-mil-alert/40 transition-colors flex-shrink-0"
+                          className="text-mil-alert hover:bg-mil-alert hover:text-white text-tiny font-semibold px-2.5 py-1 rounded-md border border-mil-alert-border transition-colors flex-shrink-0"
                         >
                           מחק
                         </button>
@@ -279,9 +288,9 @@ export default function LeavesPage() {
               })}
 
               {leaves.length === 0 && (
-                <div className="text-center py-10 text-mil-ghost">
-                  <p className="text-4xl mb-3">◎</p>
-                  <p>אין יציאות מוגדרות</p>
+                <div className="bg-mil-card border border-mil-border rounded-xl-soft py-10 text-center">
+                  <p className="text-sm font-semibold text-mil-text">אין יציאות מוגדרות</p>
+                  <p className="text-tiny text-mil-muted mt-1">עוד אין יציאות בתקופה זו</p>
                 </div>
               )}
             </div>
@@ -290,12 +299,14 @@ export default function LeavesPage() {
 
         {/* ── REQUESTS TAB (manager only) ────────────────────────── */}
         {isManager && tab === 'requests' && (
-          <div className="space-y-2">
-            <p className="text-xs text-mil-muted px-1">{approvableRequests.length} בקשות · {pendingCount} ממתינות</p>
+          <div className="space-y-2.5">
+            <p className="text-tiny font-semibold text-mil-muted tracking-wide uppercase px-1">
+              {approvableRequests.length} בקשות · <span className="text-mil-warn">{pendingCount} ממתינות</span>
+            </p>
             {approvableRequests.length === 0 && (
-              <div className="text-center py-10 text-mil-ghost">
-                <p className="text-4xl mb-3">⊖</p>
-                <p>אין בקשות יציאה</p>
+              <div className="bg-mil-card border border-mil-border rounded-xl-soft py-10 text-center">
+                <p className="text-sm font-semibold text-mil-text">אין בקשות יציאה</p>
+                <p className="text-tiny text-mil-muted mt-1">תיבת הבקשות ריקה</p>
               </div>
             )}
             {[...approvableRequests].sort((a, b) => {
@@ -303,33 +314,33 @@ export default function LeavesPage() {
               if (b.status === 'pending' && a.status !== 'pending') return 1;
               return b.submittedAt.localeCompare(a.submittedAt);
             }).map((req) => (
-              <div key={req.id} className="bg-mil-card border border-mil-border rounded-xl p-4">
+              <div key={req.id} className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <p className="font-medium text-mil-text text-sm">{req.soldierName}</p>
-                    <p className="text-xs text-mil-ghost">{req.soldierTeamClass}</p>
+                    <p className="font-semibold text-mil-text text-sm">{req.soldierName}</p>
+                    <p className="text-tiny text-mil-muted mt-0.5">{req.soldierTeamClass}</p>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded border ${reqStatusStyle[req.status]}`}>
+                  <span className={`text-xxs font-semibold px-2 py-0.5 rounded-md border ${reqStatusStyle[req.status]}`}>
                     {reqStatusLabel[req.status]}
                   </span>
                 </div>
-                <p className="text-xs text-mil-muted mb-1">
+                <p className="text-tiny text-mil-muted tabular-nums mb-1.5">
                   {req.startDate} {req.startTime} — {req.endDate} {req.endTime}
                 </p>
                 <p className="text-sm text-mil-text">{req.reason}</p>
-                <p className="text-xs text-mil-ghost mt-1">הוגש: {req.submittedAt.slice(0, 10)}</p>
+                <p className="text-xxs text-mil-ghost mt-1.5">הוגש: {req.submittedAt.slice(0, 10)}</p>
 
                 {req.status === 'pending' && (
                   <div className="flex gap-2 mt-3">
                     <button
                       onClick={() => handleApprove(req.id)}
-                      className="flex-1 py-2 rounded-lg text-sm font-medium bg-mil-success-bg text-mil-success border border-mil-success-border hover:bg-mil-success hover:text-white transition-colors"
+                      className="flex-1 py-2 rounded-lg text-tiny font-semibold bg-mil-success-bg text-mil-success border border-mil-success-border hover:bg-mil-success hover:text-white hover:border-mil-success transition-colors duration-200 ease-out-soft"
                     >
                       ✓ אשר
                     </button>
                     <button
                       onClick={() => handleReject(req.id)}
-                      className="flex-1 py-2 rounded-lg text-sm font-medium bg-mil-alert-bg text-mil-alert border border-mil-alert-border hover:bg-mil-alert hover:text-white transition-colors"
+                      className="flex-1 py-2 rounded-lg text-tiny font-semibold bg-mil-alert-bg text-mil-alert border border-mil-alert-border hover:bg-mil-alert hover:text-white hover:border-mil-alert transition-colors duration-200 ease-out-soft"
                     >
                       ✕ דחה
                     </button>
@@ -337,7 +348,7 @@ export default function LeavesPage() {
                 )}
 
                 {req.status !== 'pending' && req.reviewedByName && (
-                  <p className="text-xs text-mil-ghost mt-2">
+                  <p className="text-xxs text-mil-ghost mt-2">
                     {req.status === 'approved' ? 'אושר' : 'נדחה'} ע״י {req.reviewedByName}
                   </p>
                 )}
@@ -354,13 +365,15 @@ function TabBtn({ label, active, onClick, badge }: { label: string; active: bool
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-2.5 text-sm font-medium transition-colors relative ${
-        active ? 'bg-mil-olive text-white' : 'text-mil-muted hover:text-mil-text'
+      className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-200 ease-out-soft relative ${
+        active
+          ? 'bg-mil-card text-mil-olive shadow-card'
+          : 'text-mil-muted hover:text-mil-text'
       }`}
     >
       {label}
       {badge != null && badge > 0 && !active && (
-        <span className="absolute top-1.5 right-4 min-w-[14px] h-3.5 bg-mil-warn text-white text-[9px] rounded-full flex items-center justify-center px-0.5">
+        <span className="absolute top-1 right-4 min-w-[16px] h-4 bg-mil-warn text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 ring-2 ring-mil-bg-alt">
           {badge}
         </span>
       )}
@@ -368,4 +381,4 @@ function TabBtn({ label, active, onClick, badge }: { label: string; active: bool
   );
 }
 
-const inp = 'w-full bg-mil-bg border border-mil-border rounded-lg px-3 py-2.5 text-sm text-mil-text focus:outline-none focus:ring-1 focus:ring-mil-olive focus:border-mil-olive placeholder:text-mil-ghost';
+const inp = 'w-full bg-mil-card border border-mil-border rounded-lg px-3.5 py-2.5 text-sm text-mil-text focus:outline-none focus:border-mil-olive focus:shadow-focus placeholder:text-mil-ghost transition-all duration-200 ease-out-soft';

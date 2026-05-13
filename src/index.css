@@ -3,42 +3,61 @@
 @tailwind utilities;
 
 /*
-  Premium operational dark — global substrate.
+  Premium operational light — global substrate.
+
   The html background sets the page colour BEHIND the React tree so
   rubber-band scrolling, autofill chrome and missing safe-area regions
-  blend into the same deep slate as the app. Body text inherits the
-  off-white from mil-text via Tailwind utilities; the body declaration
-  here is the fallback for any node that doesn't carry a colour.
+  blend into the same warm off-white as the app. Body text inherits
+  the deep ink from mil-text; the body declaration here is the fallback.
 */
 
 @layer base {
   * { box-sizing: border-box; }
   html {
     direction: rtl;
-    background: #070a14;            /* matches mil-bg */
-    color-scheme: dark;             /* tells the browser to dark-style native UI (scrollbars, autofill) */
+    background: #fafaf7;            /* matches mil-bg */
+    color-scheme: light;
   }
   body {
     margin: 0;
-    font-family: 'Heebo', 'Inter', 'Segoe UI', Arial, sans-serif;
-    color: #eef0f8;                 /* matches mil-text */
+    font-family: 'Inter', 'Heebo', 'Segoe UI', Arial, sans-serif;
+    color: #1c1b21;                 /* matches mil-text */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv11', 'ss01', 'tnum';
   }
 
-  /* Subtle premium scrollbar — dark, slim, calm */
+  /* Quiet, premium scrollbars — slim and warm-toned. */
   ::-webkit-scrollbar              { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track        { background: transparent; }
-  ::-webkit-scrollbar-thumb        { background: rgba(255,255,255,0.06); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
-  ::-webkit-scrollbar-thumb:hover  { background: rgba(255,255,255,0.12); background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb        {
+    background: rgba(28, 27, 33, 0.10);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover  {
+    background: rgba(28, 27, 33, 0.22);
+    background-clip: padding-box;
+  }
 
-  /* Focus ring fallback — keeps keyboard navigation visible even on
-     elements that don't carry a focus-visible utility. */
-  :focus-visible { outline: 2px solid rgba(125, 140, 224, 0.55); outline-offset: 2px; }
+  /* Focus ring fallback — keyboard navigation always visible. */
+  :focus-visible {
+    outline: 2px solid rgba(91, 95, 207, 0.55);
+    outline-offset: 2px;
+  }
 
-  /* Selection — premium accent tint, not the default browser blue. */
-  ::selection { background: rgba(125, 140, 224, 0.35); color: #eef0f8; }
+  /* Selection — primary accent tint. */
+  ::selection {
+    background: rgba(91, 95, 207, 0.18);
+    color: #1c1b21;
+  }
+
+  /* Disable iOS tap-flash on interactive elements. */
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 .safe-area-bottom {

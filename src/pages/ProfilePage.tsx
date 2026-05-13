@@ -11,7 +11,7 @@ import { useApp } from '../context/AppContext';
 import Header from '../components/Header';
 import { roleLabel } from '../utils/permissions';
 import {
-  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Card,
+  Eyebrow, Section, PageMain, Body, Muted, Hint,
 } from '../components/ui';
 
 export default function ProfilePage() {
@@ -98,24 +98,29 @@ export default function ProfilePage() {
       <Header title="פרופיל" />
       <PageMain>
 
-        {/* Identity hero */}
-        <header>
-          <Eyebrow>{roleLabel(currentRole)}</Eyebrow>
-          <PageTitle className="mt-1">{currentUser.name}</PageTitle>
-          <Muted className="mt-1.5">
-            {myPlatoon?.name ?? '—'}
-            {mySquadName && ` · ${mySquadName}`}
-            {age != null && ` · גיל ${age}`}
-          </Muted>
-        </header>
+        {/* Identity hero — premium personal card */}
+        <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-mil-olive-bg text-mil-olive flex items-center justify-center text-xl font-bold flex-shrink-0">
+              {currentUser.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
+            </div>
+            <div className="flex-1 min-w-0">
+              <Eyebrow>{roleLabel(currentRole)}</Eyebrow>
+              <h1 className="text-2xl font-bold text-mil-text tracking-tightish mt-1 leading-tight">{currentUser.name}</h1>
+              <Muted className="mt-1.5">
+                {myPlatoon?.name ?? '—'}
+                {mySquadName && ` · ${mySquadName}`}
+                {age != null && ` · גיל ${age}`}
+              </Muted>
+            </div>
+          </div>
+        </section>
 
         {saved && (
-          <Card variant="muted" className="!border-mil-success/40 bg-mil-success-bg">
-            <div className="px-4 py-3 flex items-center gap-2">
-              <span className="text-mil-success font-bold">✓</span>
-              <Body className="text-mil-success">נשמר</Body>
-            </div>
-          </Card>
+          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
+            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
+            <Body className="text-mil-success font-semibold">השינויים נשמרו</Body>
+          </div>
         )}
 
         {/* Operational personal data */}
@@ -161,7 +166,7 @@ export default function ProfilePage() {
           {dirty && (
             <button
               onClick={save}
-              className="mt-3 w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-3 rounded-xl text-sm transition-colors"
+              className="mt-3 w-full bg-mil-olive hover:bg-mil-olive-light text-white font-semibold py-3 rounded-xl-soft text-sm transition-all duration-200 ease-out-soft shadow-card hover:shadow-card-hover active:scale-[0.985]"
             >
               שמור שינויים
             </button>
@@ -171,7 +176,7 @@ export default function ProfilePage() {
         {/* Qualifications */}
         <Section label="כישורים מבצעיים">
           {myQuals.length === 0 ? (
-            <div className="py-6 text-center">
+            <div className="bg-mil-card border border-mil-border rounded-xl-soft py-8 text-center">
               <p className="text-tiny text-mil-muted">אין כישורים רשומים</p>
             </div>
           ) : (
@@ -179,11 +184,11 @@ export default function ProfilePage() {
               {myQuals.map((q) => (
                 <span
                   key={q!.id}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-mil-olive-bg/40 border border-mil-olive/20"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-mil-olive-bg border border-mil-olive/20"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" aria-hidden />
-                  <span className="text-sm font-semibold text-mil-text">{q!.name}</span>
-                  {q!.category && <span className="text-tiny text-mil-muted">· {q!.category}</span>}
+                  <span className="text-sm font-semibold text-mil-olive">{q!.name}</span>
+                  {q!.category && <span className="text-tiny text-mil-olive/70">· {q!.category}</span>}
                 </span>
               ))}
             </div>
@@ -195,7 +200,7 @@ export default function ProfilePage() {
           <Section label="תפקידים מבצעיים">
             <div className="flex flex-wrap gap-2">
               {myProfile.operationalRoles.map((r) => (
-                <span key={r} className="inline-flex items-center px-3 py-1.5 rounded-full bg-mil-card border border-mil-border text-sm font-semibold text-mil-text">
+                <span key={r} className="inline-flex items-center px-3 py-1.5 rounded-full bg-mil-card border border-mil-border-strong text-sm font-semibold text-mil-text shadow-card">
                   {r}
                 </span>
               ))}
@@ -206,11 +211,16 @@ export default function ProfilePage() {
         {/* Equipment shortcut */}
         <button
           onClick={() => navigate('/equipment')}
-          className="w-full flex items-center gap-3 px-5 py-4 bg-mil-card border border-mil-border rounded-2xl hover:border-mil-olive transition-colors text-right"
+          className="w-full flex items-center gap-3.5 px-5 py-4 bg-mil-card border border-mil-border rounded-xl-soft shadow-card hover:shadow-card-hover hover:border-mil-border-strong transition-all duration-200 ease-out-soft text-right"
         >
-          <div className="flex-1">
-            <Body className="font-semibold">ציוד אישי</Body>
-            <Hint className="block mt-0.5">נשק · אופטיקה · ווסט · קשר</Hint>
+          <span className="w-9 h-9 rounded-xl-soft bg-mil-olive-bg text-mil-olive flex items-center justify-center flex-shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10" />
+            </svg>
+          </span>
+          <div className="flex-1 min-w-0">
+            <Body className="font-semibold leading-tight">ציוד אישי</Body>
+            <Hint className="block mt-0.5 text-mil-muted">נשק · אופטיקה · ווסט · קשר</Hint>
           </div>
           <span className="text-mil-ghost">←</span>
         </button>
@@ -225,7 +235,7 @@ export default function ProfilePage() {
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="px-5 py-3.5 flex items-center gap-4">
-      <Body className="font-semibold flex-shrink-0 w-28">{label}</Body>
+      <Body className="font-medium flex-shrink-0 w-28 text-mil-muted">{label}</Body>
       <div className="flex-1">{children}</div>
     </div>
   );
@@ -240,14 +250,16 @@ function ChoiceRow({
 }) {
   return (
     <div className="px-5 py-3.5 flex items-center gap-4">
-      <Body className="font-semibold flex-shrink-0 w-28">{label}</Body>
-      <div className="flex gap-1.5">
+      <Body className="font-medium flex-shrink-0 w-28 text-mil-muted">{label}</Body>
+      <div className="flex gap-1.5 bg-mil-bg-alt border border-mil-border rounded-lg p-0.5">
         {options.map((o) => (
           <button
             key={o.id}
             onClick={() => onChange(o.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-              value === o.id ? 'bg-mil-text text-mil-card' : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+            className={`px-3.5 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ease-out-soft ${
+              value === o.id
+                ? 'bg-mil-card text-mil-olive shadow-card'
+                : 'text-mil-muted hover:text-mil-text'
             }`}
           >
             {o.label}
@@ -259,4 +271,4 @@ function ChoiceRow({
 }
 
 const inputCls =
-  'w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-2 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-sm';
+  'w-full bg-mil-card border border-mil-border rounded-lg px-3 py-2 text-mil-text focus:outline-none focus:border-mil-olive focus:shadow-focus placeholder:text-mil-ghost text-sm transition-all duration-200 ease-out-soft';
