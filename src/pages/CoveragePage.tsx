@@ -9,7 +9,7 @@
 // Slice L2. Does NOT generate plans (lands in L6), does NOT run the
 // fairness evaluator (L7), does NOT edit anything.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp, useMyCompany } from '../context/AppContext';
 import { isCompanyLeadership } from '../utils/permissions';
@@ -18,8 +18,8 @@ import {
   Section, PageMain, Body, Muted, Hint,
 } from '../components/ui';
 import {
-  buildWeekPicture, computePreviewNotes,
-  type DayPicture, type PreviewNote,
+  buildWeekPicture, computePreviewNotes, buildDayRows,
+  type DayPicture, type PreviewNote, type DayRow, type DayChip, type ChipTone,
 } from '../utils/coverage';
 import type {
   Soldier, Platoon, Squad, CoverageEvent, AbsentScope, CoveringScope,
@@ -32,6 +32,7 @@ export default function CoveragePage() {
     soldiers, leaves, platoons, squads,
     coverageEvents, dutyExclusions,
     leaveRotationPolicy, leaveRotationPlans,
+    missions, calendarEvents,
   } = useApp();
   const myCompany = useMyCompany();
 
@@ -51,6 +52,15 @@ export default function CoveragePage() {
     [week, leaveRotationPolicy, leaveRotationPlans.length],
   );
 
+  const dayRows = useMemo(
+    () => buildDayRows({
+      week, missions, calendarEvents, coverageEvents,
+      policy: leaveRotationPolicy, platoons, squads, soldiers,
+      todayMs: today.getTime(),
+    }),
+    [week, missions, calendarEvents, coverageEvents, leaveRotationPolicy, platoons, squads, soldiers, today],
+  );
+
   // Coverage events in the visible 7-day window
   const weekEndMs = useMemo(() => {
     const d = new Date(today); d.setDate(d.getDate() + 7); return d.getTime();
@@ -67,12 +77,14 @@ export default function CoveragePage() {
 
   const todayPicture = week[0];
 
+  const [tab, setTab] = useState<'week' | 'today'>('week');
+
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="יציאות וכיסוי" />
       <PageMain>
 
-        {/* ── Hero — 5-second readout ──────────────────────────────────── */}
+        {/* ── Shared hero — today's 5-second readout, relevant in both tabs ─ */}
         <header>
           <div className="text-tiny text-mil-muted">{myCompany?.name ?? '—'}</div>
           <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
@@ -98,60 +110,137 @@ export default function CoveragePage() {
           </div>
         </header>
 
-        {/* ── Soft signals — info + warnings before the algorithm ──────── */}
-        {notes.length > 0 && <NotesStack notes={notes} />}
+        {/* ── Tab toggle — week is the new planning view; today is L2 ─────── */}
+        <div className="flex gap-1.5">
+          <TabButton active={tab === 'week'}  onClick={() => setTab('week')}>השבוע</TabButton>
+          <TabButton active={tab === 'today'} onClick={() => setTab('today')}>היום</TabButton>
+        </div>
 
-        {/* ── Week strip — at-a-glance picture per day ─────────────────── */}
-        <Section label="השבוע">
-          <WeekStrip week={week} policy={leaveRotationPolicy} />
-        </Section>
-
-        {/* ── Today's breakdown by state ───────────────────────────────── */}
-        <Section label="היום">
-          <div className="space-y-2">
-            <StateGroup
-              label="בבסיס"
-              tone="olive"
-              soldiers={todayPicture.onBase}
-            />
-            {todayPicture.atHome.length > 0 && (
-              <StateGroup
-                label="בבית"
-                tone="sand"
-                soldiers={todayPicture.atHome}
-              />
-            )}
-            {todayPicture.excluded.length > 0 && (
-              <StateGroup
-                label="מחוץ לספירה"
-                tone="ghost"
-                soldiers={todayPicture.excluded}
-              />
-            )}
+        {/* ── WEEK — single combined timeline (one block per day) ─────────── */}
+        {tab === 'week' && (
+          <div className="space-y-5">
+            {dayRows.map((row) => <DayRowView key={row.date.toISOString()} row={row} />)}
           </div>
-        </Section>
+        )}
 
-        {/* ── Coverage events (only if any in the visible window) ──────── */}
-        {upcomingCoverageEvents.length > 0 && (
-          <Section label="אירועי כיסוי">
-            <div className="space-y-2">
-              {upcomingCoverageEvents.map((ev) => (
-                <CoverageEventCard
-                  key={ev.id}
-                  event={ev}
-                  platoons={platoons}
-                  squads={squads}
-                  soldiers={soldiers}
-                  today={today}
-                />
-              ))}
-            </div>
-          </Section>
+        {/* ── TODAY — the L2 daily picture ─────────────────────────────── */}
+        {tab === 'today' && (
+          <>
+            {notes.length > 0 && <NotesStack notes={notes} />}
+
+            <Section label="השבוע">
+              <WeekStrip week={week} policy={leaveRotationPolicy} />
+            </Section>
+
+            <Section label="היום">
+              <div className="space-y-2">
+                <StateGroup label="בבסיס"        tone="olive" soldiers={todayPicture.onBase} />
+                {todayPicture.atHome.length > 0 && (
+                  <StateGroup label="בבית"        tone="sand"  soldiers={todayPicture.atHome} />
+                )}
+                {todayPicture.excluded.length > 0 && (
+                  <StateGroup label="מחוץ לספירה" tone="ghost" soldiers={todayPicture.excluded} />
+                )}
+              </div>
+            </Section>
+
+            {upcomingCoverageEvents.length > 0 && (
+              <Section label="אירועי כיסוי">
+                <div className="space-y-2">
+                  {upcomingCoverageEvents.map((ev) => (
+                    <CoverageEventCard
+                      key={ev.id}
+                      event={ev}
+                      platoons={platoons}
+                      squads={squads}
+                      soldiers={soldiers}
+                      today={today}
+                    />
+                  ))}
+                </div>
+              </Section>
+            )}
+          </>
         )}
 
       </PageMain>
     </div>
   );
+}
+
+// ─── Tab toggle ───────────────────────────────────────────────────────────
+
+function TabButton({
+  active, onClick, children,
+}: {
+  active: boolean; onClick: () => void; children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+        active
+          ? 'bg-mil-text text-mil-card'
+          : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Day row — one block per day, dot-prefixed operational facts ──────────
+
+const HE_DAY_LONG = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+const HE_MONTHS    = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+function DayRowView({ row }: { row: DayRow }) {
+  const dayName  = HE_DAY_LONG[row.date.getDay()];
+  const dateLine = `${row.date.getDate()} ב${HE_MONTHS[row.date.getMonth()]}`;
+  return (
+    <section className={row.isToday ? 'border-r-2 border-mil-olive pr-3' : ''}>
+      <div className="flex items-baseline gap-2 mb-2.5">
+        {row.isToday && (
+          <span className="text-tiny font-bold text-mil-olive-dim tracking-widest uppercase">היום</span>
+        )}
+        <Body className="font-semibold">{dayName}</Body>
+        <Muted className="text-tiny">· {dateLine}</Muted>
+      </div>
+      <div className="space-y-1.5">
+        {row.chips.map((c) => <DayChipRow key={c.id} chip={c} />)}
+      </div>
+    </section>
+  );
+}
+
+function DayChipRow({ chip }: { chip: DayChip }) {
+  const dotBg = toneToDotBg(chip.tone);
+  const textColor =
+    chip.kind === 'risk'
+      ? (chip.tone === 'alert' ? 'text-mil-alert' : 'text-mil-warn')
+      : 'text-mil-text';
+  const emphasis = chip.kind === 'risk' || chip.kind === 'state' ? 'font-semibold' : '';
+  return (
+    <div className="flex items-baseline gap-2.5">
+      <span className={`w-1.5 h-1.5 rounded-full ${dotBg} flex-shrink-0 self-center`} aria-hidden />
+      <p className={`text-sm leading-relaxed ${textColor}`}>
+        <span className={emphasis}>{chip.text}</span>
+        {chip.detail && <span className="text-mil-muted"> · {chip.detail}</span>}
+      </p>
+    </div>
+  );
+}
+
+function toneToDotBg(tone: ChipTone): string {
+  switch (tone) {
+    case 'olive':     return 'bg-mil-olive';
+    case 'olive-dim': return 'bg-mil-olive-dim';
+    case 'sand':      return 'bg-mil-sand';
+    case 'warn':      return 'bg-mil-warn';
+    case 'alert':     return 'bg-mil-alert';
+    case 'ghost':     return 'bg-mil-ghost';
+    case 'muted':     return 'bg-mil-ghost';
+  }
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────
