@@ -1,26 +1,28 @@
-// דוח 1 — operational state report for company leadership.
+// דוח 1 — operational state report.
 //
-// CC + Deputy only. Real-time projection over the active roster + the
-// status event log. The page must read like a single picture: KPI strip
-// at the top, per-platoon breakdown, and a filterable roster.
+// Two scopes:
+//   • company-wide — CC + Deputy + delegated. Shows all platoons.
+//   • platoon       — PC/PS/Sergeant + delegated. Shows their commanded
+//                     platoon only. Filters narrow accordingly.
+//
+// The page auto-resolves scope from the viewer: if they have a
+// commandedPlatoonId AND lack the report.viewCompanyState token, they
+// see the platoon-scoped variant. Otherwise company-wide.
 //
 // Performance: All filters apply to the active soldier set (boundary
 // filter in AppContext keeps this small — only active membership).
 // useMemo guards each computation. For a 200-soldier company, all
-// projections execute in <5ms per render.
-//
-// Backend portability: when persistence lands, this page consumes a
-// single `/report1` projection RPC that pre-aggregates the KPIs +
-// returns paged rows. The shape of the rows shown here is the contract.
+// projections execute in <5ms per render. Server-side this becomes a
+// single materialized view RPC.
 
 import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp, useMyCompany, useMyPlatoons } from '../context/AppContext';
-import { canViewReport1 } from '../utils/permissions';
+import { canViewReport1, isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import type { Soldier, SoldierStatus, OperationalRole, Platoon, Squad, SoldierStatusEvent } from '../types';
 import {
-  Eyebrow, Section, PageMain, Body, Muted, Hint, Segment,
+  Eyebrow, Section, PageMain, Body, Muted, Hint, Segment, EmptyState,
 } from '../components/ui';
 
 // ─── Local helpers ─────────────────────────────────────────────────────────
@@ -73,6 +75,31 @@ export default function Report1Page() {
   const myCompany = useMyCompany();
   const myPlatoons = useMyPlatoons();
 
+  // Scope resolution — company vs platoon. Company wins when the viewer
+  // has the company-wide token; otherwise we fall back to the platoon
+  // they command. A pure soldier reaches `canViewReport1 === false` and
+  // is redirected below.
+  const isCompanyScope = !!currentUser && canViewReport1(currentUser, delegations) &&
+    (currentRole === 'companyCommander' || currentRole === 'deputyCompanyCommander' || currentRole === 'owner');
+  const isPlatoonScope = !!currentUser && !isCompanyScope &&
+    isPlatoonLeadership(currentRole) && !!currentUser.commandedPlatoonId;
+
+  // Scoped roster: company-wide vs the commanded platoon's roster only.
+  const scopedSoldiers = useMemo(() => {
+    if (isCompanyScope) return soldiers;
+    if (isPlatoonScope) {
+      const sqIds = new Set(squads.filter((sq) => sq.platoonId === currentUser!.commandedPlatoonId).map((sq) => sq.id));
+      return soldiers.filter((s) => s.squadId && sqIds.has(s.squadId));
+    }
+    return [];
+  }, [isCompanyScope, isPlatoonScope, soldiers, squads, currentUser]);
+
+  const scopedPlatoons = useMemo(() => {
+    if (isCompanyScope) return myPlatoons;
+    if (isPlatoonScope) return myPlatoons.filter((p) => p.id === currentUser!.commandedPlatoonId);
+    return [];
+  }, [isCompanyScope, isPlatoonScope, myPlatoons, currentUser]);
+
   void currentRole;
 
   // Hooks always at top — early returns moved below.
@@ -83,20 +110,19 @@ export default function Report1Page() {
   const [roleFilter,    setRoleFilter]    = useState<'all' | OperationalRole>('all');
   const [search,        setSearch]        = useState('');
 
-  // KPI totals (over the whole company, unaffected by filters — that's the
-  // operational truth the CC wants).
+  // KPI totals (over the scoped soldier set — company vs platoon).
   const totals = useMemo(() => {
-    const inBase   = soldiers.filter((s) => s.currentStatus === 'in-base').length;
-    const atHome   = soldiers.filter((s) => s.currentStatus === 'home').length;
-    const inactive = soldiers.filter((s) => s.currentStatus === 'inactive-temp').length;
-    return { inBase, atHome, inactive, total: soldiers.length };
-  }, [soldiers]);
+    const inBase   = scopedSoldiers.filter((s) => s.currentStatus === 'in-base').length;
+    const atHome   = scopedSoldiers.filter((s) => s.currentStatus === 'home').length;
+    const inactive = scopedSoldiers.filter((s) => s.currentStatus === 'inactive-temp').length;
+    return { inBase, atHome, inactive, total: scopedSoldiers.length };
+  }, [scopedSoldiers]);
 
-  // Per-platoon breakdown
+  // Per-platoon breakdown — over the scoped platoon set
   const perPlatoon = useMemo(() => {
-    return myPlatoons.map((p) => {
+    return scopedPlatoons.map((p) => {
       const platoonSquadIds = new Set(squads.filter((s) => s.platoonId === p.id).map((s) => s.id));
-      const ps = soldiers.filter((s) => s.squadId && platoonSquadIds.has(s.squadId));
+      const ps = scopedSoldiers.filter((s) => s.squadId && platoonSquadIds.has(s.squadId));
       return {
         platoon: p,
         total: ps.length,
@@ -105,7 +131,7 @@ export default function Report1Page() {
         inactive: ps.filter((s) => s.currentStatus === 'inactive-temp').length,
       };
     });
-  }, [myPlatoons, squads, soldiers]);
+  }, [scopedPlatoons, squads, scopedSoldiers]);
 
   // Pre-index latest status event per soldier (sorted descending by setAt)
   const latestEventBySoldier = useMemo(() => {
@@ -117,10 +143,10 @@ export default function Report1Page() {
     return map;
   }, [soldierStatusEvents]);
 
-  // Filtered roster rows
+  // Filtered roster rows — sourced from scopedSoldiers
   const rows: ReportRow[] = useMemo(() => {
     const q = search.trim();
-    return soldiers
+    return scopedSoldiers
       .filter((s) => {
         if (statusFilter !== 'all' && s.currentStatus !== statusFilter) return false;
         if (roleFilter !== 'all' && !s.operationalRoles.includes(roleFilter)) return false;
@@ -138,17 +164,30 @@ export default function Report1Page() {
         const p  = sq ? platoons.find((px) => px.id === sq.platoonId) : undefined;
         return { soldier: s, platoon: p, squad: sq, latestEvent: latestEventBySoldier.get(s.id) };
       });
-  }, [soldiers, squads, platoons, latestEventBySoldier, search, statusFilter, roleFilter, squadFilter, platoonFilter]);
+  }, [scopedSoldiers, squads, platoons, latestEventBySoldier, search, statusFilter, roleFilter, squadFilter, platoonFilter]);
 
   // Squad options for the filter — restricted to the chosen platoon when one is active.
+  // For platoon scope, default to that platoon's squads.
   const squadOptions = useMemo(() => {
+    if (isPlatoonScope) {
+      return squads.filter((s) => s.platoonId === currentUser!.commandedPlatoonId);
+    }
     if (platoonFilter === 'all') return squads;
     return squads.filter((s) => s.platoonId === platoonFilter);
-  }, [squads, platoonFilter]);
+  }, [squads, platoonFilter, isPlatoonScope, currentUser]);
 
   // Permission gates — placed AFTER all hooks per react-hooks/rules-of-hooks.
   if (!currentUser) return <Navigate to="/login" replace />;
-  if (!canViewReport1(currentUser, delegations)) return <Navigate to="/home" replace />;
+  // Neither company-scope nor platoon-scope → not authorized.
+  if (!isCompanyScope && !isPlatoonScope) return <Navigate to="/home" replace />;
+
+  const myPlatoon = isPlatoonScope
+    ? scopedPlatoons[0]
+    : undefined;
+  const scopeLabel = isCompanyScope
+    ? (myCompany?.name ?? '—')
+    : (myPlatoon?.name ?? '—');
+  const scopeTitle = isCompanyScope ? 'דוח 1 · פלוגה' : 'דוח 1 · מחלקה';
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
@@ -157,8 +196,8 @@ export default function Report1Page() {
 
         {/* Hero KPI strip */}
         <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
-          <Eyebrow>{myCompany?.name ?? '—'}</Eyebrow>
-          <h1 className="text-hero font-extrabold text-mil-text tracking-tightish mt-1.5">דוח 1</h1>
+          <Eyebrow>{scopeLabel}</Eyebrow>
+          <h1 className="text-hero font-extrabold text-mil-text tracking-tightish mt-1.5">{scopeTitle}</h1>
           <Muted className="mt-1.5">
             תמונת מצב חיה · עודכן {formatRelative(now.toISOString(), now)}
           </Muted>
@@ -171,7 +210,8 @@ export default function Report1Page() {
           </div>
         </section>
 
-        {/* Per-platoon breakdown */}
+        {/* Per-platoon breakdown — only when company scope or multi-platoon */}
+        {perPlatoon.length > 1 && (
         <Section label="חלוקה לפי מחלקות">
           <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
             {perPlatoon.map((row) => (
@@ -203,6 +243,7 @@ export default function Report1Page() {
             ))}
           </div>
         </Section>
+        )}
 
         {/* Filters */}
         <Section label="סינון">
@@ -231,11 +272,14 @@ export default function Report1Page() {
 
             {/* Platoon + squad + role selects */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <FilterSelect
-                value={platoonFilter}
-                onChange={(v) => { setPlatoonFilter(v); setSquadFilter('all'); }}
-                options={[{ value: 'all', label: 'כל המחלקות' }, ...myPlatoons.map((p) => ({ value: p.id, label: p.name }))]}
-              />
+              {/* Platoon filter only when there's more than one platoon in scope */}
+              {scopedPlatoons.length > 1 && (
+                <FilterSelect
+                  value={platoonFilter}
+                  onChange={(v) => { setPlatoonFilter(v); setSquadFilter('all'); }}
+                  options={[{ value: 'all', label: 'כל המחלקות' }, ...scopedPlatoons.map((p) => ({ value: p.id, label: p.name }))]}
+                />
+              )}
               <FilterSelect
                 value={squadFilter}
                 onChange={setSquadFilter}
@@ -253,10 +297,10 @@ export default function Report1Page() {
         {/* Roster table */}
         <Section label={`חיילים · ${rows.length}`}>
           {rows.length === 0 ? (
-            <div className="bg-mil-card border border-mil-border rounded-xl-soft py-10 text-center">
-              <p className="text-sm font-semibold text-mil-text">אין חיילים תואמים לסינון</p>
-              <p className="text-tiny text-mil-muted mt-1">נקה את הפילטרים או חפש בשם אחר</p>
-            </div>
+            <EmptyState
+              title="אין חיילים תואמים לסינון"
+              hint="נקה את הפילטרים או חפש בשם אחר"
+            />
           ) : (
             <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
               {rows.map((row) => (

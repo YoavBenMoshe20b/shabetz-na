@@ -12,6 +12,7 @@ import {
 import AnnouncementsStrip from '../components/AnnouncementsStrip';
 import { TourOfDutyMini } from '../components/TourOfDutyCard';
 import EscalationSheet from '../components/EscalationSheet';
+import AlertsButton from '../components/AlertsButton';
 import { activeSegmentForSoldier } from '../utils/leaveCycleProjection';
 import type { Soldier, SoldierStatus } from '../types';
 
@@ -129,17 +130,21 @@ function CompanyCommanderDashboard() {
 
         {/* ── 1. HERO — operational readiness card ──────────────────────── */}
         <section className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-hero p-6">
-          <div className="flex items-baseline gap-1.5 text-tiny text-mil-muted">
-            {myCompany?.unitName && (
-              <>
-                <span className="font-medium">{myCompany.unitName}</span>
-                <span className="text-mil-ghost">·</span>
-              </>
-            )}
-            <span className="tabular-nums">
-              <span className="font-semibold text-mil-text">{platoonStats.length}</span> מחלקות
-            </span>
-            <span className="text-mil-ghost mr-auto">{formatTimeNow(now)}</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-1.5 text-tiny text-mil-muted min-w-0">
+              {myCompany?.unitName && (
+                <>
+                  <span className="font-medium">{myCompany.unitName}</span>
+                  <span className="text-mil-ghost">·</span>
+                </>
+              )}
+              <span className="tabular-nums">
+                <span className="font-semibold text-mil-text">{platoonStats.length}</span> מחלקות
+              </span>
+              <span className="text-mil-ghost">·</span>
+              <span className="text-mil-ghost">{formatTimeNow(now)}</span>
+            </div>
+            <AlertsButton />
           </div>
 
           <div className="mt-3 flex items-end gap-2.5 flex-wrap">
@@ -590,14 +595,17 @@ function PlatoonCommanderDashboard() {
 
         {/* ── STATUS NOW — typographic hero, same shape as CC home ──────── */}
         <header>
-          <div className="flex items-baseline gap-1.5 text-tiny text-mil-muted">
-            {myPlatoon?.unitName && (
-              <>
-                <span>{myPlatoon.unitName}</span>
-                <span className="text-mil-ghost">·</span>
-              </>
-            )}
-            <span>{myPlatoon?.name ?? 'מחלקה'}</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-1.5 text-tiny text-mil-muted min-w-0">
+              {myPlatoon?.unitName && (
+                <>
+                  <span>{myPlatoon.unitName}</span>
+                  <span className="text-mil-ghost">·</span>
+                </>
+              )}
+              <span>{myPlatoon?.name ?? 'מחלקה'}</span>
+            </div>
+            <AlertsButton />
           </div>
 
           <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">

@@ -93,16 +93,26 @@ function MissionRow({ mission, platoons, qualifications, equipmentItems, onClick
   const lines = buildMissionSummary({ mission, platoons, qualifications, equipmentItems });
   const preview = lines.slice(1, 3).join(' ');                  // skip the identity line
   const statusTone =
-    mission.status === 'active'   ? 'bg-mil-success' :
-    mission.status === 'draft'    ? 'bg-mil-ghost'   :
-    mission.status === 'paused'   ? 'bg-mil-warn'    :
+    mission.status === 'active'                 ? 'bg-mil-success' :
+    mission.status === 'staffed'                ? 'bg-mil-success' :
+    mission.status === 'partially-staffed'      ? 'bg-mil-warn'    :
+    mission.status === 'active-unstaffed'       ? 'bg-mil-alert'   :
+    mission.status === 'staffing-pending'       ? 'bg-mil-warn'    :
+    mission.status === 'assigned-to-platoon'    ? 'bg-mil-info'    :
+    mission.status === 'paused'                 ? 'bg-mil-warn'    :
     'bg-mil-ghost';
-  const statusLabel = {
-    active:   'פעילה',
-    draft:    'טיוטה',
-    paused:   'מושהית',
-    archived: 'בארכיון',
-  }[mission.status];
+  const STATUS_LABELS: Record<typeof mission.status, string> = {
+    'draft':                'טיוטה',
+    'active-unstaffed':     'ללא איוש',
+    'assigned-to-platoon':  'שויכה למחלקה',
+    'staffing-pending':     'באיוש',
+    'active':               'פעילה',
+    'staffed':              'מאוישת',
+    'partially-staffed':    'מאוישת חלקית',
+    'paused':               'מושהית',
+    'archived':             'בארכיון',
+  };
+  const statusLabel = STATUS_LABELS[mission.status];
 
   return (
     <button

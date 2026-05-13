@@ -953,7 +953,31 @@ export interface EquipmentRequirement {
 // stay declared elsewhere in this file for one transitional commit so existing
 // screens keep compiling. Slice E9 deletes them.
 
-export type MissionStatus = 'draft' | 'active' | 'paused' | 'archived';
+// Expanded mission lifecycle.
+//
+//   draft                — author still composing
+//   active-unstaffed     — definition published; no platoon assigned yet
+//   staffing-pending     — assigned to a platoon, awaiting per-soldier staffing
+//   active               — staffed and operational (legacy default)
+//   staffed              — engine produced a full assignment plan
+//   partially-staffed    — some shifts assigned, gaps remain
+//   paused               — manually paused; no new shifts produced
+//   archived             — historical
+//
+// The wizard saves new missions to `active-unstaffed` by default (round 5);
+// the staffing flow on /mission/:id transitions to `assigned-to-platoon`
+// then `staffing-pending` then `staffed`. Legacy 'active' remains as the
+// catch-all so existing fixtures keep compiling.
+export type MissionStatus =
+  | 'draft'
+  | 'active-unstaffed'
+  | 'assigned-to-platoon'
+  | 'staffing-pending'
+  | 'active'
+  | 'staffed'
+  | 'partially-staffed'
+  | 'paused'
+  | 'archived';
 
 export interface Mission {
   id: string;
@@ -2011,4 +2035,47 @@ export interface MockUser {
   // Audit trail
   createdAt?: string;
   lastSignInAt?: string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  UNIFIED ALERT — round 5                                                 ║
+// ║                                                                          ║
+// ║  Single surface for everything that needs the operator's attention:      ║
+// ║  active escalations, unstaffed missions, override events, manpower       ║
+// ║  shortfalls. Heterogeneous sources unified behind one Alert shape so     ║
+// ║  AlertsPage + AlertsSheet + dashboard badge consume one stream.          ║
+// ║                                                                          ║
+// ║  Projected, NEVER stored. The api/alerts module computes from current    ║
+// ║  state. When backend lands, a single `/alerts?companyId=X` endpoint     ║
+// ║  materializes the same shape — UI doesn't change.                       ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type AlertKind =
+  | 'escalation-active'
+  | 'mission-unstaffed'
+  | 'override-open'
+  | 'manpower-shortfall'
+  | 'announcement-operational';
+
+export type AlertSeverity = 'critical' | 'warning' | 'info';
+
+export interface Alert {
+  id: string;
+  companyId: string;
+  kind: AlertKind;
+  severity: AlertSeverity;
+  title: string;
+  message?: string;
+  occurredAt: string;
+  /** Back-reference to the origin entity. */
+  source:
+    | { kind: 'escalation';     id: string }
+    | { kind: 'mission';        id: string }
+    | { kind: 'override-alert'; id: string }
+    | { kind: 'platoon';        id: string }
+    | { kind: 'announcement';   id: string };
+  suggestedAction?: string;
+  actionHref?: string;
+  /** When set, scope visibility to a specific platoon (PC/PS view). */
+  platoonId?: string;
 }

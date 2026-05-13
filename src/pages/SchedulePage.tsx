@@ -347,14 +347,26 @@ function Cell({ label, value, extra }: { label: string; value: string; extra?: s
 
 function MissionStatusInline({ status }: { status: Mission['status'] }) {
   const tone =
-    status === 'active'   ? 'text-mil-olive-dim' :
-    status === 'paused'   ? 'text-mil-warn'      :
-    status === 'draft'    ? 'text-mil-ghost'     :
+    status === 'active'                 ? 'text-mil-success' :
+    status === 'staffed'                ? 'text-mil-success' :
+    status === 'partially-staffed'      ? 'text-mil-warn'    :
+    status === 'active-unstaffed'       ? 'text-mil-alert'   :
+    status === 'staffing-pending'       ? 'text-mil-warn'    :
+    status === 'assigned-to-platoon'    ? 'text-mil-info'    :
+    status === 'paused'                 ? 'text-mil-warn'    :
     'text-mil-ghost';
-  const label = {
-    active: 'פעילה', paused: 'סגורה', draft: 'טיוטה', archived: 'בארכיון',
-  }[status];
-  return <Hint className={`${tone} font-bold`}>{label}</Hint>;
+  const STATUS_LABELS: Record<Mission['status'], string> = {
+    'draft':                'טיוטה',
+    'active-unstaffed':     'ללא איוש',
+    'assigned-to-platoon':  'שויכה למחלקה',
+    'staffing-pending':     'באיוש',
+    'active':               'פעילה',
+    'staffed':              'מאוישת',
+    'partially-staffed':    'מאוישת חלקית',
+    'paused':               'סגורה',
+    'archived':             'בארכיון',
+  };
+  return <Hint className={`${tone} font-bold`}>{STATUS_LABELS[status]}</Hint>;
 }
 
 function ToggleChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {

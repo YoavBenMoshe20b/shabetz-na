@@ -187,14 +187,61 @@ export default function MissionDetailPage() {
           )}
         </section>
 
+        {/* Round 5 — staffing CTA when the mission has no staffing yet.
+            This appears IMMEDIATELY below the hero, before any other
+            section, because it's the most important next operational
+            step for an unstaffed mission. */}
+        {(mission.status === 'active-unstaffed' || mission.status === 'staffing-pending') && canEdit && (
+          <Section label="איוש משימה">
+            <div className="bg-mil-warn-bg border border-mil-warn-border rounded-xl-soft p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-mil-warn" aria-hidden />
+                <p className="text-xxs font-semibold tracking-wide uppercase text-mil-warn">
+                  {mission.status === 'staffing-pending' ? 'באיוש' : 'ללא איוש'}
+                </p>
+              </div>
+              <Body className="font-semibold text-mil-text">
+                המשימה הוגדרה אבל עדיין אין חיילים משובצים אליה.
+              </Body>
+              <Hint className="mt-1 text-mil-muted">
+                {isCC
+                  ? 'אפשר לאייש דרך הסידור או לבחור מחלקה אחראית ולעבור לאיוש פר־חייל.'
+                  : 'פתח את הסידור כדי לאייש את המשימה.'}
+              </Hint>
+              <div className="mt-3 flex gap-2 flex-wrap">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => navigate(`/schedule?missionId=${mission.id}`)}
+                >
+                  פתח סידור
+                </Button>
+                {isCC && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setMissionStatus(mission.id, 'active')}
+                  >
+                    סמן כפעילה
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Section>
+        )}
+
         {/* CC-only status toggle — pause/activate/archive */}
         {isCC && (
           <Section label="מצב משימה">
             <div className="flex gap-1.5 flex-wrap">
-              <StatusToggleBtn active={mission.status === 'active'}   onClick={() => setMissionStatus(mission.id, 'active')}>פעילה</StatusToggleBtn>
-              <StatusToggleBtn active={mission.status === 'paused'}   onClick={() => setMissionStatus(mission.id, 'paused')}>מושהית</StatusToggleBtn>
-              <StatusToggleBtn active={mission.status === 'draft'}    onClick={() => setMissionStatus(mission.id, 'draft')}>טיוטה</StatusToggleBtn>
-              <StatusToggleBtn active={mission.status === 'archived'} onClick={() => setMissionStatus(mission.id, 'archived')}>בארכיון</StatusToggleBtn>
+              <StatusToggleBtn active={mission.status === 'active' || mission.status === 'staffed'}
+                onClick={() => setMissionStatus(mission.id, 'active')}>פעילה</StatusToggleBtn>
+              <StatusToggleBtn active={mission.status === 'paused'}
+                onClick={() => setMissionStatus(mission.id, 'paused')}>מושהית</StatusToggleBtn>
+              <StatusToggleBtn active={mission.status === 'draft'}
+                onClick={() => setMissionStatus(mission.id, 'draft')}>טיוטה</StatusToggleBtn>
+              <StatusToggleBtn active={mission.status === 'archived'}
+                onClick={() => setMissionStatus(mission.id, 'archived')}>בארכיון</StatusToggleBtn>
             </div>
             <Hint className="block mt-2 text-mil-muted">
               משימה מושהית/בארכיון אינה מייצרת משמרות במנוע השיבוץ.
@@ -203,7 +250,7 @@ export default function MissionDetailPage() {
         )}
 
         {/* Current rotation owner — shows today's responsible platoon */}
-        {mission.status === 'active' && weekSlots.length > 0 && (() => {
+        {(mission.status === 'active' || mission.status === 'staffed' || mission.status === 'partially-staffed') && weekSlots.length > 0 && (() => {
           const todayIso = new Date().toISOString().slice(0, 10);
           const todaySlots = weekSlots.filter((s) => s.start.slice(0, 10) === todayIso);
           const owners = Array.from(new Set(todaySlots.map((s) => s.ownerPlatoonId).filter(Boolean)))

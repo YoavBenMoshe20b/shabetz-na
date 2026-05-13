@@ -53,6 +53,12 @@ const ICON: Record<string, React.ReactNode> = {
       <path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
     </svg>
   ),
+  report1: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </svg>
+  ),
 };
 
 const SOLDIER_ITEMS: NavItem[] = [
@@ -61,10 +67,13 @@ const SOLDIER_ITEMS: NavItem[] = [
   { to: '/profile',  label: 'פרופיל', icon: ICON.user },
 ];
 
+// Commanders (CC/Deputy/PC/PS/Sergeant) see 5 tabs. דוח 1 sits between
+// scheduling and roster — operational state report scoped by viewer.
 const COMMANDER_ITEMS: NavItem[] = [
   { to: '/home',     label: 'בית',    icon: ICON.home },
   { to: '/calendar', label: 'לוח',    icon: ICON.calendar },
   { to: '/schedule', label: 'שבצ״ק',  icon: ICON.grid },
+  { to: '/report1',  label: 'דוח 1',  icon: ICON.report1 },
   { to: '/soldiers', label: 'חיילים', icon: ICON.users },
 ];
 

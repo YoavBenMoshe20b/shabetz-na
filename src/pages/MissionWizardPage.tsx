@@ -150,7 +150,12 @@ export default function MissionWizardPage() {
 
   const stepValid = isStepValid(draft, step);
 
-  const publish = (status: 'draft' | 'active') => {
+  // Round 5 — new publish semantics:
+  //   The wizard now saves the mission DEFINITION only. Staffing happens
+  //   in a separate flow on /mission/:id. So "active" actually becomes
+  //   'active-unstaffed' on first save — there's no soldier assigned yet.
+  //   On edit we preserve whatever staffing status the mission already had.
+  const publish = (intent: 'draft' | 'publish') => {
     if (!myCompany || !currentUser) return;
     if (!draft.timeModel || !draft.manpower || !draft.command || !draft.rotation || !draft.fatigue) {
       return;                                                   // step 6 wouldn't be reachable
@@ -161,8 +166,9 @@ export default function MissionWizardPage() {
       : draft.assignedPlatoonIds.filter((id) => scope.allowedPlatoonIds.includes(id));
 
     if (isEditing && editingMission) {
-      // Edit path — patch only the policy fields. id, companyId,
-      // createdAt, createdByUserId stay frozen.
+      // Edit path — patch policy fields. Status stays unless the wizard
+      // explicitly transitions to draft. Mission staffing lifecycle is
+      // managed elsewhere (/mission/:id).
       updateMission(editingMission.id, {
         name:               draft.name,
         description:        draft.description || undefined,
@@ -178,21 +184,21 @@ export default function MissionWizardPage() {
         qualifications:     draft.qualifications,
         equipment:          draft.equipment,
         logisticsAlerts:    draft.logisticsAlerts.length > 0 ? draft.logisticsAlerts : undefined,
-        status,
+        ...(intent === 'draft' ? { status: 'draft' as const } : {}),
       });
-      // companyNotes on edit are handled via the detail page note composer,
-      // not the wizard — leaving existing notes untouched is safer.
       navigate(`/mission/${editingMission.id}`);
       return;
     }
+
+    // First publish: mission saved without staffing — caller goes to
+    // /mission/:id to assign platoons / soldiers.
+    const status = intent === 'draft' ? 'draft' : 'active-unstaffed';
 
     const created = addMission({
       companyId:          myCompany.id,
       name:               draft.name,
       description:        draft.description || undefined,
       createdByUserId:    currentUser.id,
-      // Non-CC publishers can only own platoon-scoped missions; CC keeps
-      // the broader 'company' authority over policy decisions.
       ownerRole:          isCompanyTier ? 'company' : 'platoon',
       orderId:            draft.orderId,
       assignedPlatoonIds,
@@ -213,8 +219,6 @@ export default function MissionWizardPage() {
       requiresDailyConfirmation: false,
       status,
     });
-    // Attach the free-text company note as a separate MissionNote so it
-    // stays editable independent of the mission's structured definition.
     if (draft.companyNotes && draft.companyNotes.trim()) {
       addMissionNote({
         missionId: created.id,
@@ -223,7 +227,10 @@ export default function MissionWizardPage() {
       });
     }
     sessionStorage.removeItem(SESSION_KEY);
-    navigate('/missions');
+    // Send the operator straight to the mission detail page so they can
+    // decide whether to staff now. The page surfaces a clear staffing CTA
+    // when status === 'active-unstaffed'.
+    navigate(`/mission/${created.id}`);
   };
 
   return (
@@ -272,7 +279,7 @@ export default function MissionWizardPage() {
             qualifications={qualifications}
             equipmentItems={equipmentItems}
             isEditing={isEditing}
-            onPublish={() => publish('active')}
+            onPublish={() => publish('publish')}
             onSaveDraft={() => publish('draft')}
           />
         )}

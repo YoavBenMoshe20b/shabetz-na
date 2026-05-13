@@ -60,6 +60,8 @@ const DelegationsPage    = lazy(() => import('./pages/DelegationsPage'));
 const Report1Page        = lazy(() => import('./pages/Report1Page'));
 const AnnouncementsPage  = lazy(() => import('./pages/AnnouncementsPage'));
 const LeaveCyclePage     = lazy(() => import('./pages/LeaveCyclePage'));
+// Round 5
+const AlertsPage         = lazy(() => import('./pages/AlertsPage'));
 
 // Calm Suspense fallback — single subtle skeleton so the transition
 // feels intentional rather than a flash of blank.
@@ -160,8 +162,14 @@ function AppRoutes() {
         } />
 
         {/* ── Round 4: דוח 1 + הודעות + יציאות פלוגתיות ─── */}
+        {/* Report1: opens to platoon-leadership tier too; the page itself
+            resolves scope (company-wide vs platoon) by role + token. */}
         <Route path="/report1"        element={
-          <ProtectedRoute minRole="companyCommander"><Report1Page /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander"><Report1Page /></ProtectedRoute>
+        } />
+        {/* ── Round 5: התראות ─── */}
+        <Route path="/alerts"         element={
+          <ProtectedRoute minRole="platoonCommander"><AlertsPage /></ProtectedRoute>
         } />
         {/* Announcements: read open to everyone; create gated inside the page. */}
         <Route path="/announcements"  element={currentUser ? <AnnouncementsPage /> : auth} />
