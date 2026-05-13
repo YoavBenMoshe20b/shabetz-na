@@ -7,6 +7,7 @@ export { Button }                                from './Button';
 export { StatusPill, StatusDot }                 from './StatusPill';
 export { Section, PageMain, CollapsibleSection } from './Section';
 export { EmergencyBanner }                       from './EmergencyBanner';
+export { Sheet }                                 from './Sheet';
 export {
   Eyebrow, PageTitle, HeroTitle, SectionLabel, CardTitle,
   Body, Muted, Hint, Metric,

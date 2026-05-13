@@ -1,3 +1,11 @@
+// App header — sticky, calm, premium.
+//
+// Reads as "operational chrome" not "navigation bar": the brand wordmark
+// sits on the right (RTL leading edge), the page title is the secondary
+// label, and the user chip on the left holds identity + a discreet dev
+// menu. Uses the glass surface (translucent + blur) so content scrolls
+// behind it without a hard seam.
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -11,72 +19,109 @@ export default function Header({ title }: { title: string }) {
   const [showDev, setShowDev] = useState(false);
 
   return (
-    <header className="bg-mil-surface border-b border-mil-border px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-      <div className="flex items-center gap-3">
-        <span className="text-mil-sand font-bold text-base">שבץ־נא</span>
-        <span className="text-mil-ghost">|</span>
-        <span className="text-mil-text-inv/70 text-sm">{title}</span>
+    <header className="bg-mil-bg/80 backdrop-blur-glass border-b border-mil-border/60 px-5 py-3.5 flex items-center justify-between sticky top-0 z-10">
+      <div className="flex items-baseline gap-2.5 min-w-0">
+        <span className="text-mil-text font-extrabold text-base tracking-tightish">שבץ־נא</span>
+        <span className="w-1 h-1 rounded-full bg-mil-ghost/60" aria-hidden />
+        <span className="text-mil-muted text-tiny font-medium truncate">{title}</span>
       </div>
 
-      <div className="flex items-center gap-2">
-        {/* Online indicator */}
+      <div className="flex items-center gap-2.5">
+        {/* Online indicator — subtle ring, no glow */}
         <span
           className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-mil-success' : 'bg-mil-alert'}`}
           title={isOnline ? 'מחובר' : 'לא מחובר'}
+          aria-hidden
         />
 
         {currentUser && (
           <div className="relative">
             <button
               onClick={() => setShowDev((v) => !v)}
-              className="flex items-center gap-2 text-xs bg-mil-card border border-mil-border hover:border-mil-olive px-2 py-1.5 rounded transition-colors"
+              className="flex items-center gap-2 text-tiny bg-mil-card border border-mil-border hover:border-mil-border-strong hover:bg-mil-card-hover px-2.5 py-1.5 rounded-lg transition-all duration-200 ease-out-soft"
             >
-              <span className="text-mil-text">{currentUser.name}</span>
+              <span className="text-mil-text font-semibold">{currentUser.name}</span>
               <RoleBadge role={currentRole} />
             </button>
 
             {showDev && (
-              <div className="absolute left-0 top-full mt-1 bg-mil-card border border-mil-border rounded-lg shadow-2xl p-3 min-w-[220px] z-20" dir="rtl">
-                {/* User destinations */}
+              <>
+                {/* Click-away catcher */}
                 <button
-                  onClick={() => { navigate('/profile');   setShowDev(false); }}
-                  className="block w-full text-right text-sm px-2 py-2 rounded hover:bg-mil-ghost/30 transition-colors text-mil-text"
+                  onClick={() => setShowDev(false)}
+                  className="fixed inset-0 z-10 cursor-default"
+                  aria-label="סגור"
+                />
+                <div
+                  className="absolute left-0 top-full mt-2 bg-mil-card border border-mil-border-strong rounded-xl-soft shadow-pop p-2 min-w-[240px] z-20 animate-fade-in"
+                  dir="rtl"
                 >
-                  פרופיל ופרטים אישיים
-                </button>
-                <button
-                  onClick={() => { navigate('/equipment'); setShowDev(false); }}
-                  className="block w-full text-right text-sm px-2 py-2 rounded hover:bg-mil-ghost/30 transition-colors text-mil-text"
-                >
-                  ציוד אישי
-                </button>
-                <hr className="my-2 border-mil-border" />
-                <p className="text-xs text-mil-muted mb-2 flex items-center gap-1">
-                  <span className="text-mil-warn">⚙</span> כלי מפתחים — החלפת תפקיד
-                </p>
-                {(['companyCommander', 'platoonCommander', 'soldier'] as UserRole[]).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => { switchRole(r); setShowDev(false); }}
-                    className={`block w-full text-right text-sm px-2 py-2 rounded hover:bg-mil-ghost/30 transition-colors ${
-                      currentRole === r ? 'text-mil-olive-light font-bold' : 'text-mil-text'
-                    }`}
+                  <DropdownItem onClick={() => { navigate('/profile');   setShowDev(false); }}>
+                    פרופיל ופרטים אישיים
+                  </DropdownItem>
+                  <DropdownItem onClick={() => { navigate('/equipment'); setShowDev(false); }}>
+                    ציוד אישי
+                  </DropdownItem>
+
+                  <Divider />
+                  <DropdownLabel>החלפת תפקיד · כלי מפתחים</DropdownLabel>
+                  {(['companyCommander', 'platoonCommander', 'soldier'] as UserRole[]).map((r) => (
+                    <DropdownItem
+                      key={r}
+                      onClick={() => { switchRole(r); setShowDev(false); }}
+                      active={currentRole === r}
+                    >
+                      {roleLabel(r)}
+                    </DropdownItem>
+                  ))}
+
+                  <Divider />
+                  <DropdownItem
+                    onClick={() => { logout(); setShowDev(false); }}
+                    tone="danger"
                   >
-                    {roleLabel(r)}
-                  </button>
-                ))}
-                <hr className="my-2 border-mil-border" />
-                <button
-                  onClick={() => { logout(); setShowDev(false); }}
-                  className="block w-full text-right text-sm px-2 py-2 rounded text-mil-alert hover:bg-mil-alert-bg transition-colors"
-                >
-                  יציאה מהמערכת
-                </button>
-              </div>
+                    יציאה מהמערכת
+                  </DropdownItem>
+                </div>
+              </>
             )}
           </div>
         )}
       </div>
     </header>
   );
+}
+
+function DropdownItem({
+  children, onClick, active = false, tone = 'default',
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  tone?: 'default' | 'danger';
+}) {
+  const base = 'block w-full text-right text-sm px-3 py-2 rounded-lg transition-colors duration-150 ease-out-soft';
+  const tones = {
+    default: active
+      ? 'bg-mil-olive-bg text-mil-olive-light font-bold'
+      : 'text-mil-text hover:bg-mil-card-hover',
+    danger:  'text-mil-alert hover:bg-mil-alert-bg',
+  };
+  return (
+    <button onClick={onClick} className={`${base} ${tones[tone]}`}>
+      {children}
+    </button>
+  );
+}
+
+function DropdownLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xxs font-semibold text-mil-muted tracking-wide px-3 py-1.5">
+      {children}
+    </p>
+  );
+}
+
+function Divider() {
+  return <hr className="my-1.5 border-mil-border/60" />;
 }

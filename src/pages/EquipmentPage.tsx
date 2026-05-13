@@ -13,7 +13,7 @@ import type {
   EquipmentGapKind,
 } from '../types';
 import {
-  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Button,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Button, Sheet,
 } from '../components/ui';
 
 export default function EquipmentPage() {
@@ -213,74 +213,77 @@ function ReportGapModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
-      <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl">
-        <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3">
-          <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
-          <h2 className="text-white font-bold flex-1">דיווח ליקוי ציוד</h2>
-        </div>
-        <div className="px-5 py-5 space-y-4">
-          {forItem && (
-            <div className="bg-mil-bg/50 rounded-xl px-3 py-2">
-              <Hint className="text-tiny">פריט:</Hint>
-              <Body className="font-semibold">{forItem.itemName}</Body>
-              {forItem.serialNumber && <Hint className="text-tiny font-mono tabular-nums">{forItem.serialNumber}</Hint>}
-            </div>
-          )}
-
-          <div>
-            <Hint className="block mb-1.5">סוג הדיווח</Hint>
-            <div className="flex gap-1.5 flex-wrap">
-              {(['missing','damaged','logistics-issue'] as EquipmentGapKind[]).map((k) => (
-                <button
-                  key={k}
-                  onClick={() => setKind(k)}
-                  className={`px-3 py-2 rounded-lg text-sm font-bold transition-colors ${
-                    kind === k ? 'bg-mil-text text-mil-card' : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
-                  }`}
-                >
-                  {GAP_KIND_LABEL[k]}
-                </button>
-              ))}
-            </div>
+    <Sheet open onClose={onClose} title="דיווח ליקוי ציוד">
+      <div className="px-5 py-5 space-y-4">
+        {forItem && (
+          <div className="bg-mil-bg-alt border border-mil-border/60 rounded-xl-soft px-3.5 py-3">
+            <Hint className="text-tiny">פריט</Hint>
+            <Body className="font-semibold">{forItem.itemName}</Body>
+            {forItem.serialNumber && <Hint className="text-tiny font-mono tabular-nums">{forItem.serialNumber}</Hint>}
           </div>
+        )}
 
-          {!forItem && (
-            <div>
-              <Hint className="block mb-1.5">פריט</Hint>
-              <input
-                type="text"
-                value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
-                placeholder="לדוגמה: ווסט / מכשיר קשר"
-                className="w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-base"
-              />
-            </div>
-          )}
+        <div>
+          <Hint className="block mb-1.5">סוג הדיווח</Hint>
+          <div className="flex gap-1.5 flex-wrap">
+            {(['missing','damaged','logistics-issue'] as EquipmentGapKind[]).map((k) => (
+              <SegmentBtn key={k} active={kind === k} onClick={() => setKind(k)}>
+                {GAP_KIND_LABEL[k]}
+              </SegmentBtn>
+            ))}
+          </div>
+        </div>
 
+        {!forItem && (
           <div>
-            <Hint className="block mb-1.5">תיאור</Hint>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="פרט במה הליקוי..."
-              className="w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-base resize-none"
+            <Hint className="block mb-1.5">פריט</Hint>
+            <input
+              type="text"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              placeholder="לדוגמה: ווסט / מכשיר קשר"
+              className={modalInputCls}
             />
           </div>
+        )}
 
-          <button
-            onClick={submit}
-            disabled={!itemName.trim()}
-            className="w-full bg-mil-olive hover:bg-mil-olive-light disabled:opacity-40 text-white font-bold py-4 rounded-xl text-base transition-colors"
-          >
-            שלח לסמל המחלקה
-          </button>
+        <div>
+          <Hint className="block mb-1.5">תיאור</Hint>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="פרט במה הליקוי..."
+            className={`${modalInputCls} resize-none`}
+          />
         </div>
+
+        <Button variant="primary" size="lg" fullWidth onClick={submit} disabled={!itemName.trim()}>
+          שלח לסמל המחלקה
+        </Button>
       </div>
-    </div>
+    </Sheet>
   );
 }
+
+// Local segment-toggle for option groups inside sheets.
+function SegmentBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-out-soft ${
+        active
+          ? 'bg-mil-olive-bg text-mil-olive-light border border-mil-olive/40'
+          : 'bg-mil-bg-alt border border-mil-border text-mil-muted hover:border-mil-border-strong hover:text-mil-text'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+const modalInputCls =
+  'w-full bg-mil-bg-alt border border-mil-border rounded-xl-soft px-3.5 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/40 focus:border-mil-olive placeholder:text-mil-ghost text-base transition-colors duration-200 ease-out-soft';
 
 const CATEGORY_LABEL: Record<SignedEquipmentCategory, string> = {
   weapon:     'נשק',

@@ -1,28 +1,29 @@
 // Card primitive — single source of truth for surface containers.
 //
-// Design language: refined minimalism for an operational product.
-// Shadows are reserved for floating elements (modals, FAB) — surfaces
-// here rely on the warm border + subtle bg shift for layering. Calmer
-// reads better under pressure than depth-via-shadow.
+// Premium operational dark: surfaces lean on subtle border + soft inset
+// highlight rather than heavy drop shadows. The hierarchy is:
 //
-//   muted      calmest — warm tint, no border. Empty states + asides.
-//   default    everyday card — bg-mil-card, hairline border, no shadow
-//   hero       the ONE primary surface per page — slightly stronger
-//              olive-tinted border + a single soft shadow (the only
-//              shadow we still use in non-floating surfaces)
-//   highlight  warning state — warm sand tint + sand border, no shadow
-//   critical   live operational issue — alert tint + alert border
+//   muted      calmest — quiet container, used for asides + empty states
+//   default    everyday card — bg-mil-card + hairline border
+//   hero       the ONE primary surface per page — warmer bg, soft shadow,
+//              accent-tinted border so the eye lands on it first
+//   highlight  warning state — desaturated amber tint
+//   critical   live operational issue — desaturated rose tint
+//
+// We deliberately avoid raised shadows for non-floating surfaces; the
+// soft inset highlight on bg-mil-card-warm + the border ladder reads as
+// elevation without descending into "gamer HUD" territory.
 
 import type { ReactNode } from 'react';
 
 type CardVariant = 'muted' | 'default' | 'hero' | 'highlight' | 'critical';
 
 const VARIANT: Record<CardVariant, string> = {
-  muted:     'bg-mil-card-warm border border-transparent',
-  default:   'bg-mil-card border border-mil-border',
-  hero:      'bg-mil-card border border-mil-olive/30 shadow-hero',
+  muted:     'bg-mil-bg-alt border border-mil-border/60',
+  default:   'bg-mil-card border border-mil-border shadow-card',
+  hero:      'bg-mil-card-warm border border-mil-olive/25 shadow-hero',
   highlight: 'bg-mil-warn-bg border border-mil-warn-border',
-  critical:  'bg-mil-alert-bg border border-mil-alert/40',
+  critical:  'bg-mil-alert-bg border border-mil-alert-border',
 };
 
 interface CardProps {
@@ -34,11 +35,11 @@ interface CardProps {
 
 export function Card({ children, variant = 'default', className = '', onClick }: CardProps) {
   const base = `rounded-2xl overflow-hidden ${VARIANT[variant]}`;
-  // Touch feel: subtle border shift + slight press. No shadow lift (would
-  // betray the "calm" direction); no scale (would feel toy-like). The
-  // border-olive transition is enough to read as "tappable".
+  // Touch feel for interactive cards: a subtle accent-border bloom + an
+  // almost imperceptible press. No 3-D pop (would feel gamer-y); no big
+  // scale (would feel toy-like). The border bloom alone reads as tappable.
   const interactive = onClick
-    ? 'text-right hover:border-mil-olive/50 active:scale-[0.995] transition-colors duration-150 cursor-pointer'
+    ? 'text-right hover:border-mil-olive/55 hover:bg-mil-card-hover active:scale-[0.995] transition-all duration-200 ease-out-soft cursor-pointer'
     : '';
   if (onClick) {
     return (

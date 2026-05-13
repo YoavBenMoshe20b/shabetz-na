@@ -18,7 +18,7 @@ import type {
   Mission, OperationalOrder, OperationalOrderStatus,
 } from '../types';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint, Eyebrow, Button,
+  Section, PageMain, PageTitle, Body, Muted, Hint, Eyebrow, Button, Sheet,
 } from '../components/ui';
 
 export default function SchedulePage() {
@@ -416,55 +416,49 @@ function AddOrderModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
-      <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl">
-        <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3">
-          <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
-          <h2 className="text-white font-bold flex-1">צו חדש</h2>
+    <Sheet open onClose={onClose} title="צו חדש">
+      <div className="px-5 py-5 space-y-4">
+        <div>
+          <Hint className="block mb-1.5">שם הצו</Hint>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={effectiveName}
+            className={inputCls}
+            autoFocus
+          />
         </div>
-        <div className="px-5 py-5 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <Hint className="block mb-1.5">שם הצו</Hint>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={effectiveName}
-              className={inputCls}
-              autoFocus
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Hint className="block mb-1.5">תחילת הצו</Hint>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <Hint className="block mb-1.5">סוף הצו</Hint>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} />
-            </div>
+            <Hint className="block mb-1.5">תחילת הצו</Hint>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <Hint className="block mb-1.5">כוונת מפקד (אופציונלי)</Hint>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="גזרה, אופי המשימה, מיקוד מבצעי..."
-              className={`${inputCls} resize-none`}
-            />
+            <Hint className="block mb-1.5">סוף הצו</Hint>
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} />
           </div>
-          <Button variant="primary" size="lg" fullWidth onClick={submit} disabled={!canSubmit}>
-            פתח צו
-          </Button>
         </div>
+        <div>
+          <Hint className="block mb-1.5">כוונת מפקד (אופציונלי)</Hint>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="גזרה, אופי המשימה, מיקוד מבצעי..."
+            className={`${inputCls} resize-none`}
+          />
+        </div>
+        <Button variant="primary" size="lg" fullWidth onClick={submit} disabled={!canSubmit}>
+          פתח צו
+        </Button>
       </div>
-    </div>
+    </Sheet>
   );
 }
 
 const inputCls =
-  'w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-base';
+  'w-full bg-mil-bg-alt border border-mil-border rounded-xl-soft px-3.5 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/40 focus:border-mil-olive placeholder:text-mil-ghost text-base transition-colors duration-200 ease-out-soft';
 
 function formatRange(start: string, end: string): string {
   const s = new Date(start);

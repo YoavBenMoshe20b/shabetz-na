@@ -16,7 +16,7 @@ import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import type { CommandAuthority, CommandDelegation, MockUser } from '../types';
 import {
-  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill, Sheet,
 } from '../components/ui';
 
 export default function DelegationsPage() {
@@ -248,97 +248,77 @@ function GrantModal({
   const canSubmit = !!toUserId && authorities.length > 0 && new Date(end) > new Date(start);
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
-      <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl max-h-[90vh] overflow-y-auto">
-        <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3 sticky top-0">
-          <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
-          <h2 className="text-white font-bold flex-1">הענקת פיקוד זמני</h2>
+    <Sheet open onClose={onClose} title="הענקת פיקוד זמני">
+      <div className="px-5 py-5 space-y-4">
+
+        <div>
+          <Hint className="block mb-1.5">מי משמש כממלא מקום?</Hint>
+          <select value={toUserId} onChange={(e) => setToUserId(e.target.value)} className={inputCls}>
+            <option value="">בחר חייל</option>
+            {candidates.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
         </div>
-        <div className="px-5 py-5 space-y-4">
 
+        {isCompanyTier && (
           <div>
-            <Hint className="block mb-1.5">מי משמש כממלא מקום?</Hint>
-            <select value={toUserId} onChange={(e) => setToUserId(e.target.value)} className={inputCls}>
-              <option value="">בחר חייל</option>
-              {candidates.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {isCompanyTier && (
-            <div>
-              <Hint className="block mb-1.5">היקף</Hint>
-              <div className="flex gap-1.5">
-                <button
-                  onClick={() => setScope('company')}
-                  className={tabCls(scope === 'company')}
-                >פלוגתי</button>
-                <button
-                  onClick={() => setScope('platoon')}
-                  className={tabCls(scope === 'platoon')}
-                >מחלקתי</button>
-              </div>
-              {scope === 'platoon' && (
-                <select
-                  value={scopeRefId ?? ''}
-                  onChange={(e) => setScopeRefId(e.target.value)}
-                  className={`${inputCls} mt-2`}
-                >
-                  <option value="">בחר מחלקה</option>
-                  {platoons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              )}
+            <Hint className="block mb-1.5">היקף</Hint>
+            <div className="flex gap-1.5">
+              <button onClick={() => setScope('company')} className={tabCls(scope === 'company')}>פלוגתי</button>
+              <button onClick={() => setScope('platoon')} className={tabCls(scope === 'platoon')}>מחלקתי</button>
             </div>
-          )}
-
-          <div>
-            <Hint className="block mb-1.5">סמכויות</Hint>
-            <div className="flex flex-wrap gap-1.5">
-              {(['all','scheduling','leave-approval','operational-control'] as CommandAuthority[]).map((a) => (
-                <button
-                  key={a}
-                  onClick={() => toggleAuthority(a)}
-                  className={chipCls(authorities.includes(a))}
-                >
-                  {AUTHORITY_LABEL[a]}
-                </button>
-              ))}
-            </div>
+            {scope === 'platoon' && (
+              <select
+                value={scopeRefId ?? ''}
+                onChange={(e) => setScopeRefId(e.target.value)}
+                className={`${inputCls} mt-2`}
+              >
+                <option value="">בחר מחלקה</option>
+                {platoons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
           </div>
+        )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Hint className="block mb-1.5">מתי מתחיל</Hint>
-              <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <Hint className="block mb-1.5">מתי מסתיים</Hint>
-              <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className={inputCls} />
-            </div>
+        <div>
+          <Hint className="block mb-1.5">סמכויות</Hint>
+          <div className="flex flex-wrap gap-1.5">
+            {(['all','scheduling','leave-approval','operational-control'] as CommandAuthority[]).map((a) => (
+              <button key={a} onClick={() => toggleAuthority(a)} className={chipCls(authorities.includes(a))}>
+                {AUTHORITY_LABEL[a]}
+              </button>
+            ))}
           </div>
-
-          <div>
-            <Hint className="block mb-1.5">סיבה (אופציונלי)</Hint>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="מ״מ בקורס · סמל בחופש"
-              className={inputCls}
-            />
-          </div>
-
-          <button
-            onClick={submit}
-            disabled={!canSubmit}
-            className="w-full bg-mil-olive hover:bg-mil-olive-light disabled:opacity-40 text-white font-bold py-4 rounded-xl text-base transition-colors"
-          >
-            הענק פיקוד זמני
-          </button>
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Hint className="block mb-1.5">מתי מתחיל</Hint>
+            <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <Hint className="block mb-1.5">מתי מסתיים</Hint>
+            <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+
+        <div>
+          <Hint className="block mb-1.5">סיבה (אופציונלי)</Hint>
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="מ״מ בקורס · סמל בחופש"
+            className={inputCls}
+          />
+        </div>
+
+        <Button variant="primary" size="lg" fullWidth onClick={submit} disabled={!canSubmit}>
+          הענק פיקוד זמני
+        </Button>
       </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -360,16 +340,18 @@ function formatDateTime(d: Date): string {
 }
 
 const inputCls =
-  'w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-base';
+  'w-full bg-mil-bg-alt border border-mil-border rounded-xl-soft px-3.5 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/40 focus:border-mil-olive placeholder:text-mil-ghost text-base transition-colors duration-200 ease-out-soft';
 
 const chipCls = (on: boolean): string =>
   on
-    ? 'px-3 py-1.5 rounded-full text-sm font-bold bg-mil-olive text-white'
-    : 'px-3 py-1.5 rounded-full text-sm font-semibold bg-mil-card border border-mil-border text-mil-text hover:border-mil-olive transition-colors';
+    ? 'px-3.5 py-1.5 rounded-full text-sm font-semibold bg-mil-olive-bg text-mil-olive-light border border-mil-olive/40 transition-all duration-200 ease-out-soft'
+    : 'px-3.5 py-1.5 rounded-full text-sm font-semibold bg-mil-bg-alt border border-mil-border text-mil-muted hover:border-mil-border-strong hover:text-mil-text transition-all duration-200 ease-out-soft';
 
 const tabCls = (on: boolean): string =>
-  `px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-    on ? 'bg-mil-text text-mil-card' : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+  `px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-out-soft ${
+    on
+      ? 'bg-mil-olive-bg text-mil-olive-light border border-mil-olive/40'
+      : 'bg-mil-bg-alt border border-mil-border text-mil-muted hover:border-mil-border-strong hover:text-mil-text'
   }`;
 
 // Suppress unused-import warning in some bundlers

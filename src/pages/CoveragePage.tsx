@@ -178,10 +178,10 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-out-soft ${
         active
-          ? 'bg-mil-text text-mil-card'
-          : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+          ? 'bg-mil-olive-bg text-mil-olive-light border border-mil-olive/40'
+          : 'bg-mil-bg-alt border border-mil-border text-mil-muted hover:border-mil-border-strong hover:text-mil-text'
       }`}
     >
       {children}
@@ -198,10 +198,10 @@ function DayRowView({ row }: { row: DayRow }) {
   const dayName  = HE_DAY_LONG[row.date.getDay()];
   const dateLine = `${row.date.getDate()} ב${HE_MONTHS[row.date.getMonth()]}`;
   return (
-    <section className={row.isToday ? 'border-r-2 border-mil-olive pr-3' : ''}>
+    <section className={row.isToday ? 'border-r-2 border-mil-olive-light pr-3' : ''}>
       <div className="flex items-baseline gap-2 mb-2.5">
         {row.isToday && (
-          <span className="text-tiny font-bold text-mil-olive-dim">היום</span>
+          <span className="text-xxs font-bold text-mil-olive-light bg-mil-olive-bg px-1.5 py-0.5 rounded-md border border-mil-olive/40">היום</span>
         )}
         <Body className="font-semibold">{dayName}</Body>
         <Muted className="text-tiny">· {dateLine}</Muted>

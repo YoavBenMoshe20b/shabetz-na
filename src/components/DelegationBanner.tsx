@@ -37,23 +37,23 @@ export default function DelegationBanner() {
   return (
     <button
       onClick={() => navigate('/delegations')}
-      className={`w-full text-right px-4 py-2 border-b transition-colors ${
+      className={`w-full text-right px-5 py-2.5 border-b transition-all duration-200 ease-out-soft ${
         isActor
-          ? 'bg-mil-olive-bg/60 border-mil-olive/30 hover:bg-mil-olive-bg'
-          : 'bg-mil-card-warm border-mil-border hover:bg-mil-card-hover'
+          ? 'bg-mil-olive-bg/70 border-mil-olive/30 hover:bg-mil-olive-bg'
+          : 'bg-mil-card border-mil-border/60 hover:bg-mil-card-hover'
       }`}
       dir="rtl"
     >
-      <div className="flex items-baseline gap-2 max-w-xl mx-auto">
+      <div className="flex items-baseline gap-2.5 max-w-xl mx-auto">
         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 self-center ${
-          isActor ? 'bg-mil-olive' : 'bg-mil-muted'
+          isActor ? 'bg-mil-olive-light' : 'bg-mil-muted'
         }`} aria-hidden />
-        <span className={`text-tiny font-semibold ${isActor ? 'text-mil-olive-dim' : 'text-mil-muted'}`}>
+        <span className={`text-tiny font-semibold ${isActor ? 'text-mil-olive-light' : 'text-mil-muted'}`}>
           {isActor
             ? `אתה משמש כממלא מקום של ${relevant.fromUserName}`
             : `${relevant.toUserName} משמש כממלא מקום עבורך`}
         </span>
-        <span className="text-tiny text-mil-muted mr-auto">{remaining}</span>
+        <span className="text-tiny text-mil-ghost mr-auto tabular-nums">{remaining}</span>
       </div>
     </button>
   );

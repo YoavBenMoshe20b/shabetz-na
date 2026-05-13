@@ -7,7 +7,7 @@ import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
 import { materializeWeek } from '../utils/materialize';
 import {
   Card, Button, StatusPill, Section, PageMain, CollapsibleSection,
-  PageTitle, CardTitle, Body, Muted, Hint,
+  PageTitle, CardTitle, Body, Muted, Hint, Sheet,
 } from '../components/ui';
 import type { Soldier, SoldierStatus } from '../types';
 
@@ -900,59 +900,48 @@ function LeaveRequestModal({
   const canSubmit = form.startDate && form.endDate && form.reason.trim().length > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
-      <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl">
-        <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3">
-          <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
-          <h2 className="text-white font-bold flex-1">בקשת יציאה</h2>
-        </div>
-        <div className="px-5 py-5 space-y-4">
-          <p className="text-sm text-mil-muted">הבקשה תישלח למ״מ לאישור.</p>
+    <Sheet open onClose={onClose} title="בקשת יציאה" subtitle="הבקשה תישלח למ״מ לאישור">
+      <div className="px-5 py-5 space-y-4">
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-mil-muted mb-1.5">יציאה — תאריך</label>
-              <input type="date" className={modalInp} value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs text-mil-muted mb-1.5">שעה</label>
-              <input type="time" className={modalInp} value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs text-mil-muted mb-1.5">חזרה — תאריך</label>
-              <input type="date" className={modalInp} value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs text-mil-muted mb-1.5">שעה</label>
-              <input type="time" className={modalInp} value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
-            </div>
-          </div>
-
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-mil-muted mb-1.5">סיבה</label>
-            <textarea
-              className={`${modalInp} resize-none`}
-              rows={3}
-              value={form.reason}
-              onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
-              placeholder="אירוע משפחתי / פגישה רפואית..."
-            />
+            <label className="block text-tiny text-mil-muted mb-1.5 font-semibold">יציאה — תאריך</label>
+            <input type="date" className={modalInp} value={form.startDate} onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))} />
           </div>
-
-          <button
-            onClick={() => canSubmit && onSubmit(form)}
-            disabled={!canSubmit}
-            className="w-full bg-mil-olive hover:bg-mil-olive-light disabled:opacity-40 text-white font-bold py-4 rounded-xl text-base transition-colors"
-          >
-            שלח בקשה
-          </button>
+          <div>
+            <label className="block text-tiny text-mil-muted mb-1.5 font-semibold">שעה</label>
+            <input type="time" className={modalInp} value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-tiny text-mil-muted mb-1.5 font-semibold">חזרה — תאריך</label>
+            <input type="date" className={modalInp} value={form.endDate} onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-tiny text-mil-muted mb-1.5 font-semibold">שעה</label>
+            <input type="time" className={modalInp} value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} />
+          </div>
         </div>
+
+        <div>
+          <label className="block text-tiny text-mil-muted mb-1.5 font-semibold">סיבה</label>
+          <textarea
+            className={`${modalInp} resize-none`}
+            rows={3}
+            value={form.reason}
+            onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
+            placeholder="אירוע משפחתי / פגישה רפואית..."
+          />
+        </div>
+
+        <Button variant="primary" size="lg" fullWidth onClick={() => canSubmit && onSubmit(form)} disabled={!canSubmit}>
+          שלח בקשה
+        </Button>
       </div>
-    </div>
+    </Sheet>
   );
 }
 
-const modalInp = 'w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-base';
+const modalInp = 'w-full bg-mil-bg-alt border border-mil-border rounded-xl-soft px-3.5 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/40 focus:border-mil-olive placeholder:text-mil-ghost text-base transition-colors duration-200 ease-out-soft';
 
 // ─── CollapsibleCard — reused for "my week" and roster ───────────────────────
 
@@ -1142,54 +1131,47 @@ function StatusUpdateModal({
   }[soldier.currentStatus];
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-30 flex items-end sm:items-center justify-center" dir="rtl">
-      <div className="w-full max-w-md bg-mil-card rounded-t-2xl sm:rounded-2xl">
-        <div className="bg-mil-olive rounded-t-2xl px-5 py-4 flex items-center gap-3">
-          <button onClick={onClose} className="text-white/80 hover:text-white text-xl leading-none">✕</button>
-          <h2 className="text-white font-bold flex-1">{headline}</h2>
-        </div>
-
-        <div className="px-5 py-5 space-y-4">
-          {soldier.currentStatus === 'in-base' && (
-            <>
-              <Body className="text-mil-muted">מתי אתה צפוי לחזור?</Body>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Hint className="mb-1.5 block">תאריך</Hint>
-                  <input type="date" className={modalInp} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-                </div>
-                <div>
-                  <Hint className="mb-1.5 block">שעה</Hint>
-                  <input type="time" className={modalInp} value={returnTime} onChange={(e) => setReturnTime(e.target.value)} />
-                </div>
+    <Sheet open onClose={onClose} title={headline}>
+      <div className="px-5 py-5 space-y-4">
+        {soldier.currentStatus === 'in-base' && (
+          <>
+            <Body className="text-mil-muted">מתי אתה צפוי לחזור?</Body>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Hint className="mb-1.5 block">תאריך</Hint>
+                <input type="date" className={modalInp} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
               </div>
-              <Button variant="primary" size="lg" fullWidth onClick={goHome} disabled={!returnDate}>
-                יצאתי הביתה
-              </Button>
-              <Hint className="text-center">המ״מ יראה מתי אתה צפוי לחזור.</Hint>
-            </>
-          )}
+              <div>
+                <Hint className="mb-1.5 block">שעה</Hint>
+                <input type="time" className={modalInp} value={returnTime} onChange={(e) => setReturnTime(e.target.value)} />
+              </div>
+            </div>
+            <Button variant="primary" size="lg" fullWidth onClick={goHome} disabled={!returnDate}>
+              יצאתי הביתה
+            </Button>
+            <Hint className="text-center">המ״מ יראה מתי אתה צפוי לחזור.</Hint>
+          </>
+        )}
 
-          {soldier.currentStatus === 'home' && (
-            <>
-              <Body className="text-mil-muted">לאשר: אתה בבסיס מעכשיו?</Body>
-              <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
-                חזרתי לבסיס
-              </Button>
-            </>
-          )}
+        {soldier.currentStatus === 'home' && (
+          <>
+            <Body className="text-mil-muted">לאשר: אתה בבסיס מעכשיו?</Body>
+            <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
+              חזרתי לבסיס
+            </Button>
+          </>
+        )}
 
-          {soldier.currentStatus === 'inactive-temp' && (
-            <>
-              <Body className="text-mil-muted">לאשר: אתה פעיל ומוכן לשיבוץ?</Body>
-              <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
-                חזרתי לפעילות
-              </Button>
-            </>
-          )}
-        </div>
+        {soldier.currentStatus === 'inactive-temp' && (
+          <>
+            <Body className="text-mil-muted">לאשר: אתה פעיל ומוכן לשיבוץ?</Body>
+            <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
+              חזרתי לפעילות
+            </Button>
+          </>
+        )}
       </div>
-    </div>
+    </Sheet>
   );
 }
 

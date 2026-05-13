@@ -87,10 +87,10 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ease-out-soft ${
         active
-          ? 'bg-mil-text text-mil-card'
-          : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+          ? 'bg-mil-olive-bg text-mil-olive-light border border-mil-olive/40'
+          : 'bg-mil-bg-alt border border-mil-border text-mil-muted hover:border-mil-border-strong hover:text-mil-text'
       }`}
     >
       {children}
@@ -182,14 +182,14 @@ function DayBlock({
   const hasNothing = entries.length === 0;
 
   return (
-    <section className={isToday ? 'border-r-2 border-mil-olive pr-3' : ''}>
-      <button onClick={onOpen} className="w-full text-right flex items-baseline gap-2 mb-2.5">
+    <section className={isToday ? 'border-r-2 border-mil-olive-light pr-3' : ''}>
+      <button onClick={onOpen} className="w-full text-right flex items-baseline gap-2 mb-2.5 group">
         {isToday && (
-          <span className="text-tiny font-bold text-mil-olive-dim">היום</span>
+          <span className="text-xxs font-bold text-mil-olive-light bg-mil-olive-bg px-1.5 py-0.5 rounded-md border border-mil-olive/40">היום</span>
         )}
         <Body className="font-semibold">{HE_DAYS[day.getDay()]}</Body>
         <Muted className="text-tiny">· {day.getDate()} ב{HE_MONTHS[day.getMonth()]}</Muted>
-        <Hint className="mr-auto text-mil-ghost">פתח →</Hint>
+        <Hint className="mr-auto text-mil-ghost group-hover:text-mil-muted transition-colors">פתח →</Hint>
       </button>
 
       {hasNothing ? (
@@ -258,49 +258,48 @@ function MonthView({
         <PageTitle className="mt-1">{monthLabel}</PageTitle>
       </header>
 
-      <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+      <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden shadow-card">
         {/* Header row with day-of-week labels */}
-        <div className="grid grid-cols-7 divide-x divide-mil-border bg-mil-card-warm/50">
+        <div className="grid grid-cols-7 bg-mil-bg-alt/60 border-b border-mil-border">
           {HE_DAYS_SHORT.map((d) => (
-            <div key={d} className="px-1 py-2 text-center">
-              <Hint className="text-mil-muted">{d}</Hint>
+            <div key={d} className="px-1 py-2.5 text-center">
+              <span className="text-xxs font-semibold text-mil-muted tracking-wide">{d}</span>
             </div>
           ))}
         </div>
 
         {/* 6 weeks */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-mil-border">
+        <div className="grid grid-cols-7 divide-x divide-y divide-mil-border/60">
           {cells.map((d) => {
             const inMonth   = d.getMonth() === anchor.getMonth();
             const isToday   = d.getTime() === today.getTime();
             const info      = dayInfo.get(isoDate(d));
             const stateBg =
               !inMonth                 ? 'bg-transparent' :
-              info?.state === 'home'   ? 'bg-mil-sand/10' :
+              info?.state === 'home'   ? 'bg-mil-sand-bg/50' :
               info?.state === 'mixed'  ? 'bg-mil-olive-bg/40' :
               'bg-transparent';
             return (
               <button
                 key={d.toISOString()}
                 onClick={() => onPick(d)}
-                className={`min-h-[56px] px-1.5 py-1.5 text-right transition-colors hover:bg-mil-card-warm/40 ${stateBg}`}
+                className={`min-h-[60px] px-2 py-2 text-right transition-colors duration-200 ease-out-soft hover:bg-mil-card-hover ${stateBg} ${isToday ? 'ring-1 ring-inset ring-mil-olive/50' : ''}`}
               >
                 <div className="flex items-baseline gap-1">
                   <span className={`text-sm tabular-nums font-semibold ${
                     !inMonth ? 'text-mil-ghost' :
-                    isToday  ? 'text-mil-olive-dim font-extrabold' :
+                    isToday  ? 'text-mil-olive-light font-extrabold' :
                     'text-mil-text'
                   }`}>
                     {d.getDate()}
                   </span>
-                  {isToday && <span className="text-[8px] text-mil-olive-dim font-bold">היום</span>}
                 </div>
                 {info && info.eventCount > 0 && inMonth && (
-                  <div className="mt-1 flex items-center gap-0.5">
+                  <div className="mt-1.5 flex items-center gap-0.5">
                     {[...Array(Math.min(3, info.eventCount))].map((_, i) => (
-                      <span key={i} className="w-1 h-1 rounded-full bg-mil-olive" aria-hidden />
+                      <span key={i} className="w-1 h-1 rounded-full bg-mil-olive-light" aria-hidden />
                     ))}
-                    {info.eventCount > 3 && <span className="text-[8px] text-mil-ghost mr-0.5">+</span>}
+                    {info.eventCount > 3 && <span className="text-[8px] text-mil-muted mr-0.5">+</span>}
                   </div>
                 )}
               </button>

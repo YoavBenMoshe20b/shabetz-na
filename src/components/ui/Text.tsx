@@ -2,7 +2,7 @@
 // Tailwind. Lets us tune the whole product's reading rhythm in one place.
 //
 // Hierarchy (top → bottom):
-//   Eyebrow        — small context tag above a PageTitle (gdood / company)
+//   Eyebrow        — small context tag above a PageTitle (company / order)
 //   PageTitle      — once per screen, biggest text on the page
 //   HeroTitle      — the one card that's the action target
 //   SectionLabel   — quiet eyebrow above a section group
@@ -12,24 +12,24 @@
 //   Hint           — tertiary metadata (smallest, lowest contrast)
 //   Metric         — big tabular numbers
 //
-// Design language: Hebrew labels never carry `uppercase` (no case in
-// Hebrew) and never `tracking-widest` (spreads letters awkwardly).
-// Confidence comes from weight + tone, not letterspacing.
+// Premium dark language: Hebrew titles use slightly negative tracking
+// for confidence (Heebo tightens beautifully); muted/hint stay at default
+// for readability. Confidence comes from weight + tone, not letterspacing.
 
 import type { ReactNode, ElementType } from 'react';
 
 type AsProps = { as?: ElementType };
 
 const cls = {
-  eyebrow:       'text-tiny font-bold text-mil-muted',
-  pageTitle:     'text-hero font-extrabold text-mil-text tracking-tight',
-  heroTitle:     'text-xl font-bold text-mil-text leading-snug',
-  sectionLabel:  'text-xs font-bold text-mil-muted',
+  eyebrow:       'text-tiny font-semibold text-mil-muted tracking-wide',
+  pageTitle:     'text-hero font-extrabold text-mil-text tracking-tightish',
+  heroTitle:     'text-xl font-bold text-mil-text leading-snug tracking-tightish',
+  sectionLabel:  'text-tiny font-semibold text-mil-muted tracking-wide',
   cardTitle:     'text-base font-bold text-mil-text leading-tight',
   body:          'text-sm text-mil-text leading-relaxed',
   muted:         'text-tiny text-mil-muted leading-relaxed',
   hint:          'text-xxs text-mil-ghost',
-  metric:        'text-metric font-extrabold tabular-nums text-mil-text',
+  metric:        'text-metric font-extrabold tabular-nums text-mil-text tracking-tightish',
 };
 
 function make(variantClass: string) {
