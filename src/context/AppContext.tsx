@@ -8,6 +8,7 @@ import type {
   CalendarEvent,
   Mission, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
+  CoverageEvent, DutyExclusion, LeaveRotationPlan,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
@@ -17,6 +18,7 @@ import {
   mockCalendarEvents,
   mockMissions, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
   mockLeaveRotationPolicy, mockLeaveBlocks,
+  mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -151,6 +153,13 @@ interface AppContextType {
   soldierQualifications:  SoldierQualification[];
   leaveRotationPolicy:    LeaveRotationPolicy | null;
   leaveBlocks:            LeaveBlock[];
+
+  // ── Leave/coverage engine foundation (slice L1 — read-only) ──────────
+  // Write actions (L2 policy editor, L3 coverage modal, L4 exclusion
+  // manager) land in later slices.
+  coverageEvents:      CoverageEvent[];
+  dutyExclusions:      DutyExclusion[];
+  leaveRotationPlans:  LeaveRotationPlan[];
 
   // ── Roster-first auth ────────────────────────────────────────────────
   // Sign in for already-claimed identities
@@ -352,6 +361,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [soldierQualifications] = useState<SoldierQualification[]>(mockSoldierQualifications);
   const [leaveRotationPolicy]   = useState<LeaveRotationPolicy | null>(mockLeaveRotationPolicy);
   const [leaveBlocks]           = useState<LeaveBlock[]>(mockLeaveBlocks);
+
+  // ── Leave/coverage engine foundation (slice L1 — state only) ──────────
+  const [coverageEvents]     = useState<CoverageEvent[]>(mockCoverageEvents);
+  const [dutyExclusions]     = useState<DutyExclusion[]>(mockDutyExclusions);
+  const [leaveRotationPlans] = useState<LeaveRotationPlan[]>(mockLeaveRotationPlans);
 
   // ── Calendar events (slice 1: state + write actions, no UI uses them yet) ──
   // Slice 1 ships read-only. The actions are wired so slice 2 (week view +
@@ -742,6 +756,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
       missions, addMission, qualifications, equipmentItems, soldierQualifications,
       leaveRotationPolicy, leaveBlocks,
+      coverageEvents, dutyExclusions, leaveRotationPlans,
       signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
       logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,

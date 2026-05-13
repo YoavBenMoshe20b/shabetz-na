@@ -6,6 +6,7 @@ import type {
   CalendarEvent,
   Mission, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
+  CoverageEvent, DutyExclusion, LeaveRotationPlan,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -851,3 +852,48 @@ export const mockLeaveRotationPolicy: LeaveRotationPolicy = {
 
 // Empty until slice E5 wires the leave-rotation planner.
 export const mockLeaveBlocks: LeaveBlock[] = [];
+
+// ─── Leave/coverage engine seed (slice L1 — read-only) ───────────────────────
+//
+// Foundation data shapes for the leave/coverage engine. The planner, the
+// fairness evaluator, and all write paths land in later L-slices.
+
+// One CoverageEvent — a company event tomorrow afternoon. Platoon g1 is
+// out for ~5 hours; the absence is small enough that the existing
+// missions' manpower naturally covers it.
+export const mockCoverageEvents: CoverageEvent[] = [
+  {
+    id:        'cv-1',
+    companyId: 'co1',
+    absent:    { kind: 'platoon', platoonId: 'g1' },
+    covering:  { kind: 'mission-already-covers' },
+    start:     todayAt('14:00', 1),
+    end:       todayAt('19:00', 1),
+    affectedMissionIds: [],            // engine will re-derive at projection time
+    reason:    'company-event',
+    notes:     'אירוע פלוגה — ברביקיו וערב גיבוש',
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+];
+
+// One DutyExclusion — soldier s4 marked abroad for the next 10 days.
+// compensateOnReturn=true so the fairness evaluator weights them as
+// "expected to contribute more" once they return.
+export const mockDutyExclusions: DutyExclusion[] = [
+  {
+    id:        'de-1',
+    companyId: 'co1',
+    soldierId: 's4',                   // נועם כץ
+    startIso:  dayBounds(-1).start,
+    endIso:    dayBounds(9).end,
+    reason:    'abroad',
+    note:      'חו"ל — חופשת לימודים',
+    compensateOnReturn: true,
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+];
+
+// Empty until slice L6 wires the rotation planner.
+export const mockLeaveRotationPlans: LeaveRotationPlan[] = [];

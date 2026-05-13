@@ -645,6 +645,14 @@ export interface CalendarEvent {
     /** Even on a locked date, certain leave kinds may still be allowed.
      *  When false, the leave flow must reject requests covering this day. */
     allowsLeave: boolean;
+    /** Operational categorization — filterable + future analytics grouping. */
+    category?: LockedDateCategory;
+    /** Scope of the lock. Defaults to { kind: 'company' } when absent —
+     *  preserves behavior of pre-existing locked dates. */
+    appliesTo?: LockedDateScope;
+    /** When true, even a CC grant emits an immediate OverrideAlert for
+     *  audit. Future workflow may require a second CC ack. */
+    overrideRequiresCC?: boolean;
   };
 
   createdBy: string;                       // userId
@@ -1083,6 +1091,19 @@ export interface LeaveRotationPolicy {
   /** Sub-units the CC has marked as eligible for partial-leave granularity. */
   squadsEligibleForPartialLeave: string[];
   exceptions: LeaveRotationException[];
+
+  // ── Duration controls (slice L1 — read-only in this slice) ─────────────
+  /** Hard floor — soldier must stay this many continuous days on base
+   *  before another home rotation is offered. Prevents 2–3 day rotations
+   *  that hurt operational continuity. */
+  minBaseDaysBeforeHome?: number;
+  /** Soft preference — engine targets this rotation length when scoring
+   *  alternative plans. Used as a weight in Phase L6, NOT a hard constraint. */
+  preferredRotationLengthDays?: number;
+  /** Hard floor — minimum gap between two consecutive home periods for
+   *  the same soldier/platoon. Prevents "home Tue, back Thu, home again Fri". */
+  minDaysBetweenHomePeriods?: number;
+
   createdAt: string;
 }
 
@@ -1162,6 +1183,229 @@ export interface Rule {
   id: string;
   name: string;
   category: 'rest' | 'manpower' | 'coverage' | 'fairness' | 'qualification' | 'custom';
+}
+
+// ─── Leave & coverage engine — foundation (slice L1) ────────────────────────
+//
+// Read-only data shapes for the leave/coverage engine. The algorithm
+// pipeline (Phases L0–L8), the planner, the fairness evaluator, and all
+// the write paths land in later slices. L1 only establishes the model so
+// future slices can plug in cleanly.
+
+// ── Locked date scoping (extensions to CalendarEvent.lockedDate) ──
+
+export type LockedDateCategory =
+  | 'duty-start'
+  | 'duty-end'
+  | 'inspection'
+  | 'special-mission'
+  | 'preparation'
+  | 'escalation'
+  | 'command-decision'
+  | 'other';
+
+export type LockedDateScope =
+  | { kind: 'company' }
+  | { kind: 'platoons'; platoonIds: string[] }
+  | { kind: 'squads';   squadIds:   string[] }
+  | { kind: 'soldiers'; soldierIds: string[] };
+
+// ── DutyExclusion — non-counting period for a single soldier ──
+//
+// Distinct from LeaveBlock because the soldier isn't on leave — they're
+// outside the count entirely. Fairness ignores days inside an exclusion.
+// Used for: soldier abroad, outside reserve duty period, extended medical,
+// extended personal leave that shouldn't count as "home benefit".
+
+export type DutyExclusionReason =
+  | 'abroad'
+  | 'outside-duty-period'
+  | 'medical'
+  | 'personal'
+  | 'other';
+
+export interface DutyExclusion {
+  id: string;
+  companyId: string;
+  soldierId: string;
+  startIso: string;
+  endIso:   string;
+  reason: DutyExclusionReason;
+  note?:  string;
+  /** When true, the engine weights this soldier as "expected to contribute
+   *  more" upon return — scheduler prefers giving them base time after
+   *  the exclusion window closes to balance the missed contribution. */
+  compensateOnReturn: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
+// ── CoverageEvent — temporary group absence + who covers it ──
+//
+// The "company barbecue / rest activity / 5-hour off" case. Distinct from:
+//   • LeaveBlock — too long, too formal
+//   • SoldierStatusEvent — individual, not group
+//   • CombatBlock — positive activity, not an absence
+
+export type AbsentScope =
+  | { kind: 'platoon';  platoonId:  string }
+  | { kind: 'squad';    squadId:    string }
+  | { kind: 'soldiers'; soldierIds: string[] };
+
+export type CoveringScope =
+  | { kind: 'platoon';                platoonId:  string }
+  | { kind: 'squad';                  squadId:    string }
+  | { kind: 'soldiers';               soldierIds: string[] }
+  | { kind: 'mission-already-covers' };
+
+export type CoverageEventReason =
+  | 'company-event'
+  | 'rest-activity'
+  | 'training'
+  | 'logistics'
+  | 'other';
+
+export interface CoverageEvent {
+  id: string;
+  companyId: string;
+
+  /** Who is OUT during this window. */
+  absent: AbsentScope;
+  /** Who COVERS for them. 'mission-already-covers' when an existing
+   *  mission's manpower naturally covers the absence. */
+  covering: CoveringScope;
+
+  start: string;                                                  // ISO
+  end:   string;
+
+  /** Snapshot at creation time — audit reads correctly even if missions
+   *  later change. The engine re-derives at projection time for live views. */
+  affectedMissionIds: string[];
+
+  reason: CoverageEventReason;
+  notes?: string;
+
+  createdBy: string;
+  createdAt: string;
+}
+
+// ── LeaveRotationPlan — concrete schedule produced by the engine ──
+//
+// Editing the policy does NOT retroactively change a published plan.
+// The CC re-generates from updated policy when ready.
+
+export type LeaveRotationPlanStatus = 'draft' | 'proposed' | 'published' | 'archived';
+
+export interface LeaveRotationPlan {
+  id: string;
+  companyId: string;
+  policyId: string;                                               // which policy generated this
+  periodStartIso: string;
+  periodEndIso:   string;
+  status: LeaveRotationPlanStatus;
+
+  /** The LeaveBlocks this plan implies. */
+  leaveBlockIds: string[];
+
+  /** Snapshots at the moment of last refinement — kept on the plan so the
+   *  CC sees the same numbers they approved. */
+  coverageSnapshot?: CoverageReport;
+  fairnessSnapshot?: FairnessSnapshot;
+
+  notes?:        string;
+  createdBy:     string;
+  createdAt:     string;
+  publishedAt?:  string;
+}
+
+// ── Fairness — computed, not stored ──
+
+export interface SoldierFairness {
+  soldierId: string;
+  daysOnBase:     number;
+  daysAtHome:     number;
+  nightsOnBase:   number;
+  weekendsOnBase: number;
+  missionHours:   number;
+  /** 0..1 — daysAtHome / (daysAtHome + daysOnBase) over the window. */
+  homeRatio: number;
+  /** σ from the soldier's platoon mean. */
+  loadDeviationFromPlatoon: number;
+  /** Days inside any DutyExclusion during the window. */
+  excludedDays: number;
+  trend: 'rising' | 'steady' | 'falling';
+}
+
+export interface PlatoonFairness {
+  platoonId:                string;
+  meanHomeRatio:            number;
+  /** Diff from company mean — positive = more home time than average. */
+  homeRatioVsCompany:       number;
+  /** σ among soldiers within this platoon. */
+  internalVariance:         number;
+  overworkedSoldierIds:     string[];
+  underworkedSoldierIds:    string[];
+}
+
+export type FairnessWarningKind =
+  | 'platoon-overworked'
+  | 'platoon-underworked'
+  | 'soldier-overworked'
+  | 'soldier-underworked'
+  | 'too-frequent-rotation'
+  | 'rotation-too-short';
+
+export interface FairnessWarning {
+  id: string;
+  kind: FairnessWarningKind;
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+  affectedSoldierIds?: string[];
+  affectedPlatoonIds?: string[];
+}
+
+export interface FairnessSnapshot {
+  asOf: string;
+  windowDays: number;                                             // typically 30
+  companyMeanHomeRatio: number;
+  perSoldier: SoldierFairness[];
+  perPlatoon: PlatoonFairness[];
+  warnings:   FairnessWarning[];
+}
+
+// ── Coverage report — computed at plan-evaluation time ──
+
+export type CoverageWarningKind =
+  | 'unstaffed'
+  | 'understaffed'
+  | 'commander-missing'
+  | 'qualification-missing';
+
+export interface CoverageWarning {
+  kind: CoverageWarningKind;
+  severity: 'info' | 'warning' | 'critical';
+  windowStart: string;
+  windowEnd:   string;
+  message: string;
+}
+
+export interface MissionCoverage {
+  missionId: string;
+  totalHours:          number;
+  fullyCoveredHours:   number;
+  understaffedHours:   number;
+  unstaffedHours:      number;
+  warnings: CoverageWarning[];
+}
+
+export interface CoverageReport {
+  generatedAt: string;
+  windowStart: string;
+  windowEnd:   string;
+  perMission:  MissionCoverage[];
+  fullyCoveredHours: number;
+  understaffedHours: number;
+  unstaffedHours:    number;
 }
 
 export interface MockUser {
