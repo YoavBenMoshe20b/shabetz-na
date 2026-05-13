@@ -36,6 +36,8 @@ export type PermissionToken =
   | 'logistics.signOut' | 'logistics.signIn' | 'logistics.viewAll'
   // Reports
   | 'report.viewCompanyState' | 'report.viewPlatoonState'
+  // Announcements + leave cycles (added in product round 4)
+  | 'announcement.create' | 'leaveCycle.edit'
   // Meta
   | 'delegation.grant';
 
@@ -1011,6 +1013,11 @@ export interface Mission {
   startDate?: string;
   endDate?:   string;
   createdAt:  string;
+
+  /** Back-reference when this mission was spawned in response to an
+   *  EscalationEvent. Lets the escalation surface show the missions it
+   *  created, and lets the mission surface show its escalation origin. */
+  escalationId?: string;
 }
 
 // ─── Operational order (צו) ──────────────────────────────────────────────────
@@ -1731,6 +1738,255 @@ export interface EquipmentGap {
   resolvedNotes?:    string;
 
   createdAt: string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  AUDIENCE — shared discriminated union for targeting                     ║
+// ║                                                                          ║
+// ║  Reused by Announcement, EscalationEvent, PlatoonLeaveCycleSegment, and  ║
+// ║  the lockedDate audience extension on CalendarEvent. Resolved to a flat  ║
+// ║  Set<soldierId> by utils/audience.ts so consumers do not duplicate the   ║
+// ║  expansion logic. New audience kinds (e.g. 'qualifications') extend the  ║
+// ║  union without breaking existing consumers — discriminate on `kind`.     ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type Audience =
+  | { kind: 'company' }
+  | { kind: 'platoons';          platoonIds:       string[] }
+  | { kind: 'squads';            squadIds:         string[] }
+  | { kind: 'soldiers';          soldierIds:       string[] }
+  | { kind: 'operational-roles'; operationalRoles: OperationalRole[] };
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  ANNOUNCEMENT — operational message / schedule item                      ║
+// ║                                                                          ║
+// ║  The single product entity for "the company commander posted a thing".   ║
+// ║  Three kinds:                                                            ║
+// ║                                                                          ║
+// ║    message       — short operational note ("בריפינג בשעה 18:30 ליד החפ״ק")║
+// ║    schedule      — schedule item that ALSO appears on the calendar       ║
+// ║    operational   — urgent operational guidance, surfaces emphatically    ║
+// ║                                                                          ║
+// ║  When kind ∈ {schedule, operational} the projection layer renders a      ║
+// ║  matching CalendarEntry — we do NOT denormalize a CalendarEvent record.  ║
+// ║  Calendar reads from announcements directly, so edits propagate cleanly. ║
+// ║  This is the same pattern as Mission → AssignmentSlot projection.        ║
+// ║                                                                          ║
+// ║  Scale: a company emits maybe 10–50 announcements per duty cycle. The    ║
+// ║  visible set for any viewer is bounded by O(audience-match). Search /    ║
+// ║  archive filtering happens client-side until storage exceeds ~5k rows,   ║
+// ║  at which point the backend will own pagination.                         ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type AnnouncementKind = 'message' | 'schedule' | 'operational';
+export type AnnouncementStatus = 'active' | 'closed' | 'archived';
+
+export interface Announcement {
+  id: string;
+  companyId: string;
+
+  kind: AnnouncementKind;
+  title: string;
+  body?: string;
+
+  /** When the announcement is operationally relevant. Open-ended (no endDate)
+   *  is allowed for evergreen guidance ("צוות התקשורת בקומה א'"). */
+  startDate?: string;                  // ISO date (YYYY-MM-DD)
+  endDate?:   string;                  // ISO date
+  /** Optional time-of-day component for schedule kind (e.g. בריפינג ב-18:30). */
+  startTime?: string;                  // HH:MM
+  endTime?:   string;                  // HH:MM
+
+  audience: Audience;
+
+  /** When true (default for kind=schedule), the announcement projects into
+   *  the calendar surface as a CalendarEntry. Operators can untoggle for a
+   *  message that should appear on Home but not the calendar timeline. */
+  showOnCalendar: boolean;
+
+  status: AnnouncementStatus;
+  pinned?: boolean;                    // floats to top of the strip
+
+  // Authorship + audit
+  createdByUserId: string;
+  createdByName:   string;
+  createdAt:       string;
+  updatedAt?:      string;
+  closedAt?:       string;
+  closedByUserId?: string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  ESCALATION EVENT (הקפצה) — operational call-up                          ║
+// ║                                                                          ║
+// ║  Top-level emergency event. Only company-tier leadership opens these.    ║
+// ║  When ACTIVE, surfaces as a sticky banner across every page for every    ║
+// ║  affected viewer. Carries audience + reportTime + endTime + equipment +  ║
+// ║  optional links to newly-created missions and temporary delegations      ║
+// ║  raised in its wake. Append-only history through openedAt/closedAt.      ║
+// ║                                                                          ║
+// ║  We deliberately do NOT model partial acknowledgement per-soldier yet —  ║
+// ║  the v1 product surfaces the event broadly; per-soldier ack is a phase-2 ║
+// ║  feature requiring a real backend (push receipts + ack tokens).          ║
+// ║                                                                          ║
+// ║  Single source of truth for "is the company on alert right now?":        ║
+// ║    escalationEvents.some(e => e.status === 'active')                     ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type EscalationStatus = 'active' | 'closed';
+export type EscalationEndKind = 'planned' | 'unknown';
+
+export interface EscalationEvent {
+  id: string;
+  companyId: string;
+
+  /** Free-text operational reason ("התרעה צפונית", "ניוד פלוגה לתעוז דרום"). */
+  reason: string;
+  /** Where to report ("שער ראשי", "תעוז 4", "מתחם החפ״ק"). */
+  location?: string;
+  /** When to report (ISO). The single most important field. */
+  reportTime: string;
+  /** Planned end, or 'unknown' for open-ended events. */
+  endKind: EscalationEndKind;
+  endTime?: string;                    // present iff endKind === 'planned'
+
+  audience: Audience;
+
+  /** Free-text guidance the operations officer wants the audience to see. */
+  instructions?: string;
+  /** Free-text equipment list ("ווסט · קסדה · מד״ר · כריזה"). Free-form so the
+   *  composer doesn't have to wait on the EquipmentItem catalogue. */
+  requiredEquipment?: string[];
+
+  /** Back-references to mission(s) created in response to this escalation.
+   *  The Mission carries this id back via the new `escalationId` field. */
+  spawnedMissionIds?: string[];
+
+  /** Back-references to temporary command delegations raised for this event. */
+  spawnedDelegationIds?: string[];
+
+  status: EscalationStatus;
+
+  // Audit — append-only
+  openedByUserId: string;
+  openedByName:   string;
+  openedAt:       string;
+  closedByUserId?: string;
+  closedByName?:   string;
+  closedAt?:       string;
+  closeReason?:    string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  PLATOON LEAVE CYCLE — concrete home/base rotation plan                  ║
+// ║                                                                          ║
+// ║  The CC-facing artifact. A Cycle holds a set of Segments. A Segment is   ║
+// ║  one row of "this scope is at home / on base, over this window".         ║
+// ║                                                                          ║
+// ║  Distinct from existing types:                                           ║
+// ║    LeaveRotationPolicy — abstract rule set (cycle length, floors, etc.)  ║
+// ║    LeaveRotationPlan   — engine-produced concrete plan (future)          ║
+// ║    LeaveBlock          — engine atom under a Plan                        ║
+// ║    Leave / LeaveRequest— individual leaves, NOT part of the cycle        ║
+// ║                                                                          ║
+// ║  The cycle is the SIMPLE user-facing thing the CC actually edits. The    ║
+// ║  engine concepts above remain as the path the real solver will produce.  ║
+// ║  Until the solver exists, the CC's cycle IS the plan.                    ║
+// ║                                                                          ║
+// ║  Conflict semantics:                                                     ║
+// ║    cycle segment (kind='home') vs individual Leave for someone in scope: ║
+// ║      both are valid simultaneously — the individual leave is an explicit ║
+// ║      'exception' overlay rendered with a distinct visual tone.           ║
+// ║                                                                          ║
+// ║  Scale: a company has ~1 active cycle per Order. Even at 10 platoons,    ║
+// ║  the segment count stays under ~50 per cycle. All projections O(N).      ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type LeaveCycleStatus = 'draft' | 'published' | 'archived';
+export type LeaveCycleSegmentKind = 'home' | 'base-locked';
+//                                  ↑      ↑
+//                                  |      everybody in scope must be on base
+//                                  one scope is at home for this window
+
+export type LeaveCycleSegmentScope =
+  | { kind: 'platoon'; platoonId: string }
+  | { kind: 'squad';   squadId:   string }
+  | { kind: 'soldiers'; soldierIds: string[] };
+
+export interface PlatoonLeaveCycleSegment {
+  id: string;
+  scope: LeaveCycleSegmentScope;
+  kind: LeaveCycleSegmentKind;
+  startDate: string;                   // ISO YYYY-MM-DD inclusive
+  endDate:   string;                   // ISO YYYY-MM-DD inclusive
+  note?: string;
+}
+
+export interface PlatoonLeaveCycle {
+  id: string;
+  companyId: string;
+  /** Optional anchor to a specific operational order. When tied to an order
+   *  the cycle inherits its time window for display purposes. */
+  orderId?: string;
+  name: string;                        // free-text label
+  status: LeaveCycleStatus;
+
+  segments: PlatoonLeaveCycleSegment[];
+
+  // Authorship + audit
+  createdByUserId: string;
+  createdAt:       string;
+  updatedAt?:      string;
+  publishedAt?:    string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  TOUR-OF-DUTY SUMMARY — derived (NEVER stored)                           ║
+// ║                                                                          ║
+// ║  Computed from SoldierStatusEvent[] intersected with OperationalOrder    ║
+// ║  windows by utils/tourOfDuty.ts. Carries the on-base / at-home /         ║
+// ║  inactive day counts per order, plus an aggregate.                       ║
+// ║                                                                          ║
+// ║  Why derived: status events are the single source of truth. Storing      ║
+// ║  per-order counts would create drift the moment events backfill or get   ║
+// ║  corrected. Pure projection guarantees consistency for free.             ║
+// ║                                                                          ║
+// ║  Performance: O(events × orders) per soldier. For a soldier with 200     ║
+// ║  events over 10 orders → 2000 ops. Cached at viewer with useMemo. The    ║
+// ║  CC dashboard does NOT compute every soldier's summary on load — Report  ║
+// ║  1 doesn't need it; the soldier-detail/profile screens do.               ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export interface TourOfDutyOrderBreakdown {
+  orderId?:    string;                 // undefined for "before any order existed"
+  orderName?:  string;
+  windowStart: string;                 // ISO date
+  windowEnd:   string;                 // ISO date
+  daysOnBase:  number;
+  daysAtHome:  number;
+  daysInactive: number;
+  /** Within the order window: when does the soldier's PERSONAL current line
+   *  end? (== orderEnd unless the soldier has a planned return date). */
+  daysRemainingInOrder?: number;
+}
+
+export interface SoldierTourSummary {
+  soldierId: string;
+  asOf: string;
+
+  /** The current line — derived from the active OperationalOrder + the
+   *  soldier's current status. When no order is active, this is null. */
+  current: TourOfDutyOrderBreakdown | null;
+
+  /** Historical breakdowns, newest first. */
+  past: TourOfDutyOrderBreakdown[];
+
+  /** Aggregate over everything in storage. */
+  total: {
+    daysOnBase:   number;
+    daysAtHome:   number;
+    daysInactive: number;
+  };
 }
 
 export interface MockUser {

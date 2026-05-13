@@ -21,8 +21,10 @@
 import type {
   CalendarEntry, CalendarEvent, Leave, Soldier, Platoon, Squad,
   UserRole,
+  Announcement, EscalationEvent, PlatoonLeaveCycle,
 } from '../types';
 import type { MaterializedSlot } from './materialize';
+import { announcementsToCalendarEntries } from './announcementProjection';
 
 // ─── Inputs ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +45,17 @@ export interface CalendarSources {
   /** Pre-materialized AssignmentSlots for the visible window. The caller
    *  produces these via utils/materialize.ts → materializeWeek(). */
   materializedSlots: MaterializedSlot[];
+  /** Round 4 — operational announcements visible on the calendar. The
+   *  projection layer filters by audience + `showOnCalendar`. Optional so
+   *  legacy callers compile without forcing them to pass these. */
+  announcements?:    Announcement[];
+  escalationEvents?: EscalationEvent[];
+  leaveCycles?:      PlatoonLeaveCycle[];
 }
+
+export type CalendarFilter = {
+  showLeaveCycle?: boolean;             // platoon-leave-cycle segments
+};
 
 export interface BuildDayEntriesInput {
   day:     Date;
@@ -103,7 +115,65 @@ export function buildDayEntries(input: BuildDayEntriesInput): CalendarEntry[] {
     });
   }
 
-  // 5. Visibility filter (viewer-aware)
+  // 5. Round 4 — announcements with showOnCalendar=true
+  if (sources.announcements && sources.announcements.length > 0) {
+    out.push(...announcementsToCalendarEntries(sources.announcements, day));
+  }
+
+  // 6. Round 4 — active escalation event(s) project as all-day operational entries.
+  //    Closed events don't surface on calendar (audit only).
+  if (sources.escalationEvents) {
+    for (const ev of sources.escalationEvents) {
+      if (ev.status !== 'active') continue;
+      const reportDate = ev.reportTime.slice(0, 10);
+      const endDate    = (ev.endTime ?? ev.reportTime).slice(0, 10);
+      if (dayIso < reportDate || dayIso > endDate) continue;
+      out.push({
+        id:    `esc-${ev.id}-${dayIso}`,
+        kind:  'announcement',
+        scope: 'company',
+        scopeRefId: ev.companyId,
+        start: `${dayIso}T00:00:00`,
+        end:   `${dayIso}T23:59:59`,
+        allDay: true,
+        title: `הקפצה · ${ev.reason}`,
+        detail: ev.location,
+        priority: 100,
+        locked: true,
+        sourceRef: { kind: 'escalation', id: ev.id },
+      });
+    }
+  }
+
+  // 7. Round 4 — platoon-leave-cycle segments. Per-segment entry per day so a
+  //    multi-day segment renders on every overlapping day.
+  if (sources.leaveCycles) {
+    for (const cycle of sources.leaveCycles) {
+      if (cycle.status !== 'published') continue;
+      for (const seg of cycle.segments) {
+        if (dayIso < seg.startDate || dayIso > seg.endDate) continue;
+        // Scope label — used for the title only.
+        const scopeLabel = scopeShortLabel(seg.scope, sources);
+        const tone = seg.kind === 'home' ? 'בבית' : 'בבסיס חובה';
+        out.push({
+          id: `plc-${cycle.id}-${seg.id}-${dayIso}`,
+          kind: 'announcement',
+          scope: 'platoon',
+          scopeRefId: seg.scope.kind === 'platoon' ? seg.scope.platoonId : cycle.companyId,
+          start: `${dayIso}T00:00:00`,
+          end:   `${dayIso}T23:59:59`,
+          allDay: true,
+          title: `${tone} — ${scopeLabel}`,
+          detail: seg.note,
+          priority: seg.kind === 'home' ? 25 : 30,
+          locked: true,
+          sourceRef: { kind: 'leave-cycle-segment', id: seg.id },
+        });
+      }
+    }
+  }
+
+  // 8. Visibility filter (viewer-aware)
   const visible = out.filter((e) => canSee(e, viewer, sources));
 
   // 6. Sort: all-day first (rendered in a strip), then by start ascending.
@@ -385,4 +455,24 @@ function overlapsDay(startIso: string, endIso: string, dayStart: Date, dayEnd: D
   const e = Date.parse(endIso);
   if (isNaN(s) || isNaN(e)) return false;
   return s <= dayEnd.getTime() && e >= dayStart.getTime();
+}
+
+// ─── Round 4 helpers ──────────────────────────────────────────────────────
+
+function scopeShortLabel(
+  scope: PlatoonLeaveCycle['segments'][number]['scope'],
+  sources: CalendarSources,
+): string {
+  switch (scope.kind) {
+    case 'platoon': {
+      const p = sources.platoons.find((x) => x.id === scope.platoonId);
+      return p?.name ?? 'מחלקה';
+    }
+    case 'squad': {
+      const sq = sources.squads.find((x) => x.id === scope.squadId);
+      return sq?.name ?? 'כיתה';
+    }
+    case 'soldiers':
+      return scope.soldierIds.length === 1 ? 'חייל' : `${scope.soldierIds.length} חיילים`;
+  }
 }

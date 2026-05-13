@@ -81,6 +81,7 @@ const ALL_TOKENS: PermissionToken[] = [
   'escalation.declare', 'escalation.respond', 'escalation.collectStatus',
   'logistics.signOut', 'logistics.signIn', 'logistics.viewAll',
   'report.viewCompanyState', 'report.viewPlatoonState',
+  'announcement.create', 'leaveCycle.edit',
   'delegation.grant',
 ];
 
@@ -402,4 +403,27 @@ export function canSeeSoldierSection(
   if (section === 'history')       return scope === 'self' || scope === 'platoon-cmd' || scope === 'company-cmd';
   if (section === 'edit-controls') return scope === 'platoon-cmd' || scope === 'company-cmd';
   return false;
+}
+
+// ─── Round 4 helpers — announcements, escalation, leave cycle, report 1 ──────
+//
+// All four surfaces are company-tier: CC + Deputy by default, anyone else
+// only via an active Delegation. Helpers funnel through hasPermission() so
+// the same delegation system already used elsewhere covers them for free.
+
+export function canCreateAnnouncement(user: MockUser, delegations: Delegation[] = []): boolean {
+  return hasPermission(user, 'announcement.create', { platoonId: user.commandedPlatoonId }, delegations);
+}
+
+export function canEditLeaveCycle(user: MockUser, delegations: Delegation[] = []): boolean {
+  return hasPermission(user, 'leaveCycle.edit', undefined, delegations);
+}
+
+export function canDeclareEscalation(user: MockUser, delegations: Delegation[] = []): boolean {
+  return hasPermission(user, 'escalation.declare', undefined, delegations);
+}
+
+/** דוח 1 — same scope as the company-wide state report. */
+export function canViewReport1(user: MockUser, delegations: Delegation[] = []): boolean {
+  return hasPermission(user, 'report.viewCompanyState', undefined, delegations);
 }

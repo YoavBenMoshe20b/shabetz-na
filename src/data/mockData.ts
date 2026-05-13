@@ -11,6 +11,7 @@ import type {
   CommandDelegation, EquipmentGap,
   MissionNote,
   OperationalOrder,
+  Announcement, EscalationEvent, PlatoonLeaveCycle,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -1153,5 +1154,147 @@ export const mockMissionNotes: MissionNote[] = [
     authorRole:   'companyCommander',
     text:         'לא להכניס למשמרת לילה חיילים שחזרו מהבית באותו יום.',
     createdAt:    SEED_CREATED,
+  },
+];
+
+// ─── Round-4 entities ─────────────────────────────────────────────────────
+// Announcements / Escalations / Leave cycle.
+// All scoped to co1 + the current order (order-current).
+
+const dayOffsetIso = (offset: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+};
+
+export const mockAnnouncements: Announcement[] = [
+  {
+    id:              'ann-pinned-1',
+    companyId:       SEED_CO,
+    kind:            'operational',
+    title:           'בדיקת ציוד גנרל',
+    body:            'כל החיילים מתבקשים להתייצב מחר ב-08:30 בהיכון מלא לבדיקת ציוד.',
+    startDate:       dayOffsetIso(1),
+    endDate:         dayOffsetIso(1),
+    startTime:       '08:30',
+    audience:        { kind: 'company' },
+    showOnCalendar:  true,
+    status:          'active',
+    pinned:          true,
+    createdByUserId: 'u-cc',
+    createdByName:   'מ״פ',
+    createdAt:       SEED_CREATED,
+  },
+  {
+    id:              'ann-schedule-1',
+    companyId:       SEED_CO,
+    kind:            'schedule',
+    title:           'בריפינג מ״מים',
+    body:            'בריפינג מ״מים שבועי בחפ״ק. נוכחות חובה.',
+    startDate:       dayOffsetIso(2),
+    endDate:         dayOffsetIso(2),
+    startTime:       '19:00',
+    endTime:         '20:00',
+    audience:        { kind: 'operational-roles', operationalRoles: ['מ״מ', 'סמל'] },
+    showOnCalendar:  true,
+    status:          'active',
+    createdByUserId: 'u-cc',
+    createdByName:   'מ״פ',
+    createdAt:       SEED_CREATED,
+  },
+  {
+    id:              'ann-message-1',
+    companyId:       SEED_CO,
+    kind:            'message',
+    title:           'מקלחות בחפ״ק',
+    body:            'מקלחות בחפ״ק לא יפעלו מחר בין 14:00 ל-16:00 בעקבות עבודות אחזקה.',
+    startDate:       dayOffsetIso(1),
+    endDate:         dayOffsetIso(1),
+    audience:        { kind: 'company' },
+    showOnCalendar:  false,
+    status:          'active',
+    createdByUserId: 'u-cc',
+    createdByName:   'מ״פ',
+    createdAt:       SEED_CREATED,
+  },
+  {
+    id:              'ann-platoon-1',
+    companyId:       SEED_CO,
+    kind:            'message',
+    title:           'נשק נקי בכלי הראשון',
+    body:            'תזכורת — מחלקה 1 בודקים שטח. נשק נקי בכלי הראשון.',
+    startDate:       dayOffsetIso(0),
+    endDate:         dayOffsetIso(3),
+    audience:        { kind: 'platoons', platoonIds: ['g1'] },
+    showOnCalendar:  false,
+    status:          'active',
+    createdByUserId: 'u-cc',
+    createdByName:   'מ״פ',
+    createdAt:       SEED_CREATED,
+  },
+];
+
+// One historical (closed) escalation, no active. CC can declare a new one.
+export const mockEscalationEvents: EscalationEvent[] = [
+  {
+    id:              'esc-history-1',
+    companyId:       SEED_CO,
+    reason:          'תרגיל הקפצה מפקדתי',
+    location:        'שער ראשי',
+    reportTime:      new Date(Date.now() - 6 * 86400000).toISOString(),
+    endKind:         'planned',
+    endTime:         new Date(Date.now() - 6 * 86400000 + 3 * 3600000).toISOString(),
+    audience:        { kind: 'company' },
+    instructions:    'התייצבות מלאה. סבב נוכחות בידי המ״מים.',
+    requiredEquipment: ['ווסט', 'קסדה', 'נשק אישי'],
+    status:          'closed',
+    openedByUserId:  'u-cc',
+    openedByName:    'מ״פ',
+    openedAt:        new Date(Date.now() - 6 * 86400000 - 1800000).toISOString(),
+    closedByUserId:  'u-cc',
+    closedByName:    'מ״פ',
+    closedAt:        new Date(Date.now() - 6 * 86400000 + 4 * 3600000).toISOString(),
+    closeReason:     'תרגיל הסתיים בהצלחה',
+  },
+];
+
+// One active leave cycle anchored to the current order.
+// 3 home segments × 3 platoons rolling, plus one base-locked period.
+export const mockPlatoonLeaveCycles: PlatoonLeaveCycle[] = [
+  {
+    id:               'plc-current',
+    companyId:        SEED_CO,
+    orderId:          'order-current',
+    name:             'סבב יציאות — צו נוכחי',
+    status:           'published',
+    segments: [
+      {
+        id: 'seg-1', kind: 'home',
+        scope: { kind: 'platoon', platoonId: 'g1' },
+        startDate: dayOffsetIso(2), endDate: dayOffsetIso(5),
+        note: 'מחלקה 1 בבית',
+      },
+      {
+        id: 'seg-2', kind: 'home',
+        scope: { kind: 'platoon', platoonId: 'g2' },
+        startDate: dayOffsetIso(6), endDate: dayOffsetIso(9),
+        note: 'מחלקה 2 בבית',
+      },
+      {
+        id: 'seg-3', kind: 'home',
+        scope: { kind: 'platoon', platoonId: 'g3' },
+        startDate: dayOffsetIso(10), endDate: dayOffsetIso(13),
+        note: 'מחלקה 3 בבית',
+      },
+      {
+        id: 'seg-4', kind: 'base-locked',
+        scope: { kind: 'platoon', platoonId: 'g-chapack' },
+        startDate: dayOffsetIso(0), endDate: dayOffsetIso(13),
+        note: 'חפ״ק חייב נוכחות מלאה כל הצו',
+      },
+    ],
+    createdByUserId:  'u-cc',
+    createdAt:        SEED_CREATED,
+    publishedAt:      SEED_CREATED,
   },
 ];

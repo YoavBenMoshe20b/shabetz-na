@@ -13,6 +13,7 @@ import { roleLabel } from '../utils/permissions';
 import {
   Eyebrow, Section, PageMain, Body, Muted, Hint,
 } from '../components/ui';
+import TourOfDutyCard from '../components/TourOfDutyCard';
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -207,6 +208,9 @@ export default function ProfilePage() {
             </div>
           </Section>
         )}
+
+        {/* Tour of duty (ימי קו) */}
+        {myProfile && <TourOfDutyCard soldier={myProfile} />}
 
         {/* Equipment shortcut */}
         <button

@@ -15,6 +15,7 @@ import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { getSoldierDetailScope, canSeeSoldierSection } from '../utils/permissions';
 import Header from '../components/Header';
+import TourOfDutyCard from '../components/TourOfDutyCard';
 import { materializeWeek } from '../utils/materialize';
 import type {
   OperationalRole, SignedEquipmentCategory, SoldierStatus,
@@ -354,6 +355,13 @@ export default function SoldierDetailPage() {
                 ))}
               </div>
             )}
+          </Section>
+        )}
+
+        {/* Tour of duty (ימי קו) — visible to anyone with operational-status access */}
+        {can('operational-status') && (
+          <Section label="ימי קו">
+            <TourOfDutyCard soldier={target} bare />
           </Section>
         )}
 

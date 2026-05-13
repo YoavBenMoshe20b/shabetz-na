@@ -14,8 +14,10 @@ import type {
   CommandAuthority, OperationalRole,
   MissionNote,
   OperationalOrder, OperationalOrderStatus,
+  Announcement, AnnouncementStatus,
+  EscalationEvent, PlatoonLeaveCycle, PlatoonLeaveCycleSegment,
 } from '../types';
-import { canApproveLeaveFor } from '../utils/permissions';
+import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle } from '../utils/permissions';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockPlatoons, mockLeaves, mockLeaveRequests,
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
@@ -28,6 +30,7 @@ import {
   mockCommandDelegations, mockEquipmentGaps,
   mockMissionNotes,
   mockOperationalOrders,
+  mockAnnouncements, mockEscalationEvents, mockPlatoonLeaveCycles,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -297,6 +300,38 @@ interface AppContextType {
   addLeaveRequest:     (req: Omit<LeaveRequest, 'id' | 'status' | 'submittedAt'>) => void;
   approveLeaveRequest: (id: string, reviewerId: string, reviewerName: string) => void;
   rejectLeaveRequest:  (id: string, reviewerId: string, reviewerName: string) => void;
+
+  // ── Round 4: Announcements / Escalations / Leave Cycles ──────────────
+  // All three follow the same pattern: state in-context + action functions
+  // that perform a permission check at the write boundary. Read paths are
+  // open — visibility filtering happens at projection time so commanders
+  // see the full set and soldiers see only what their audience covers.
+
+  // Announcements / לו"ז פלוגתי
+  announcements:        Announcement[];
+  addAnnouncement:      (data: Omit<Announcement, 'id' | 'createdAt' | 'createdByUserId' | 'createdByName' | 'status'> & { status?: AnnouncementStatus }) => Announcement | null;
+  updateAnnouncement:   (id: string, patch: Partial<Omit<Announcement, 'id' | 'companyId' | 'createdAt' | 'createdByUserId' | 'createdByName'>>) => void;
+  closeAnnouncement:    (id: string) => void;
+  deleteAnnouncement:   (id: string) => void;
+
+  // Escalation events / הקפצה
+  escalationEvents:     EscalationEvent[];
+  /** Single active event by default — commanders can stack if needed.
+   *  Returns the newly-created EscalationEvent (or null if not permitted). */
+  declareEscalation:    (data: Omit<EscalationEvent, 'id' | 'status' | 'openedAt' | 'openedByUserId' | 'openedByName'>) => EscalationEvent | null;
+  closeEscalation:      (id: string, reason?: string) => void;
+  /** True iff the viewer has at least one active escalation whose audience
+   *  covers them. Used by the global EscalationActiveBanner. */
+  activeEscalationsForViewer: () => EscalationEvent[];
+
+  // Platoon leave cycle / סבב יציאות פלוגתי
+  platoonLeaveCycles:        PlatoonLeaveCycle[];
+  addPlatoonLeaveCycle:      (data: Omit<PlatoonLeaveCycle, 'id' | 'createdAt' | 'createdByUserId' | 'status' | 'segments'> & { segments?: PlatoonLeaveCycleSegment[]; status?: PlatoonLeaveCycle['status'] }) => PlatoonLeaveCycle | null;
+  updatePlatoonLeaveCycle:   (id: string, patch: Partial<Omit<PlatoonLeaveCycle, 'id' | 'companyId' | 'createdAt' | 'createdByUserId'>>) => void;
+  addLeaveCycleSegment:      (cycleId: string, segment: Omit<PlatoonLeaveCycleSegment, 'id'>) => void;
+  updateLeaveCycleSegment:   (cycleId: string, segmentId: string, patch: Partial<Omit<PlatoonLeaveCycleSegment, 'id'>>) => void;
+  removeLeaveCycleSegment:   (cycleId: string, segmentId: string) => void;
+  publishLeaveCycle:         (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -1090,6 +1125,194 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : r
     ));
 
+  // ── Round 4 state — Announcements / Escalations / Leave Cycles ───────
+  //
+  // Each action performs a permission check at the write boundary. When a
+  // backend replaces this layer, the check moves server-side; the action
+  // signature stays the same so consumers don't change.
+  const [announcements,       setAnnouncements]       = useState<Announcement[]>(mockAnnouncements);
+  const [escalationEvents,    setEscalationEvents]    = useState<EscalationEvent[]>(mockEscalationEvents);
+  const [platoonLeaveCycles,  setPlatoonLeaveCycles]  = useState<PlatoonLeaveCycle[]>(mockPlatoonLeaveCycles);
+
+  // — Announcements —
+  const addAnnouncement = (
+    data: Omit<Announcement, 'id' | 'createdAt' | 'createdByUserId' | 'createdByName' | 'status'> & { status?: AnnouncementStatus },
+  ): Announcement | null => {
+    if (!currentUser) return null;
+    if (!canCreateAnnouncement(currentUser, delegations)) return null;
+    const ann: Announcement = {
+      ...data,
+      id: `ann-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdByUserId: currentUser.id,
+      createdByName:   currentUser.name,
+      createdAt:       new Date().toISOString(),
+      status:          data.status ?? 'active',
+    };
+    setAnnouncements((prev) => [ann, ...prev]);
+    addAuditLog({ actorName: currentUser.name, actorRole: currentRole, action: 'הודעה פלוגתית חדשה', target: ann.title });
+    return ann;
+  };
+
+  const updateAnnouncement = (id: string, patch: Partial<Omit<Announcement, 'id' | 'companyId' | 'createdAt' | 'createdByUserId' | 'createdByName'>>) => {
+    if (!currentUser) return;
+    if (!canCreateAnnouncement(currentUser, delegations)) return;
+    setAnnouncements((prev) => prev.map((a) => a.id === id
+      ? { ...a, ...patch, updatedAt: new Date().toISOString() }
+      : a
+    ));
+  };
+
+  const closeAnnouncement = (id: string) => {
+    if (!currentUser) return;
+    if (!canCreateAnnouncement(currentUser, delegations)) return;
+    const now = new Date().toISOString();
+    setAnnouncements((prev) => prev.map((a) => a.id === id
+      ? { ...a, status: 'closed' as const, closedAt: now, closedByUserId: currentUser.id }
+      : a
+    ));
+  };
+
+  const deleteAnnouncement = (id: string) => {
+    if (!currentUser) return;
+    if (!canCreateAnnouncement(currentUser, delegations)) return;
+    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  // — Escalation events —
+  const declareEscalation = (
+    data: Omit<EscalationEvent, 'id' | 'status' | 'openedAt' | 'openedByUserId' | 'openedByName'>,
+  ): EscalationEvent | null => {
+    if (!currentUser) return null;
+    if (!canDeclareEscalation(currentUser, delegations)) return null;
+    const ev: EscalationEvent = {
+      ...data,
+      id: `esc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      status: 'active',
+      openedByUserId: currentUser.id,
+      openedByName:   currentUser.name,
+      openedAt:       new Date().toISOString(),
+    };
+    setEscalationEvents((prev) => [ev, ...prev]);
+    addAuditLog({ actorName: currentUser.name, actorRole: currentRole, action: 'פתיחת הקפצה', target: ev.reason });
+    return ev;
+  };
+
+  const closeEscalation = (id: string, reason?: string) => {
+    if (!currentUser) return;
+    if (!canDeclareEscalation(currentUser, delegations)) return;
+    const now = new Date().toISOString();
+    setEscalationEvents((prev) => prev.map((e) => e.id === id
+      ? { ...e,
+          status: 'closed' as const,
+          closedAt: now,
+          closedByUserId: currentUser.id,
+          closedByName:   currentUser.name,
+          closeReason:    reason,
+        }
+      : e
+    ));
+    addAuditLog({ actorName: currentUser.name, actorRole: currentRole, action: 'סגירת הקפצה', target: reason ?? id });
+  };
+
+  const activeEscalationsForViewer = (): EscalationEvent[] => {
+    if (!currentUser) return [];
+    // Project audience match. Lazy — only run when consumer asks.
+    const lookups = { soldiers, platoons, squads };
+    return escalationEvents.filter((e) => {
+      if (e.status !== 'active') return false;
+      // Commanders see all active escalations in their company. Soldiers
+      // see only events whose audience covers them.
+      const isCommander = currentRole !== 'soldier';
+      if (isCommander) return e.companyId === currentUser.companyId;
+      if (!currentUser.soldierProfileId) return false;
+      if (e.audience.kind === 'company') return e.companyId === currentUser.companyId;
+      // Inline minimal scope check to avoid runtime import cycle with
+      // utils/audience.ts — projection util is consumed by surfaces, not here.
+      switch (e.audience.kind) {
+        case 'platoons': {
+          const myPlatoonId = currentUser.platoonId ?? currentUser.commandedPlatoonId;
+          return !!myPlatoonId && e.audience.platoonIds.includes(myPlatoonId);
+        }
+        case 'squads':
+          return !!currentUser.squadId && e.audience.squadIds.includes(currentUser.squadId);
+        case 'soldiers':
+          return e.audience.soldierIds.includes(currentUser.soldierProfileId);
+        case 'operational-roles':
+          return currentUser.operationalRoles.some((r) => e.audience.kind === 'operational-roles' && e.audience.operationalRoles.includes(r));
+      }
+      return false;
+    });
+    // Silence unused for refs to lookups (used in real audience.ts util at consumer sites)
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    lookups;
+  };
+
+  // — Platoon leave cycle —
+  const addPlatoonLeaveCycle = (
+    data: Omit<PlatoonLeaveCycle, 'id' | 'createdAt' | 'createdByUserId' | 'status' | 'segments'> & { segments?: PlatoonLeaveCycleSegment[]; status?: PlatoonLeaveCycle['status'] },
+  ): PlatoonLeaveCycle | null => {
+    if (!currentUser) return null;
+    if (!canEditLeaveCycle(currentUser, delegations)) return null;
+    const c: PlatoonLeaveCycle = {
+      ...data,
+      id: `plc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      segments: data.segments ?? [],
+      status: data.status ?? 'draft',
+      createdByUserId: currentUser.id,
+      createdAt: new Date().toISOString(),
+    };
+    setPlatoonLeaveCycles((prev) => [...prev, c]);
+    addAuditLog({ actorName: currentUser.name, actorRole: currentRole, action: 'יצירת סבב יציאות', target: c.name });
+    return c;
+  };
+
+  const updatePlatoonLeaveCycle = (id: string, patch: Partial<Omit<PlatoonLeaveCycle, 'id' | 'companyId' | 'createdAt' | 'createdByUserId'>>) => {
+    if (!currentUser || !canEditLeaveCycle(currentUser, delegations)) return;
+    setPlatoonLeaveCycles((prev) => prev.map((c) => c.id === id
+      ? { ...c, ...patch, updatedAt: new Date().toISOString() }
+      : c
+    ));
+  };
+
+  const addLeaveCycleSegment = (cycleId: string, segment: Omit<PlatoonLeaveCycleSegment, 'id'>) => {
+    if (!currentUser || !canEditLeaveCycle(currentUser, delegations)) return;
+    const seg: PlatoonLeaveCycleSegment = {
+      ...segment,
+      id: `seg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    };
+    setPlatoonLeaveCycles((prev) => prev.map((c) => c.id === cycleId
+      ? { ...c, segments: [...c.segments, seg], updatedAt: new Date().toISOString() }
+      : c
+    ));
+  };
+
+  const updateLeaveCycleSegment = (cycleId: string, segmentId: string, patch: Partial<Omit<PlatoonLeaveCycleSegment, 'id'>>) => {
+    if (!currentUser || !canEditLeaveCycle(currentUser, delegations)) return;
+    setPlatoonLeaveCycles((prev) => prev.map((c) => c.id === cycleId
+      ? { ...c,
+          segments: c.segments.map((s) => s.id === segmentId ? { ...s, ...patch } : s),
+          updatedAt: new Date().toISOString() }
+      : c
+    ));
+  };
+
+  const removeLeaveCycleSegment = (cycleId: string, segmentId: string) => {
+    if (!currentUser || !canEditLeaveCycle(currentUser, delegations)) return;
+    setPlatoonLeaveCycles((prev) => prev.map((c) => c.id === cycleId
+      ? { ...c, segments: c.segments.filter((s) => s.id !== segmentId), updatedAt: new Date().toISOString() }
+      : c
+    ));
+  };
+
+  const publishLeaveCycle = (id: string) => {
+    if (!currentUser || !canEditLeaveCycle(currentUser, delegations)) return;
+    const now = new Date().toISOString();
+    setPlatoonLeaveCycles((prev) => prev.map((c) => c.id === id
+      ? { ...c, status: 'published' as const, publishedAt: now, updatedAt: now }
+      : c
+    ));
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser, currentRole, soldiers, periods, auditLogs, platoons,
@@ -1119,6 +1342,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
       allSoldiers,
       soldierStatusEvents, delegations, updateSoldierStatus,
+      // ── Round 4 ─────────────────────────────────────────────────────
+      announcements, addAnnouncement, updateAnnouncement, closeAnnouncement, deleteAnnouncement,
+      escalationEvents, declareEscalation, closeEscalation, activeEscalationsForViewer,
+      platoonLeaveCycles, addPlatoonLeaveCycle, updatePlatoonLeaveCycle,
+      addLeaveCycleSegment, updateLeaveCycleSegment, removeLeaveCycleSegment, publishLeaveCycle,
     }}>
       {children}
     </AppContext.Provider>

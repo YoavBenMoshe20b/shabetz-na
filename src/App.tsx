@@ -30,6 +30,7 @@ import { AppProvider, useApp, useOperationalEmergency } from './context/AppConte
 import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import DelegationBanner from './components/DelegationBanner';
+import EscalationActiveBanner from './components/EscalationActiveBanner';
 import { EmergencyBanner } from './components/ui';
 
 // Eager — entry surfaces every authed user lands on
@@ -55,6 +56,10 @@ const EquipmentPage      = lazy(() => import('./pages/EquipmentPage'));
 const SoldierDetailPage  = lazy(() => import('./pages/SoldierDetailPage'));
 const PlatoonGapsPage    = lazy(() => import('./pages/PlatoonGapsPage'));
 const DelegationsPage    = lazy(() => import('./pages/DelegationsPage'));
+// Round 4
+const Report1Page        = lazy(() => import('./pages/Report1Page'));
+const AnnouncementsPage  = lazy(() => import('./pages/AnnouncementsPage'));
+const LeaveCyclePage     = lazy(() => import('./pages/LeaveCyclePage'));
 
 // Calm Suspense fallback — single subtle skeleton so the transition
 // feels intentional rather than a flash of blank.
@@ -92,6 +97,10 @@ function AppRoutes() {
           onAction={emergency!.actionHref ? () => navigate(emergency!.actionHref!) : undefined}
         />
       )}
+
+      {/* Active escalation (הקפצה) — higher priority than DelegationBanner;
+          renders only if the viewer's audience covers an active event. */}
+      {currentUser && !isFullScreen && <EscalationActiveBanner />}
 
       {currentUser && !isFullScreen && <DelegationBanner />}
 
@@ -148,6 +157,16 @@ function AppRoutes() {
         <Route path="/mission/:id" element={currentUser ? <MissionDetailPage /> : auth} />
         <Route path="/coverage"     element={
           <ProtectedRoute minRole="companyCommander"><CoveragePage /></ProtectedRoute>
+        } />
+
+        {/* ── Round 4: דוח 1 + הודעות + יציאות פלוגתיות ─── */}
+        <Route path="/report1"        element={
+          <ProtectedRoute minRole="companyCommander"><Report1Page /></ProtectedRoute>
+        } />
+        {/* Announcements: read open to everyone; create gated inside the page. */}
+        <Route path="/announcements"  element={currentUser ? <AnnouncementsPage /> : auth} />
+        <Route path="/leave-cycle"    element={
+          <ProtectedRoute minRole="companyCommander"><LeaveCyclePage /></ProtectedRoute>
         } />
 
         {/* ── Legacy redirects (so old links don't 404) ── */}

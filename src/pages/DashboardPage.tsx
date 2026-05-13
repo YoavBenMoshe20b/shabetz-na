@@ -2,13 +2,17 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, useApprovableLeaveRequests, useAlertsForCompany, useMyCompany, useMyPlatoons } from '../context/AppContext';
 import Header from '../components/Header';
-import { isPlatoonLeadership, isCompanyLeadership } from '../utils/permissions';
+import { isPlatoonLeadership, isCompanyLeadership, canDeclareEscalation, canEditLeaveCycle, canViewReport1 } from '../utils/permissions';
 import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
 import { materializeWeek } from '../utils/materialize';
 import {
   Card, Button, StatusPill, Section, PageMain, CollapsibleSection,
   PageTitle, CardTitle, Body, Muted, Hint, Sheet,
 } from '../components/ui';
+import AnnouncementsStrip from '../components/AnnouncementsStrip';
+import { TourOfDutyMini } from '../components/TourOfDutyCard';
+import EscalationSheet from '../components/EscalationSheet';
+import { activeSegmentForSoldier } from '../utils/leaveCycleProjection';
 import type { Soldier, SoldierStatus } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,7 +114,13 @@ function CompanyCommanderDashboard() {
   }), [now, materializedSlots, leaves, soldiers, allAlerts, soldierStatusEvents]);
 
   const [showActivity, setShowActivity] = useState(false);
+  const [escalationOpen, setEscalationOpen] = useState(false);
   const openAlertCount = overrideAlerts.filter((a) => a.companyId === myCompany?.id && a.status === 'open').length;
+
+  const { currentUser, delegations } = useApp();
+  const canEsc = !!currentUser && canDeclareEscalation(currentUser, delegations);
+  const canRpt = !!currentUser && canViewReport1(currentUser, delegations);
+  const canCyc = !!currentUser && canEditLeaveCycle(currentUser, delegations);
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
@@ -219,9 +229,57 @@ function CompanyCommanderDashboard() {
           </CollapsibleSection>
         )}
 
-        {/* ── 5. CC operational destinations ── */}
+        {/* ── 5. Announcements strip (round 4) ── */}
+        <AnnouncementsStrip isCommander={true} />
+
+        {/* ── 6. Escalation CTA (CC only) — only when no active one exists ── */}
+        {canEsc && (
+          <Section label="פעולת חירום">
+            <button
+              onClick={() => setEscalationOpen(true)}
+              className="w-full text-right bg-mil-alert-bg border border-mil-alert-border rounded-xl-soft shadow-card hover:shadow-card-hover transition-all duration-200 ease-out-soft px-5 py-4 flex items-center gap-3.5"
+            >
+              <span className="w-9 h-9 rounded-xl-soft bg-mil-alert text-white flex items-center justify-center flex-shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2 L22 20 H2 Z" />
+                  <path d="M12 9 v5" />
+                  <circle cx="12" cy="17.5" r="0.5" fill="currentColor" />
+                </svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <Body className="font-semibold leading-tight text-mil-alert">הקפצה</Body>
+                <Hint className="block mt-0.5 text-mil-alert/80">פתיחת אירוע מבצעי לקהל יעד</Hint>
+              </div>
+              <span className="text-mil-alert">←</span>
+            </button>
+          </Section>
+        )}
+
+        {/* ── 7. CC operational destinations ── */}
         <Section label="ניהול">
           <div className="grid grid-cols-1 gap-2.5">
+            {canRpt && (
+              <NavTile
+                label="דוח 1"
+                hint="תמונת מצב חיה של הפלוגה"
+                onClick={() => navigate('/report1')}
+                icon="report1"
+              />
+            )}
+            <NavTile
+              label="הודעות פלוגתיות"
+              hint="לו״ז, הודעות מבצעיות, הודעות שוטפות"
+              onClick={() => navigate('/announcements')}
+              icon="announcements"
+            />
+            {canCyc && (
+              <NavTile
+                label="יציאות פלוגתיות"
+                hint="סבב יציאות פלוגתי + הגנת סד״כ"
+                onClick={() => navigate('/leave-cycle')}
+                icon="leaveCycle"
+              />
+            )}
             <NavTile
               label="ניהול משימות"
               hint="הגדרת משימות פעילות וטיוטות"
@@ -244,6 +302,11 @@ function CompanyCommanderDashboard() {
         </Section>
 
       </PageMain>
+
+      {/* Escalation composer */}
+      {escalationOpen && (
+        <EscalationSheet open onClose={() => setEscalationOpen(false)} />
+      )}
     </div>
   );
 }
@@ -282,10 +345,10 @@ function NavTile({
   label: string;
   hint: string;
   onClick: () => void;
-  icon: 'missions' | 'coverage' | 'delegate';
+  icon: 'missions' | 'coverage' | 'delegate' | 'report1' | 'announcements' | 'leaveCycle';
 }) {
   const stroke = 1.6;
-  const Glyph = {
+  const glyphs: Record<typeof icon, React.ReactNode> = {
     missions: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
         <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
@@ -305,7 +368,28 @@ function NavTile({
         <path d="M15 18 c-2 2-5 2-7 0 s-2-5 0-7 l2-2" />
       </svg>
     ),
-  }[icon];
+    report1: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <path d="M8 8h8M8 12h8M8 16h5" />
+      </svg>
+    ),
+    announcements: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 11 L18 4 V18 L4 13 Z" />
+        <path d="M7 17 c0 2 1.5 3 3.5 3" />
+      </svg>
+    ),
+    leaveCycle: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 12 a9 9 0 0 1 17-4" />
+        <path d="M20 4 v5 h-5" />
+        <path d="M21 12 a9 9 0 0 1-17 4" />
+        <path d="M4 20 v-5 h5" />
+      </svg>
+    ),
+  };
+  const Glyph = glyphs[icon];
 
   return (
     <button
@@ -577,6 +661,9 @@ function PlatoonCommanderDashboard() {
           </Section>
         )}
 
+        {/* ── Announcements strip — visible to platoon leadership ── */}
+        <AnnouncementsStrip isCommander={true} />
+
         {/* ── השעות הקרובות ──────────────────────────── */}
         <Section label="השעות הקרובות">
           {events.length === 0 ? (
@@ -844,6 +931,15 @@ function SoldierDashboard() {
           />
         )}
 
+        {/* Round 4: Tour-of-duty mini (current line + days remaining) */}
+        {myProfile && <TourOfDutyMini soldier={myProfile} />}
+
+        {/* Round 4: My cycle status (when a published cycle covers me) */}
+        {myProfile && <SoldierCycleHint soldier={myProfile} />}
+
+        {/* Round 4: Announcements relevant to this soldier */}
+        <AnnouncementsStrip isCommander={false} />
+
         {/* Compact "מי על שמירה כרגע" — only if something is running */}
         {activeMissions.length > 0 && (
           <Section label="מי על שמירה כרגע">
@@ -1025,6 +1121,39 @@ function LeaveRequestModal({
 }
 
 const modalInp = 'w-full bg-mil-bg-alt border border-mil-border rounded-xl-soft px-3.5 py-3 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/40 focus:border-mil-olive placeholder:text-mil-ghost text-base transition-colors duration-200 ease-out-soft';
+
+// ─── SoldierCycleHint — round 4 ───────────────────────────────────────────
+//
+// Shows a single quiet card telling the soldier where they stand inside
+// the platoon leave cycle. Hidden when there's no published cycle, or
+// when no segment covers the viewer today. Visible to soldiers + commanders
+// (commanders see it for the soldier they're viewing themselves as).
+
+function SoldierCycleHint({ soldier }: { soldier: Soldier }) {
+  const { platoonLeaveCycles, squads } = useApp();
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const activeCycle = platoonLeaveCycles.find(
+    (c) => c.companyId === soldier.companyId && c.status === 'published',
+  );
+  const seg = activeSegmentForSoldier(activeCycle ?? null, soldier, todayIso, squads);
+  if (!seg) return null;
+
+  const label = seg.kind === 'home' ? 'אתה בבית בסבב' : 'נדרשת נוכחות מלאה';
+  const range = `${seg.startDate.slice(5)} – ${seg.endDate.slice(5)}`;
+  const tone = seg.kind === 'home'
+    ? { bg: 'bg-mil-sand-bg',  border: 'border-mil-sand/30',  fg: 'text-mil-sand'  }
+    : { bg: 'bg-mil-info-bg',  border: 'border-mil-info-border', fg: 'text-mil-info' };
+
+  return (
+    <div className={`${tone.bg} border ${tone.border} rounded-xl-soft p-4`}>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className={`text-sm font-semibold ${tone.fg}`}>{label}</span>
+        <span className="text-tiny text-mil-muted mr-auto tabular-nums font-medium">{range}</span>
+      </div>
+      {seg.note && <Muted className="mt-1 text-tiny">{seg.note}</Muted>}
+    </div>
+  );
+}
 
 // ─── CollapsibleCard — reused for "my week" and roster ───────────────────────
 

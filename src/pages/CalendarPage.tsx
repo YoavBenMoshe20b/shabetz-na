@@ -31,6 +31,7 @@ export default function CalendarPage() {
     currentUser, currentRole,
     calendarEvents, leaves, soldiers, platoons, squads,
     missions, dutyExclusions,
+    announcements, escalationEvents, platoonLeaveCycles,
   } = useApp();
 
   const today = useMemo(() => {
@@ -56,7 +57,10 @@ export default function CalendarPage() {
     companyId:          currentUser?.companyId,
     role:               currentRole,
   };
-  const sources: CalendarSources = { calendarEvents, leaves, soldiers, platoons, squads, materializedSlots };
+  const sources: CalendarSources = {
+    calendarEvents, leaves, soldiers, platoons, squads, materializedSlots,
+    announcements, escalationEvents, leaveCycles: platoonLeaveCycles,
+  };
 
   const pickDay = (d: Date) => { setViewedDay(d); setTab('day'); };
 
