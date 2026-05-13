@@ -10,7 +10,7 @@
 
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { isPlatoonLeadership } from '../utils/permissions';
+import { isPlatoonLeadership, isRasap } from '../utils/permissions';
 
 interface NavItem { to: string; label: string; icon: React.ReactNode }
 
@@ -77,9 +77,30 @@ const COMMANDER_ITEMS: NavItem[] = [
   { to: '/soldiers', label: 'חיילים', icon: ICON.users },
 ];
 
+// Rasap (logistics chief) — soldier-plus, with their command surface
+// being logistics. Tabs anchor on inventory + lifecycle.
+const RASAP_ICON = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10" />
+  </svg>
+);
+
+const RASAP_ITEMS: NavItem[] = [
+  { to: '/home',                 label: 'בית',     icon: ICON.home },
+  { to: '/calendar',             label: 'לוח',     icon: ICON.calendar },
+  { to: '/rasap',                label: 'רס״פ',    icon: RASAP_ICON },
+  { to: '/equipment/inventory',  label: 'מלאי',    icon: ICON.grid },
+  { to: '/profile',              label: 'פרופיל',  icon: ICON.user },
+];
+
 export default function BottomNav() {
-  const { currentRole } = useApp();
-  const items = isPlatoonLeadership(currentRole) ? COMMANDER_ITEMS : SOLDIER_ITEMS;
+  const { currentUser, currentRole } = useApp();
+  // Priority: commander variant > Rasap variant > soldier variant.
+  // A Rasap who is ALSO a PC keeps the commander toolbar.
+  const items =
+    isPlatoonLeadership(currentRole)            ? COMMANDER_ITEMS :
+    currentUser && isRasap(currentUser)         ? RASAP_ITEMS     :
+    SOLDIER_ITEMS;
 
   return (
     <nav

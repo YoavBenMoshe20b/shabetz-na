@@ -17,6 +17,7 @@ import { getSoldierDetailScope, canSeeSoldierSection } from '../utils/permission
 import Header from '../components/Header';
 import TourOfDutyCard from '../components/TourOfDutyCard';
 import DamageReportSheet from '../components/DamageReportSheet';
+import ManualStatusSheet from '../components/ManualStatusSheet';
 import { materializeWeek } from '../utils/materialize';
 import type { SignedEquipment } from '../types';
 import type {
@@ -136,6 +137,8 @@ export default function SoldierDetailPage() {
   // Round 6 — damage reporting (commanders can report on this soldier's items)
   const [damageOpen, setDamageOpen] = useState(false);
   const [damageFor, setDamageFor] = useState<SignedEquipment | null>(null);
+  // Round 7 — manual status override (commander on soldier)
+  const [statusOverrideOpen, setStatusOverrideOpen] = useState(false);
   const saveRoles = () => { updateSoldierOperationalRoles(target.id, rolesDraft); setEditRolesOpen(false); };
   const saveSquad = () => { updateSoldierSquad(target.id, squadDraft); setEditSquadOpen(false); };
 
@@ -187,7 +190,17 @@ export default function SoldierDetailPage() {
 
         {/* Operational status */}
         {can('operational-status') && (
-          <Section label="מצב מבצעי">
+          <Section
+            label="מצב מבצעי"
+            action={can('edit-controls') && (
+              <button
+                onClick={() => setStatusOverrideOpen(true)}
+                className="text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
+              >
+                עדכן ידנית
+              </button>
+            )}
+          >
             <div className="bg-mil-card border border-mil-border rounded-2xl px-5 py-4">
               <div className="flex items-baseline gap-3 flex-wrap">
                 <StatusPill status={
@@ -387,6 +400,14 @@ export default function SoldierDetailPage() {
             onClose={() => { setDamageOpen(false); setDamageFor(null); }}
             forItem={damageFor}
             reportedBySoldierId={target.id}
+          />
+        )}
+
+        {statusOverrideOpen && (
+          <ManualStatusSheet
+            open
+            onClose={() => setStatusOverrideOpen(false)}
+            soldier={target}
           />
         )}
 

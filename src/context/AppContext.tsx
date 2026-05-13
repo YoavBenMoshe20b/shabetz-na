@@ -69,6 +69,9 @@ export type JoinIdentity =
 
 interface AppContextType {
   currentUser:    MockUser | null;
+  /** All MockUsers in storage — used by approval-routing + commander
+   *  surfaces that need to resolve "who is this soldier's user / role". */
+  users:          MockUser[];
   currentRole:    UserRole;
   /** Active roster only. Inactive (historical) records are deliberately
    *  hidden behind `allSoldiers` so that no operational selector can read
@@ -83,9 +86,17 @@ interface AppContextType {
   delegations:    Delegation[];
 
   // ── Operational state actions ──────────────────────────────────────
-  /** Update a soldier's current operational state. Writes a status event
-   *  to the audit log AND denormalises onto Soldier.currentStatus. */
+  /** Soldier updates their OWN status. Writes a status event + denorms. */
   updateSoldierStatus: (data: {
+    soldierId: string;
+    next: SoldierStatus;
+    expectedUntil?: string;
+    reason?: string;
+  }) => void;
+  /** Commander updates a soldier's status manually (e.g. CC sends a
+   *  soldier home for personal reasons). Always logs isManualOverride=true
+   *  and captures the actor + previous value. */
+  updateSoldierStatusByCommander: (data: {
     soldierId: string;
     next: SoldierStatus;
     expectedUntil?: string;
@@ -381,32 +392,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [soldierStatusEvents, setSoldierStatusEvents] = useState<SoldierStatusEvent[]>(mockSoldierStatusEvents);
   const [delegations] = useState<Delegation[]>(mockDelegations);
 
+  // Internal helper — handles BOTH soldier-self-update and commander-
+  // override paths. Captures previous value + actor + reason for audit.
+  const writeStatusTransition = (data: {
+    soldierId: string;
+    next: SoldierStatus;
+    expectedUntil?: string;
+    reason?: string;
+    isManualOverride?: boolean;
+  }) => {
+    const now = new Date().toISOString();
+    // Resolve previous value BEFORE updating. We read from the live state
+    // via the functional updater pattern to avoid stale closures.
+    let previousValue: SoldierStatus | undefined;
+    setAllSoldiers((prev) => {
+      const target = prev.find((s) => s.id === data.soldierId);
+      previousValue = target?.currentStatus;
+      return prev.map((s) => s.id === data.soldierId ? {
+        ...s,
+        currentStatus:       data.next,
+        statusSetAt:         now,
+        statusExpectedUntil: data.expectedUntil,
+        availability:        data.next === 'in-base',
+      } : s);
+    });
+    setSoldierStatusEvents((prev) => [...prev, {
+      id: newId('sse'),
+      soldierId:        data.soldierId,
+      value:            data.next,
+      previousValue,
+      setAt:            now,
+      setBy:            currentUser?.id ?? 'system',
+      setByName:        currentUser?.name ?? 'system',
+      setByRole:        currentRole,
+      expectedUntil:    data.expectedUntil,
+      reason:           data.reason,
+      isManualOverride: data.isManualOverride ?? false,
+    }]);
+  };
+
+  /** Soldier updates their OWN status. */
   const updateSoldierStatus = (data: {
     soldierId: string;
     next: SoldierStatus;
     expectedUntil?: string;
     reason?: string;
-  }) => {
-    const now = new Date().toISOString();
-    // Append to the log
-    setSoldierStatusEvents((prev) => [...prev, {
-      id: newId('sse'),
-      soldierId: data.soldierId,
-      value: data.next,
-      setAt: now,
-      setBy: currentUser?.id ?? 'system',
-      expectedUntil: data.expectedUntil,
-      reason: data.reason,
-    }]);
-    // Denormalise onto the Soldier
-    setAllSoldiers((prev) => prev.map((s) => s.id === data.soldierId ? {
-      ...s,
-      currentStatus: data.next,
-      statusSetAt: now,
-      statusExpectedUntil: data.expectedUntil,
-      availability: data.next === 'in-base',   // keep legacy field in sync for one commit
-    } : s));
-  };
+  }) => writeStatusTransition({ ...data, isManualOverride: false });
+
+  /** Commander updates a SOLDIER'S status. Reason becomes mandatory in
+   *  the UI layer; the data path treats it as optional but the audit
+   *  log will surface "no reason given" when absent. */
+  const updateSoldierStatusByCommander = (data: {
+    soldierId: string;
+    next: SoldierStatus;
+    expectedUntil?: string;
+    reason?: string;
+  }) => writeStatusTransition({ ...data, isManualOverride: true });
   const [periods,      setPeriods]      = useState<SchedulePeriod[]>(mockSchedulePeriods);
   const [auditLogs,    setAuditLogs]    = useState<AuditLog[]>(mockAuditLogs);
   const [platoons, setPlatoons]           = useState<Platoon[]>(mockPlatoons);
@@ -1477,7 +1518,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      currentUser, currentRole, soldiers, periods, auditLogs, platoons,
+      currentUser, users, currentRole, soldiers, periods, auditLogs, platoons,
       leaves, leaveRequests, soldierHistory, miluimPeriods, reminders, isOnline, hasEmergency,
       lastWarnings, lastFairness, lastGeneratedPeriodId, setGenerationResult,
       companies, squads, addSquad, removeSquad, renameSquad,
@@ -1507,6 +1548,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
       allSoldiers,
       soldierStatusEvents, delegations, updateSoldierStatus,
+      updateSoldierStatusByCommander,
       // ── Round 4 ─────────────────────────────────────────────────────
       announcements, addAnnouncement, updateAnnouncement, closeAnnouncement, deleteAnnouncement,
       escalationEvents, declareEscalation, closeEscalation, activeEscalationsForViewer,
@@ -1696,9 +1738,9 @@ export function useAlertsForCompany(): OverrideAlert[] {
 // commander (no commanded platoon); scoped to the user's commanded platoon
 // for platoon leadership and for the חפ״ק dual-role case.
 export function useApprovableLeaveRequests(): LeaveRequest[] {
-  const { currentUser, leaveRequests, soldiers, platoons } = useApp();
+  const { currentUser, leaveRequests, soldiers, platoons, users, squads } = useApp();
   if (!currentUser) return [];
-  return leaveRequests.filter((req) => canApproveLeaveFor(currentUser, req, soldiers, platoons));
+  return leaveRequests.filter((req) => canApproveLeaveFor(currentUser, req, soldiers, platoons, users, squads));
 }
 
 export function useVisiblePeriods() {

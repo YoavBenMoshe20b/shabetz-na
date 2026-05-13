@@ -155,6 +155,15 @@ export const mockUsers: MockUser[] = [
     operationalRoles: ['רס״פ'], teamClass: 'מפלג',
     createdAt: '2024-04-22T08:00:00',
   },
+  {
+    // סמ"פ — Deputy CC. Same company powers as CC except can't grant
+    // delegations. Added in round 7 to enable approval-chain testing.
+    id: 'u7', name: 'דנה לוי', role: 'deputyCompanyCommander',
+    phone: '0507777666', idLast4: '7777', password: 'Test@1234',
+    companyId: 'co1',
+    operationalRoles: ['סמ״פ'], teamClass: 'חפ״ק',
+    createdAt: '2024-04-20T08:30:00',
+  },
 ];
 
 // ─── Leaves ──────────────────────────────────────────────────────────────────

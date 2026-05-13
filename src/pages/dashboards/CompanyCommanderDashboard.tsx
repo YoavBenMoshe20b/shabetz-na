@@ -25,6 +25,7 @@ import {
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import EscalationSheet from '../../components/EscalationSheet';
 import AlertsButton from '../../components/AlertsButton';
+import PersonalActionsFab from '../../components/PersonalActionsFab';
 import { Kpi } from './_shared/Kpi';
 import { NavTile } from './_shared/NavTile';
 import { TimelineCard } from './_shared/TimelineCard';
@@ -348,6 +349,10 @@ export default function CompanyCommanderDashboard() {
       {escalationOpen && (
         <EscalationSheet open onClose={() => setEscalationOpen(false)} />
       )}
+
+      {/* Personal capability layer — every role, including CC, gets the
+          personal toolbox: profile, equipment, status, leave request. */}
+      <PersonalActionsFab />
     </div>
   );
 }

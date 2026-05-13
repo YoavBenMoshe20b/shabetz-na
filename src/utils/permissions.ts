@@ -23,7 +23,7 @@
 // Legacy 'owner' ≈ companyCommander, legacy 'manager' ≈ platoonCommander
 // so old mock users still resolve correctly.
 
-import type { UserRole, MockUser, Platoon, LeaveRequest, Soldier, PermissionToken, Delegation } from '../types';
+import type { UserRole, MockUser, Platoon, LeaveRequest, Soldier, Squad, PermissionToken, Delegation } from '../types';
 
 // ─── Role hierarchy ──────────────────────────────────────────────────────────
 
@@ -188,32 +188,140 @@ export function canManagePlatoon(user: MockUser, platoon: Platoon): boolean {
 }
 
 /**
- * Can this user approve / reject the given leave request?
+ * Approval chain — who can approve THIS leave request?
  *
- * Only the commander/sergeant of the SAME PLATOON the soldier belongs to.
- * Company commanders do NOT auto-approve other platoons' leaves — per spec,
- * each platoon is a closed approval scope. The exception (חפ״ק case) is
- * handled by the same predicate: a company commander who also leads חפ״ק
- * has `commandedPlatoonId === g_chapack`, so this returns true for that
- * platoon and false for siblings.
+ * The chain depends on the REQUESTER's role, not the approver's:
+ *
+ *   חייל  → מ״מ או סמל של המחלקה
+ *   סמל   → מ״מ של המחלקה
+ *   מ״מ   → מ״פ או סמ״פ
+ *   רס״פ  → מ״פ או סמ״פ      (regardless of base UserRole — operational tag)
+ *   סמ״פ  → מ״פ
+ *   מ״פ   → לעצמו (no approval needed)
+ *
+ * The function resolves the requester from request.soldierId via the
+ * MockUser linked through Soldier.userId. When the link is missing
+ * (legacy / unclaimed slot) we default to 'soldier' role.
+ */
+
+export type ApprovalScope =
+  | 'self'                  // requester approves themselves (CC)
+  | 'cc-only'               // only company commander
+  | 'cc-or-deputy'          // CC or deputy
+  | 'platoon-pc-only'       // platoon commander of the requester's platoon
+  | 'platoon-pc-or-ps';     // PC or PS of the requester's platoon
+
+export interface ApprovalRouting {
+  scope: ApprovalScope;
+  /** When scope is platoon-level, the platoon id the approver must command. */
+  platoonId?: string;
+}
+
+/** Resolve the approval routing for a given leave request. Pure helper —
+ *  consumed both by canApproveLeaveFor (the predicate) and by UI labels
+ *  that want to display "ממתין למ״מ" / "ממתין למ״פ" etc. */
+export function approvalRoutingFor(
+  request: LeaveRequest,
+  soldiers: Soldier[],
+  users: MockUser[],
+  platoons: Platoon[],
+  squads: Squad[] = [],
+): ApprovalRouting {
+  const soldier = soldiers.find((s) => s.id === request.soldierId);
+
+  // Resolve requester's UserRole + OperationalRole list.
+  // When the soldier has no userId yet (unclaimed), fall back to soldier role.
+  const requesterUser = soldier?.userId ? users.find((u) => u.id === soldier.userId) : undefined;
+  const requesterRole: UserRole = requesterUser?.role ?? 'soldier';
+  const requesterOps  = requesterUser?.operationalRoles ?? soldier?.operationalRoles ?? [];
+
+  // CC requests don't need approval.
+  if (requesterRole === 'companyCommander' || requesterRole === 'owner') {
+    return { scope: 'self' };
+  }
+  // Deputy CC needs CC only.
+  if (requesterRole === 'deputyCompanyCommander') {
+    return { scope: 'cc-only' };
+  }
+  // Rasap operational role routes upward to company tier regardless of base role.
+  if (requesterOps.includes('רס״פ')) {
+    return { scope: 'cc-or-deputy' };
+  }
+  // Platoon commander goes up to company.
+  if (requesterRole === 'platoonCommander' || requesterRole === 'manager') {
+    return { scope: 'cc-or-deputy' };
+  }
+
+  // Platoon sergeant goes up to platoon commander only.
+  if (requesterRole === 'platoonSergeant') {
+    const platoonId = requesterUser?.commandedPlatoonId
+      ?? findPlatoonOfSoldier(soldier, platoons, squads);
+    return { scope: 'platoon-pc-only', platoonId };
+  }
+
+  // Plain soldier — PC or PS of their platoon may approve.
+  const platoonId = findPlatoonOfSoldier(soldier, platoons, squads);
+  return { scope: 'platoon-pc-or-ps', platoonId };
+}
+
+function findPlatoonOfSoldier(
+  soldier: Soldier | undefined,
+  platoons: Platoon[],
+  squads: Squad[],
+): string | undefined {
+  if (!soldier) return undefined;
+  // Modern path: via squadId.
+  if (soldier.squadId) {
+    const sq = squads.find((s) => s.id === soldier.squadId);
+    if (sq) return sq.platoonId;
+  }
+  // Legacy path: memberIds.
+  const p = platoons.find((g) => g.memberIds.includes(soldier.userId ?? ''));
+  return p?.id;
+}
+
+/**
+ * Can this user approve / reject the given leave request? Built on top
+ * of approvalRoutingFor so the routing logic stays single-source.
+ *
+ * Note: this function preserves the legacy 4-argument signature for
+ * callsites that don't have the users array handy (e.g. older calls in
+ * legacy reducers). When users is missing we fall back to the simpler
+ * platoon-only rule.
  */
 export function canApproveLeaveFor(
   user: MockUser,
   request: LeaveRequest,
   soldiers: Soldier[],
   platoons: Platoon[],
+  users?: MockUser[],
+  squads?: Squad[],
 ): boolean {
+  // Path A — full role-chain resolution when we have the users array.
+  if (users) {
+    const routing = approvalRoutingFor(request, soldiers, users, platoons, squads);
+    switch (routing.scope) {
+      case 'self':
+        return false; // CC requests are self-approved at creation; no review needed.
+      case 'cc-only':
+        return user.role === 'companyCommander' || user.role === 'owner';
+      case 'cc-or-deputy':
+        return isCompanyLeadership(user.role);
+      case 'platoon-pc-only':
+        return user.role === 'platoonCommander' && user.commandedPlatoonId === routing.platoonId;
+      case 'platoon-pc-or-ps':
+        return isPlatoonLeadership(user.role) && user.commandedPlatoonId === routing.platoonId;
+    }
+  }
+
+  // Path B — legacy fallback (kept for callers that don't pass users).
   const soldier = soldiers.find((s) => s.id === request.soldierId);
   if (!soldier) return false;
   const platoon = platoons.find((g) => g.memberIds.includes(soldier.userId ?? ''));
   if (!platoon) return false;
 
-  // Primary: explicit command-chain link.
   if (user.commandedPlatoonId === platoon.id) return true;
 
-  // Legacy fallback for mock users without commandedPlatoonId set yet.
-  // ONLY platoon-level roles fall through here — a pure company commander
-  // (no commandedPlatoonId) deliberately does not.
   const isPlatoonRole =
     user.role === 'platoonCommander' ||
     user.role === 'platoonSergeant'  ||
@@ -221,6 +329,17 @@ export function canApproveLeaveFor(
   if (isPlatoonRole && platoon.memberIds.includes(user.id)) return true;
 
   return false;
+}
+
+/** Approval-status display helper — what's the queue label for a pending request? */
+export function approvalQueueLabel(routing: ApprovalRouting): string {
+  switch (routing.scope) {
+    case 'self':                return 'אישור עצמי';
+    case 'cc-only':             return 'ממתין למ״פ';
+    case 'cc-or-deputy':        return 'ממתין למ״פ / סמ״פ';
+    case 'platoon-pc-only':     return 'ממתין למ״מ';
+    case 'platoon-pc-or-ps':    return 'ממתין למ״מ / סמל';
+  }
 }
 
 /** Only company-level leadership can create company-wide missions (assigned to one or more platoons). */

@@ -63,7 +63,7 @@ export default function Header({ title }: { title: string }) {
 
                   <Divider />
                   <DropdownLabel>החלפת תפקיד · כלי מפתחים</DropdownLabel>
-                  {(['companyCommander', 'platoonCommander', 'soldier'] as UserRole[]).map((r) => (
+                  {(['companyCommander', 'deputyCompanyCommander', 'platoonCommander', 'platoonSergeant', 'soldier'] as UserRole[]).map((r) => (
                     <DropdownItem
                       key={r}
                       onClick={() => { switchRole(r); setShowDev(false); }}

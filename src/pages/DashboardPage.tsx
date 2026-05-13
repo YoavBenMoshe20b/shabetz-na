@@ -1,24 +1,32 @@
 // DashboardPage — thin router by role.
 //
-// The three variants live in src/pages/dashboards/. Each is independently
-// importable + lazily loadable in the future. The router decides ONLY
-// which variant to mount.
+// Routing logic, in priority order:
+//   1. Company leadership   → CompanyCommanderDashboard
+//   2. Platoon leadership   → PlatoonCommanderDashboard
+//   3. Rasap (functional)   → RasapDashboard (round 7)
+//                              Detected via OperationalRole 'רס״פ' OR
+//                              functionalRoles.includes('rasap'). A Rasap
+//                              user is FIRST a soldier — their dashboard
+//                              combines the soldier-spine with logistics.
+//   4. Default soldier      → SoldierDashboard
 //
-// Architecture: variants share widgets via dashboards/_shared/. Pure
-// presentation; no cross-variant prop drilling. Each variant owns its
-// data fetching (useApp + projections) so the file-level boundaries
-// map cleanly to backend endpoints later: one fetch per variant.
+// Each variant lives in its own file and fetches its own data so the
+// file boundaries map cleanly to backend endpoints later.
 
 import { useApp } from '../context/AppContext';
-import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
+import { isCompanyLeadership, isPlatoonLeadership, isRasap } from '../utils/permissions';
 
 import CompanyCommanderDashboard from './dashboards/CompanyCommanderDashboard';
 import PlatoonCommanderDashboard from './dashboards/PlatoonCommanderDashboard';
+import RasapDashboard            from './dashboards/RasapDashboard';
 import SoldierDashboard          from './dashboards/SoldierDashboard';
 
 export default function DashboardPage() {
-  const { currentRole } = useApp();
+  const { currentUser, currentRole } = useApp();
   if (isCompanyLeadership(currentRole))   return <CompanyCommanderDashboard />;
   if (isPlatoonLeadership(currentRole))   return <PlatoonCommanderDashboard />;
+  // Rasap functional role on top of a plain soldier — render the
+  // logistics-aware soldier variant.
+  if (currentUser && isRasap(currentUser)) return <RasapDashboard />;
   return <SoldierDashboard />;
 }

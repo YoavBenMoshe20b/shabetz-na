@@ -213,14 +213,27 @@ export type SoldierStatus =
 
 // Append-only audit log of every status change. Soldier.currentStatus
 // is a denormalised cache of the latest event for fast reads.
+//
+// Round 7 expansion — events now capture:
+//   • previousValue   — what the status WAS before the transition
+//   • setByName       — actor display name (denormalized)
+//   • setByRole       — actor role at time of event
+//   • isManualOverride— true when a commander set the value for another
+//                       soldier (vs the soldier setting their own state)
 export interface SoldierStatusEvent {
   id:        string;
   soldierId: string;
   value:     SoldierStatus;
+  previousValue?: SoldierStatus;
   setAt:     string;
   setBy:     string;               // userId of whoever set it
+  setByName?: string;              // denormalized for audit display
+  setByRole?: UserRole;            // role of the setter at time of event
   expectedUntil?: string;
   reason?:   string;
+  /** True when a commander updated a soldier's status (vs. soldier
+   *  setting their own). Required when isManualOverride=true. */
+  isManualOverride?: boolean;
   // Architecture-ready: escalationId? linked when the event is part of an
   // EscalationEvent response. Not used yet.
   escalationId?: string;

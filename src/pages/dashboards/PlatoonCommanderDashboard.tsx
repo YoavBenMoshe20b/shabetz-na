@@ -21,6 +21,7 @@ import {
 } from '../../components/ui';
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import AlertsButton from '../../components/AlertsButton';
+import PersonalActionsFab from '../../components/PersonalActionsFab';
 import { TimelineCard } from './_shared/TimelineCard';
 
 // ─── ReadinessBar (PC mirror of the CC version) ──────────────────────────
@@ -240,6 +241,11 @@ export default function PlatoonCommanderDashboard() {
         </Section>
 
       </PageMain>
+
+      {/* Personal capability layer — every PC/PS is FIRST a soldier
+          who can submit their own leave request, update own status,
+          report damage on their own gear. */}
+      <PersonalActionsFab />
     </div>
   );
 }
