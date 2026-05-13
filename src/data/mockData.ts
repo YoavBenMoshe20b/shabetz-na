@@ -4,6 +4,8 @@ import type {
   CompanyMission, OverrideAlert,
   SoldierStatusEvent, Delegation,
   CalendarEvent,
+  Mission, Qualification, EquipmentItem, SoldierQualification,
+  LeaveRotationPolicy, LeaveBlock,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -663,3 +665,185 @@ export const mockCalendarEvents: CalendarEvent[] = [
     createdAt: SEED_CREATED,
   },
 ];
+
+// ─── Engine seed (slice E1 — no UI consumer yet) ─────────────────────────────
+//
+// Read-only foundation for the scheduling/leave/mission engine. Slice E2
+// adds the CC mission-authoring wizard that writes to mockMissions via
+// context actions. Until then this data is reachable through useApp() but
+// no screen renders it.
+
+// Company-defined capability vocabulary.
+export const mockQualifications: Qualification[] = [
+  {
+    id:        'q-drone-op',
+    companyId: 'co1',
+    name:      'מפעיל רחפן מבצעי',
+    category:  'תקשורת',
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:        'q-driver-c',
+    companyId: 'co1',
+    name:      'נהג קשת',
+    category:  'נהיגה',
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:        'q-tactical-medic',
+    companyId: 'co1',
+    name:      'חובש קרבי',
+    category:  'רפואה',
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+];
+
+export const mockEquipmentItems: EquipmentItem[] = [
+  { id: 'eq-ladder',    companyId: 'co1', name: 'סולם',          category: 'ציוד פריצה', isConsumable: false, unitCount: 3 },
+  { id: 'eq-drone-mvk', companyId: 'co1', name: 'רחפן מאוויק 3', category: 'תקשורת',     isConsumable: false, unitCount: 2 },
+  { id: 'eq-radio-cmd', companyId: 'co1', name: 'מכשיר קשר מ״מ',  category: 'תקשורת',     isConsumable: false, unitCount: 6 },
+];
+
+// Soldier ↔ Qualification links. Two soldiers carry quals for demo realism.
+export const mockSoldierQualifications: SoldierQualification[] = [
+  {
+    id:              'sq-1',
+    soldierId:       's7',                                        // Shay Avraham — has 'רחפן' op role too
+    qualificationId: 'q-drone-op',
+    certifiedAt:     '2025-03-01',
+  },
+  {
+    id:              'sq-2',
+    soldierId:       's9',                                        // Nisim Dahan — חובש
+    qualificationId: 'q-tactical-medic',
+    certifiedAt:     '2024-11-15',
+  },
+];
+
+// Two seed missions exercising different policy combinations.
+export const mockMissions: Mission[] = [
+  {
+    id:               'mi-gate-north',
+    companyId:        'co1',
+    name:             'שמירה בשער צפון',
+    description:      'שמירת בסיס · משמרת מתחלפת',
+    createdByUserId:  'u-cc',
+    ownerRole:        'company',
+    assignedPlatoonIds: ['g1'],
+    timeModel: {
+      kind: '24-7-continuous',
+    },
+    manpower: {
+      kind: 'window-varies',
+      windows: [
+        { label: 'day',   from: '06:00', to: '22:00', spec: { kind: 'exact', count: 1 } },
+        { label: 'night', from: '22:00', to: '06:00', spec: { kind: 'exact', count: 2 } },
+      ],
+    },
+    command: {
+      required: false,
+      count:    0,
+      commanderCountsAsManpower: false,
+      allowedCommanderRanks: [],
+      rankParticipation: {
+        soldier: 'eligible-as-soldier',
+        mk:      'eligible-as-soldier',
+      },
+    },
+    rotation: { kind: 'fixed-platoon', platoonId: 'g1' },
+    fatigue: {
+      intensity:         'standing-guard',
+      impactsSleep:      false,
+      minRestAfterHours: 6,
+      fatigueWeight:     3,
+    },
+    qualifications: [],
+    equipment: [
+      { equipmentItemId: 'eq-radio-cmd', count: 1, perSoldier: false },
+    ],
+    conflictsWith:  [],
+    canOverlapWith: [],
+    pairings:       [],
+    squadPolicy:    { mode: 'mix' },
+    requiresDailyConfirmation: false,
+    status:    'active',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:               'mi-night-patrol',
+    companyId:        'co1',
+    name:             'סיור לילה — גזרה מערבית',
+    description:      'יציאה לילית · משימה בעלת אופי מבצעי',
+    createdByUserId:  'u-cc',
+    ownerRole:        'company',
+    assignedPlatoonIds: ['g1'],
+    timeModel: {
+      kind: 'fixed-hours',
+      windows: [
+        { startTime: '23:00', endTime: '03:00', shiftDurationMinutes: 240, recurring: 'every-day' },
+      ],
+    },
+    manpower: {
+      kind: 'exact',
+      count: 4,
+    },
+    command: {
+      required: true,
+      count:    1,
+      commanderCountsAsManpower: true,
+      allowedCommanderRanks: ['samal', 'mam'],
+      rankParticipation: {
+        soldier: 'eligible-as-soldier',
+        mk:      'eligible-as-soldier',
+        samal:   'commander-only',
+        mam:     'commander-only',
+      },
+    },
+    rotation: { kind: 'rotate-squads', period: 'daily' },
+    fatigue: {
+      intensity:         'ambush',
+      impactsSleep:      true,
+      sleepWindowHours:  4,
+      minRestAfterHours: 12,
+      fatigueWeight:     9,
+    },
+    qualifications: [
+      { qualificationId: 'q-tactical-medic', count: 1 },
+    ],
+    equipment: [
+      { equipmentItemId: 'eq-radio-cmd', count: 1, perSoldier: false },
+    ],
+    conflictsWith:  [],
+    canOverlapWith: [],
+    pairings:       [],
+    squadPolicy:    { mode: 'no-mix' },
+    requiresDailyConfirmation: true,
+    status:    'active',
+    createdAt: SEED_CREATED,
+  },
+];
+
+// Company-level leave rotation policy. One per company.
+export const mockLeaveRotationPolicy: LeaveRotationPolicy = {
+  id:                'lrp-co1',
+  companyId:         'co1',
+  mode:              'platoon-rotation',
+  minSoldiersOnBase: 8,
+  perPlatoonFloors:  { g1: 5 },
+  cycle:             { everyDays: 7 },
+  squadsEligibleForPartialLeave: ['su-g1-a', 'su-g1-b', 'su-g1-c'],
+  exceptions: [
+    {
+      kind:   'never-on-leave',
+      target: { functionalRoles: ['rasap'] },
+      rule:   'רס״פ נשאר בבסיס במהלך מחזורי החופשה',
+    },
+  ],
+  createdAt: SEED_CREATED,
+};
+
+// Empty until slice E5 wires the leave-rotation planner.
+export const mockLeaveBlocks: LeaveBlock[] = [];

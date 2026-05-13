@@ -679,6 +679,321 @@ export interface CalendarEntry {
   sourceRef: { kind: string; id: string };
 }
 
+// ─── Engine: open capability vocabulary (company-defined, reusable) ─────────
+//
+// Qualifications and EquipmentItems are NOT enums. They are data the
+// company commander defines. The engine only understands shapes ("this
+// mission needs N people with qualification Q"); the CC decides what Q is.
+
+export interface Qualification {
+  id: string;
+  companyId: string;
+  name: string;                          // "מפעיל רחפן מבצעי"
+  description?: string;
+  category?: string;                     // optional grouping ("תקשורת", "נהיגה")
+  createdBy: string;                     // userId
+  createdAt: string;
+}
+
+export interface EquipmentItem {
+  id: string;
+  companyId: string;
+  name: string;                          // "סולם", "רחפן מאוויק 3"
+  category?: string;
+  isConsumable: boolean;                 // batteries vs ladders
+  unitCount: number;                     // how many the company owns
+}
+
+// Soldier ↔ Qualification join. Annual recerts use expiresAt.
+export interface SoldierQualification {
+  id: string;
+  soldierId: string;
+  qualificationId: string;
+  certifiedAt?: string;
+  certifiedBy?: string;                  // userId of certifying officer
+  expiresAt?: string;                    // ISO; missions exclude soldier past this
+}
+
+// ─── Engine: mission policy primitives ──────────────────────────────────────
+//
+// A Mission is composed of policy objects rather than fields. Each policy
+// is a discriminated union so authoring flows (slice E2) and the engine
+// (slice E3+) can handle the kinds independently.
+
+export interface MissionTimeWindow {
+  startTime: string;                     // HH:MM
+  endTime: string;
+  shiftDurationMinutes: number;          // length of a single shift inside this window
+  recurring: 'every-day' | { daysOfWeek: number[] };   // 0=Sun..6=Sat
+}
+
+export type MissionTimeModel =
+  | { kind: '24-7-continuous' }
+  | { kind: 'fixed-hours';    windows: MissionTimeWindow[] }
+  | { kind: 'daily-variable'; perDate: Record<string, MissionTimeWindow[]> }
+  | { kind: 'one-time';       start: string; end: string }
+  | { kind: 'on-demand' };                                        // readiness / כוננות
+
+export type MissionManpowerSpec =
+  | { kind: 'exact'; count: number }
+  | { kind: 'range'; min: number; max: number; ideal?: number }
+  | {
+      kind: 'window-varies';
+      windows: Array<{
+        label: 'day' | 'night' | string;
+        from:  string;                                            // HH:MM
+        to:    string;
+        spec:  { kind: 'exact'; count: number } | { kind: 'range'; min: number; max: number };
+      }>;
+    };
+
+export type CommandRank = 'soldier' | 'mk' | 'samal' | 'mam' | 'officer' | 'custom';
+export type RankParticipation = 'commander-only' | 'eligible-as-soldier' | 'excluded';
+
+export interface MissionCommandSpec {
+  required: boolean;
+  count: number;                                                  // typically 1
+  commanderCountsAsManpower: boolean;
+  /** Whitelist — engine picks commander from one of these ranks. */
+  allowedCommanderRanks: CommandRank[];
+  /** Per-rank policy for THIS mission. Missing entries default to
+   *  'eligible-as-soldier' for non-commander ranks and 'commander-only'
+   *  for ranks listed in allowedCommanderRanks. */
+  rankParticipation: Partial<Record<CommandRank, RankParticipation>>;
+}
+
+export type RotationPeriod = 'daily' | 'weekly' | { everyHours: number };
+
+export type MissionRotation =
+  | { kind: 'fixed-platoon';      platoonId: string }
+  | { kind: 'rotate-platoons';    period: RotationPeriod; order?: string[] }   // explicit ordering optional
+  | { kind: 'rotate-squads';      period: RotationPeriod }
+  | { kind: 'whichever-strongest' }                                            // engine picks most-rested platoon
+  | { kind: 'returning-from-home' }                                            // platoon just back from leave
+  | { kind: 'manual' };                                                        // CC assigns each cycle
+
+export type MissionIntensity =
+  | 'passive'        // sitting in HQ
+  | 'standing-guard' // gate / tower
+  | 'active-patrol'
+  | 'ambush'         // night-impacting
+  | 'readiness'      // כוננות
+  | 'admin';
+
+export interface MissionFatigueProfile {
+  intensity: MissionIntensity;
+  impactsSleep: boolean;
+  /** Hours of sleep window the mission overlaps with (only meaningful when
+   *  impactsSleep=true and the slot crosses 23:00–05:00). */
+  sleepWindowHours?: number;
+  /** Hard floor on rest BEFORE the same soldier may take another shift. */
+  minRestAfterHours: number;
+  /** Contribution to the rolling fatigue score (0–10 scale, ambush=10). */
+  fatigueWeight: number;
+}
+
+export interface QualificationRequirement {
+  qualificationId: string;
+  count: number;
+}
+export interface EquipmentRequirement {
+  equipmentItemId: string;
+  count: number;
+  /** True when each soldier needs one (helmet); false when one per shift
+   *  satisfies the slot (ladder). */
+  perSoldier: boolean;
+}
+
+// ─── Engine: Mission — the unified contract ─────────────────────────────────
+//
+// Replaces CompanyMission + MissionType under one shape. The legacy entities
+// stay declared elsewhere in this file for one transitional commit so existing
+// screens keep compiling. Slice E9 deletes them.
+
+export type MissionStatus = 'draft' | 'active' | 'paused' | 'archived';
+
+export interface Mission {
+  id: string;
+  companyId: string;
+
+  // Identity & ownership
+  name: string;
+  description?: string;
+  createdByUserId: string;
+  ownerRole: 'company' | 'platoon';
+
+  // Scope — platoons sharing responsibility for this mission
+  assignedPlatoonIds: string[];
+
+  // Composable policy objects
+  timeModel: MissionTimeModel;
+  manpower:  MissionManpowerSpec;
+  command:   MissionCommandSpec;
+  rotation:  MissionRotation;
+  fatigue:   MissionFatigueProfile;
+
+  // Open-vocabulary requirements
+  qualifications: QualificationRequirement[];
+  equipment:      EquipmentRequirement[];
+
+  // Constraints
+  conflictsWith:  string[];                                       // mission ids
+  canOverlapWith: string[];
+  pairings:       SoldierPairing[];
+  squadPolicy:    { mode: 'mix' | 'no-mix' | 'specific'; allowedSquadIds?: string[] };
+
+  // Operational protocols
+  requiresDailyConfirmation: boolean;
+
+  // Lifecycle
+  status:     MissionStatus;
+  startDate?: string;
+  endDate?:   string;
+  createdAt:  string;
+}
+
+// ─── Engine: schedule outputs (produced by phases 4 + 7) ────────────────────
+//
+// ScheduleSlot replaces TimeSlot's responsibilities. Both exist for one
+// transitional commit; engine slice E3+ will start producing ScheduleSlot.
+
+export interface ScheduleSlot {
+  id: string;
+  missionId: string;
+  start: string;
+  end: string;
+  /** Manpower snapshot at the moment the slot was generated. */
+  requiredCount: number;
+  commanderRequired: boolean;
+  commanderRanks: CommandRank[];
+  /** Owner platoon after rotation resolution. */
+  ownerPlatoonId: string;
+}
+
+export interface Assignment {
+  id: string;
+  slotId: string;
+  soldierId: string;
+  role: 'soldier' | 'commander';
+  createdBy: string;
+  createdAt: string;
+  /** Link to the OverrideAlert when this assignment broke an engine rule. */
+  overrideAlertId?: string;
+}
+
+// ─── Engine: leave framework (refactor of existing Leave) ──────────────────
+//
+// LeaveBlock is the richer replacement for Leave. LeaveRotationPolicy is
+// the company-level configuration the engine reads to know "who can go home
+// this week" without breaking floors.
+
+export type LeaveRotationMode =
+  | 'platoon-rotation' | 'squad-rotation' | 'mixed' | 'individual-only';
+
+export interface LeaveRotationException {
+  kind: 'never-on-leave' | 'always-on-leave-when' | 'custom';
+  target: {
+    soldierIds?:      string[];
+    functionalRoles?: FunctionalRole[];
+    squadIds?:        string[];
+  };
+  rule: string;                                                   // free-text now; future formal predicate
+}
+
+export interface LeaveRotationPolicy {
+  id: string;
+  companyId: string;
+  mode: LeaveRotationMode;
+  /** Company-wide floor — minimum on-base soldiers at any moment. */
+  minSoldiersOnBase: number;
+  /** Optional per-platoon overrides (tighter floors for special platoons). */
+  perPlatoonFloors: Record<string, number>;
+  /** How often the rotation cycle repeats. */
+  cycle: { everyDays: number };
+  /** Sub-units the CC has marked as eligible for partial-leave granularity. */
+  squadsEligibleForPartialLeave: string[];
+  exceptions: LeaveRotationException[];
+  createdAt: string;
+}
+
+export type LeaveBlockSource = 'rotation-plan' | 'request' | 'company-event' | 'commander-grant';
+export type LeaveBlockStatus = 'planned' | 'confirmed' | 'cancelled';
+
+export interface LeaveBlock {
+  id: string;
+  companyId: string;
+  scope: 'individual' | 'squad' | 'platoon' | 'company-wide';
+  scopeRefId?: string;
+  soldierIds?: string[];
+  startIso: string;
+  endIso: string;
+  reason?: string;
+  source: LeaveBlockSource;
+  status: LeaveBlockStatus;
+  createdBy: string;
+  createdAt: string;
+}
+
+// ─── Engine: fatigue snapshot (computed, never stored) ─────────────────────
+
+export interface SoldierFatigueSnapshot {
+  soldierId: string;
+  asOf: string;
+  // Rolling load
+  hoursWorkedLast24: number;
+  hoursWorkedLast48: number;
+  hoursWorkedLast7d: number;
+  // Sleep
+  longestSleepBlockLast24h: number;
+  sleepImpactedLastNight: boolean;
+  consecutiveNightsImpacted: number;
+  // Rest constraints
+  hoursSinceLastShift: number;
+  minRestRequiredNow: number;
+  isRested: boolean;
+  // Rolling fatigue index
+  fatigueScore: number;                                           // 0–100
+  trend: 'rising' | 'steady' | 'falling';
+}
+
+// ─── Engine: validation / rules (contract only; rules land in E7) ──────────
+
+export type ObservationSeverity = 'info' | 'warning' | 'critical';
+
+export interface Observation {
+  id: string;
+  ruleId: string;
+  severity: ObservationSeverity;
+  message: string;
+  detail?: string;
+  affectedSoldierIds?: string[];
+  affectedSlotIds?: string[];
+  affectedMissionIds?: string[];
+}
+
+export interface Recommendation {
+  id: string;
+  ruleId: string;
+  message: string;
+  detail?: string;
+  /** Free-form action descriptor (engine handlers land in later slices). */
+  suggestedAction?: string;
+}
+
+export interface ValidationReport {
+  generatedAt: string;
+  observations:    Observation[];
+  recommendations: Recommendation[];
+}
+
+/** Contract for a pluggable rule. Rules' concrete evaluate signatures are
+ *  defined in slice E3 once the phase-2 eligibility shape is firm. */
+export interface Rule {
+  id: string;
+  name: string;
+  category: 'rest' | 'manpower' | 'coverage' | 'fairness' | 'qualification' | 'custom';
+}
+
 export interface MockUser {
   id: string;                         // stable across membership transfers
   name: string;

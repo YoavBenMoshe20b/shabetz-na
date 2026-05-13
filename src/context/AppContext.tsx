@@ -6,6 +6,8 @@ import type {
   CompanyMission, OverrideAlert,
   SoldierStatus, SoldierStatusEvent, Delegation,
   CalendarEvent,
+  Mission, Qualification, EquipmentItem, SoldierQualification,
+  LeaveRotationPolicy, LeaveBlock,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
@@ -13,6 +15,8 @@ import {
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
   mockSoldierStatusEvents, mockDelegations,
   mockCalendarEvents,
+  mockMissions, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
+  mockLeaveRotationPolicy, mockLeaveBlocks,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -133,6 +137,17 @@ interface AppContextType {
     reason:    string;
     allowsLeave?: boolean;
   }) => CalendarEvent;
+
+  // ── Engine foundation (slice E1 — read-only, no UI consumer yet) ─────
+  // The mission engine reads these as source-of-truth state. Slice E2 will
+  // add `addMission` / mission-edit actions; slice E5 adds leave-rotation
+  // write actions. For now: exposed for reads only.
+  missions:               Mission[];
+  qualifications:         Qualification[];
+  equipmentItems:         EquipmentItem[];
+  soldierQualifications:  SoldierQualification[];
+  leaveRotationPolicy:    LeaveRotationPolicy | null;
+  leaveBlocks:            LeaveBlock[];
 
   // ── Roster-first auth ────────────────────────────────────────────────
   // Sign in for already-claimed identities
@@ -313,6 +328,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? { ...a, status: 'resolved', resolvedByUserId: byUserId, resolvedAt: new Date().toISOString() }
       : a
     ));
+
+  // ── Engine foundation (slice E1 — state only, no UI consumer yet) ─────
+  // The engine pipeline (slice E3+) will read from these directly. Mission
+  // authoring (slice E2) will add a setMissions write path; leave-rotation
+  // configuration (slice E5) will replace the readonly policy with a setter.
+  const [missions]              = useState<Mission[]>(mockMissions);
+  const [qualifications]        = useState<Qualification[]>(mockQualifications);
+  const [equipmentItems]        = useState<EquipmentItem[]>(mockEquipmentItems);
+  const [soldierQualifications] = useState<SoldierQualification[]>(mockSoldierQualifications);
+  const [leaveRotationPolicy]   = useState<LeaveRotationPolicy | null>(mockLeaveRotationPolicy);
+  const [leaveBlocks]           = useState<LeaveBlock[]>(mockLeaveBlocks);
 
   // ── Calendar events (slice 1: state + write actions, no UI uses them yet) ──
   // Slice 1 ships read-only. The actions are wired so slice 2 (week view +
@@ -701,6 +727,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
+      missions, qualifications, equipmentItems, soldierQualifications,
+      leaveRotationPolicy, leaveBlocks,
       signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
       logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
