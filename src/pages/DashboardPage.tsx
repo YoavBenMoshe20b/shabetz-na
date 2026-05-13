@@ -210,6 +210,18 @@ function CompanyCommanderDashboard() {
           </CollapsibleSection>
         )}
 
+        {/* ── 5. Quiet navigation affordance — the one CC settings entry ── */}
+        <button
+          onClick={() => navigate('/missions')}
+          className="w-full flex items-center gap-3 px-4 py-3.5 bg-mil-card border border-mil-border rounded-2xl hover:border-mil-olive transition-colors text-right"
+        >
+          <div className="flex-1">
+            <Body className="font-semibold">ניהול משימות</Body>
+            <Hint className="block mt-0.5">הגדרת משימות פעילות וטיוטות</Hint>
+          </div>
+          <span className="text-mil-ghost">←</span>
+        </button>
+
       </PageMain>
     </div>
   );

@@ -39,6 +39,8 @@ import SchedulePage       from './pages/SchedulePage';
 import LeavesPage         from './pages/LeavesPage';
 import ProfilePage        from './pages/ProfilePage';
 import CalendarPage       from './pages/CalendarPage';
+import MissionsPage       from './pages/MissionsPage';
+import MissionWizardPage  from './pages/MissionWizardPage';
 
 // Full-screen flows hide the bottom nav AND the emergency banner so
 // new-user wizards aren't competing with operational signals.
@@ -96,6 +98,14 @@ function AppRoutes() {
         {/* ── Manager only ─────────────────────────── */}
         <Route path="/leaves" element={
           <ProtectedRoute minRole="platoonCommander"><LeavesPage /></ProtectedRoute>
+        } />
+
+        {/* ── Company commander only ───────────────── */}
+        <Route path="/missions"     element={
+          <ProtectedRoute minRole="companyCommander"><MissionsPage /></ProtectedRoute>
+        } />
+        <Route path="/missions/new" element={
+          <ProtectedRoute minRole="companyCommander"><MissionWizardPage /></ProtectedRoute>
         } />
 
         {/* ── Legacy redirects (so old links don't 404) ── */}

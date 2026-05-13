@@ -143,6 +143,9 @@ interface AppContextType {
   // add `addMission` / mission-edit actions; slice E5 adds leave-rotation
   // write actions. For now: exposed for reads only.
   missions:               Mission[];
+  /** Create a new mission. CC-only at the UI tier (no permission check
+   *  inside the action itself yet — gated by route in slice E2). */
+  addMission:             (data: Omit<Mission, 'id' | 'createdAt'>) => Mission;
   qualifications:         Qualification[];
   equipmentItems:         EquipmentItem[];
   soldierQualifications:  SoldierQualification[];
@@ -333,7 +336,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // The engine pipeline (slice E3+) will read from these directly. Mission
   // authoring (slice E2) will add a setMissions write path; leave-rotation
   // configuration (slice E5) will replace the readonly policy with a setter.
-  const [missions]              = useState<Mission[]>(mockMissions);
+  const [missions, setMissions] = useState<Mission[]>(mockMissions);
+
+  const addMission = (data: Omit<Mission, 'id' | 'createdAt'>): Mission => {
+    const m: Mission = {
+      ...data,
+      id:        `mi-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: new Date().toISOString(),
+    };
+    setMissions((prev) => [...prev, m]);
+    return m;
+  };
   const [qualifications]        = useState<Qualification[]>(mockQualifications);
   const [equipmentItems]        = useState<EquipmentItem[]>(mockEquipmentItems);
   const [soldierQualifications] = useState<SoldierQualification[]>(mockSoldierQualifications);
@@ -727,7 +740,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
-      missions, qualifications, equipmentItems, soldierQualifications,
+      missions, addMission, qualifications, equipmentItems, soldierQualifications,
       leaveRotationPolicy, leaveBlocks,
       signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
       logout, switchRole, addPeriod, updatePeriod, addAuditLog,

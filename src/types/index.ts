@@ -753,18 +753,29 @@ export type MissionManpowerSpec =
     };
 
 export type CommandRank = 'soldier' | 'mk' | 'samal' | 'mam' | 'officer' | 'custom';
-export type RankParticipation = 'commander-only' | 'eligible-as-soldier' | 'excluded';
+
+// Per-mission, per-rank policy. Every CommandRank gets EXACTLY one value
+// when a Mission is created — no implicit defaults. The engine reads this
+// single map to answer all seven command-related questions:
+//   Q1 (field-command required?)         → MissionCommandSpec.fieldCommandRequired
+//   Q2 (who can command?)                → ranks with policy 'commander-only'
+//   Q3 (commanders per slot?)            → MissionCommandSpec.commandersPerSlot
+//   Q4 (commander counts as manpower?)   → MissionCommandSpec.commanderCountsAsManpower
+//   Q5 (who can participate?)            → ranks with policy 'regular' or 'fallback'
+//   Q6 (who is excluded?)                → ranks with policy 'excluded'
+//   Q7 (fallback when manpower short?)   → ranks with policy 'fallback'
+export type RankPolicy =
+  | 'regular'         // fills regular soldier slots normally
+  | 'fallback'        // joins regular slots ONLY when manpower is below ideal
+  | 'commander-only'  // commands the slot; cannot fill regular slots
+  | 'excluded';       // never assigned to this mission
 
 export interface MissionCommandSpec {
-  required: boolean;
-  count: number;                                                  // typically 1
+  fieldCommandRequired:      boolean;
+  commandersPerSlot:         number;
   commanderCountsAsManpower: boolean;
-  /** Whitelist — engine picks commander from one of these ranks. */
-  allowedCommanderRanks: CommandRank[];
-  /** Per-rank policy for THIS mission. Missing entries default to
-   *  'eligible-as-soldier' for non-commander ranks and 'commander-only'
-   *  for ranks listed in allowedCommanderRanks. */
-  rankParticipation: Partial<Record<CommandRank, RankParticipation>>;
+  /** Every CommandRank carries exactly one policy. */
+  rankPolicy: Record<CommandRank, RankPolicy>;
 }
 
 export type RotationPeriod = 'daily' | 'weekly' | { everyHours: number };
