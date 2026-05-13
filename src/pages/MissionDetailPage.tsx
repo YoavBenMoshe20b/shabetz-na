@@ -176,6 +176,26 @@ export default function MissionDetailPage() {
           </Section>
         )}
 
+        {/* Current rotation owner — shows today's responsible platoon
+            for rotating missions; static for fixed-platoon. */}
+        {mission.status === 'active' && weekSlots.length > 0 && (() => {
+          const todayIso = new Date().toISOString().slice(0, 10);
+          const todaySlots = weekSlots.filter((s) => s.start.slice(0, 10) === todayIso);
+          const owners = Array.from(new Set(todaySlots.map((s) => s.ownerPlatoonId).filter(Boolean)))
+            .map((pid) => platoons.find((p) => p.id === pid)?.name)
+            .filter(Boolean);
+          if (owners.length === 0) return null;
+          return (
+            <Section label="אחריות היום">
+              <div className="bg-mil-card border border-mil-border rounded-2xl px-5 py-3.5 flex items-baseline gap-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0 self-center" aria-hidden />
+                <Body className="font-semibold">{owners.join(' · ')}</Body>
+                <Hint className="mr-auto">{todaySlots.length} משמרות</Hint>
+              </div>
+            </Section>
+          );
+        })()}
+
         {/* Structured summary (operational prose) */}
         <Section label="הגדרה מבצעית">
           <div className="bg-mil-card border border-mil-border rounded-2xl px-5 py-4 space-y-2">
