@@ -1,213 +1,262 @@
-import { useState } from 'react';
-import { useApp, useActivePeriod } from '../context/AppContext';
-import Header from '../components/Header';
+// Profile / personal data — every user has one.
+//
+// Reachable from the header avatar's "פרופיל ופרטים אישיים" entry. The
+// surface is read-mostly: identity at the top, then operational personal
+// fields (dominant hand / weapon side / sizes), then qualifications, then
+// a link to /equipment.
 
-const REMINDER_OPTIONS = [5, 15, 30, 60] as const;
+import { useState, useMemo } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
+import Header from '../components/Header';
+import { roleLabel } from '../utils/permissions';
+import {
+  Section, PageMain, PageTitle, Body, Muted, Hint, Card,
+} from '../components/ui';
 
 export default function ProfilePage() {
-  const { currentUser, currentRole, soldiers, addLeaveRequest, leaveRequests } = useApp();
-  const activePeriod = useActivePeriod();
-  const [reminderMin, setReminderMin] = useState<5 | 15 | 30 | 60 | null>(null);
-  const [reminderSet, setReminderSet] = useState(false);
+  const navigate = useNavigate();
+  const {
+    currentUser, currentRole, soldiers, qualifications, soldierQualifications, platoons, squads,
+    updateSoldierProfile,
+  } = useApp();
 
-  // Leave request form state
-  const [showReqForm, setShowReqForm]   = useState(false);
-  const [reqForm, setReqForm] = useState({ startDate: '', startTime: '14:00', endDate: '', endTime: '08:00', reason: '' });
-  const [reqSaved, setReqSaved] = useState(false);
+  if (!currentUser) return <Navigate to="/login" replace />;
 
-  const myProfile = soldiers.find((s) => s.id === currentUser?.soldierProfileId);
+  const myProfile = useMemo(
+    () => soldiers.find((s) => s.id === currentUser.soldierProfileId || s.userId === currentUser.id),
+    [soldiers, currentUser],
+  );
 
-  const myNextSlot = activePeriod?.missionTypes.flatMap((mt) =>
-    mt.timeSlots.filter((ts) => myProfile && ts.assignedSoldierIds.includes(myProfile.id))
-      .map((ts) => ({ ts, mt }))
-  )[0] ?? null;
+  const myPlatoon = useMemo(
+    () => platoons.find((p) => p.id === currentUser.platoonId),
+    [platoons, currentUser],
+  );
 
-  const myRequests = leaveRequests.filter((r) => r.soldierId === myProfile?.id);
+  const mySquadName = useMemo(() => {
+    if (!myProfile) return '';
+    return squads.find((s) => s.id === myProfile.squadId)?.name ?? myProfile.teamClass ?? '';
+  }, [squads, myProfile]);
 
-  const handleSubmitRequest = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!myProfile || !currentUser) return;
-    addLeaveRequest({
-      soldierId:       myProfile.id,
-      soldierName:     myProfile.name,
-      soldierTeamClass: myProfile.teamClass,
-      startDate:       reqForm.startDate,
-      startTime:       reqForm.startTime,
-      endDate:         reqForm.endDate,
-      endTime:         reqForm.endTime,
-      reason:          reqForm.reason,
+  const myQuals = useMemo(() => {
+    if (!myProfile) return [];
+    return soldierQualifications
+      .filter((sq) => sq.soldierId === myProfile.id)
+      .map((sq) => qualifications.find((q) => q.id === sq.qualificationId))
+      .filter(Boolean);
+  }, [soldierQualifications, qualifications, myProfile]);
+
+  // Local edit state — synced from the soldier record.
+  const [edit, setEdit] = useState({
+    dominantHand: myProfile?.dominantHand ?? '',
+    weaponSide:   myProfile?.weaponSide   ?? '',
+    shirtSize:    myProfile?.shirtSize    ?? '',
+    pantsSize:    myProfile?.pantsSize    ?? '',
+    shoeSize:     myProfile?.shoeSize     ?? '',
+    dateOfBirth:  myProfile?.dateOfBirth  ?? '',
+  });
+  const [saved, setSaved] = useState(false);
+
+  const dirty =
+    edit.dominantHand !== (myProfile?.dominantHand ?? '') ||
+    edit.weaponSide   !== (myProfile?.weaponSide   ?? '') ||
+    edit.shirtSize    !== (myProfile?.shirtSize    ?? '') ||
+    edit.pantsSize    !== (myProfile?.pantsSize    ?? '') ||
+    edit.shoeSize     !== (myProfile?.shoeSize     ?? '') ||
+    edit.dateOfBirth  !== (myProfile?.dateOfBirth  ?? '');
+
+  const save = () => {
+    if (!myProfile) return;
+    updateSoldierProfile({
+      soldierId:    myProfile.id,
+      dominantHand: (edit.dominantHand || undefined) as 'right' | 'left' | undefined,
+      weaponSide:   (edit.weaponSide   || undefined) as 'right' | 'left' | undefined,
+      shirtSize:    edit.shirtSize     || undefined,
+      pantsSize:    edit.pantsSize     || undefined,
+      shoeSize:     edit.shoeSize      || undefined,
+      dateOfBirth:  edit.dateOfBirth   || undefined,
     });
-    setReqSaved(true);
-    setShowReqForm(false);
-    setReqForm({ startDate: '', startTime: '14:00', endDate: '', endTime: '08:00', reason: '' });
-    setTimeout(() => setReqSaved(false), 3000);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
   };
 
-  const isSoldier = currentRole === 'soldier';
+  // Compute age from dateOfBirth
+  const age = useMemo(() => {
+    const dob = edit.dateOfBirth || myProfile?.dateOfBirth;
+    if (!dob) return null;
+    const birth = new Date(dob);
+    if (isNaN(birth.getTime())) return null;
+    const today = new Date();
+    let years = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) years--;
+    return years;
+  }, [edit.dateOfBirth, myProfile]);
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="פרופיל" />
+      <PageMain>
 
-      <main className="px-4 py-4 pb-28 max-w-xl mx-auto space-y-3">
+        {/* Identity hero */}
+        <header>
+          <Hint className="tracking-widest uppercase">{roleLabel(currentRole)}</Hint>
+          <PageTitle className="mt-1">{currentUser.name}</PageTitle>
+          <Muted className="mt-1.5">
+            {myPlatoon?.name ?? '—'}
+            {mySquadName && ` · ${mySquadName}`}
+            {age != null && ` · גיל ${age}`}
+          </Muted>
+        </header>
 
-        {reqSaved && (
-          <div className="bg-mil-success-bg border border-mil-success/40 text-mil-success rounded-xl px-4 py-3 text-sm">✓ בקשת היציאה הוגשה</div>
+        {saved && (
+          <Card variant="muted" className="!border-mil-success/40 bg-mil-success-bg">
+            <div className="px-4 py-3 flex items-center gap-2">
+              <span className="text-mil-success font-bold">✓</span>
+              <Body className="text-mil-success">נשמר</Body>
+            </div>
+          </Card>
         )}
 
-        {/* User card */}
-        <div className="bg-mil-card border border-mil-border rounded-xl p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 rounded-full bg-mil-olive-bg border border-mil-olive/40 flex items-center justify-center text-mil-olive text-xl font-bold">
-              {currentUser?.name.charAt(0)}
-            </div>
-            <div>
-              <p className="font-bold text-mil-text">{currentUser?.name}</p>
-              <p className="text-xs text-mil-muted dir-ltr">{currentUser?.phone}</p>
-            </div>
+        {/* Operational personal data */}
+        <Section label="פרטים אישיים מבצעיים">
+          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+
+            <FieldRow label="תאריך לידה">
+              <input
+                type="date"
+                value={edit.dateOfBirth}
+                onChange={(e) => setEdit((s) => ({ ...s, dateOfBirth: e.target.value }))}
+                className={inputCls}
+              />
+            </FieldRow>
+
+            <ChoiceRow
+              label="יד דומיננטית"
+              value={edit.dominantHand}
+              options={[{ id: 'right', label: 'ימין' }, { id: 'left', label: 'שמאל' }]}
+              onChange={(v) => setEdit((s) => ({ ...s, dominantHand: v }))}
+            />
+
+            <ChoiceRow
+              label="צד נשק"
+              value={edit.weaponSide}
+              options={[{ id: 'right', label: 'ימין' }, { id: 'left', label: 'שמאל' }]}
+              onChange={(v) => setEdit((s) => ({ ...s, weaponSide: v }))}
+            />
+
+            <FieldRow label="מידת חולצה">
+              <input type="text" value={edit.shirtSize} onChange={(e) => setEdit((s) => ({ ...s, shirtSize: e.target.value }))} placeholder="S / M / L / XL" className={inputCls} />
+            </FieldRow>
+
+            <FieldRow label="מידת מכנס">
+              <input type="text" value={edit.pantsSize} onChange={(e) => setEdit((s) => ({ ...s, pantsSize: e.target.value }))} placeholder="34" className={inputCls} />
+            </FieldRow>
+
+            <FieldRow label="מידת נעל">
+              <input type="text" value={edit.shoeSize} onChange={(e) => setEdit((s) => ({ ...s, shoeSize: e.target.value }))} placeholder="43" className={inputCls} />
+            </FieldRow>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-mil-bg border border-mil-border rounded-lg px-3 py-2">
-              <p className="text-mil-ghost mb-0.5">תפקיד מבצעי</p>
-              <p className="text-mil-text font-medium">{currentUser?.operationalRoles.join(', ') || '—'}</p>
+          {dirty && (
+            <button
+              onClick={save}
+              className="mt-3 w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-3 rounded-xl text-sm transition-colors"
+            >
+              שמור שינויים
+            </button>
+          )}
+        </Section>
+
+        {/* Qualifications */}
+        <Section label="כישורים מבצעיים">
+          {myQuals.length === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-tiny text-mil-muted">אין כישורים רשומים</p>
             </div>
-            <div className="bg-mil-bg border border-mil-border rounded-lg px-3 py-2">
-              <p className="text-mil-ghost mb-0.5">כיתה</p>
-              <p className="text-mil-text font-medium">{currentUser?.teamClass || '—'}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Next guard + reminder */}
-        <div className="bg-mil-card border border-mil-border rounded-xl overflow-hidden">
-          <div className="bg-mil-surface border-b border-mil-border px-4 py-2.5">
-            <span className="text-xs font-bold tracking-widest text-mil-text-inv/70">המשמרת הבאה שלי</span>
-          </div>
-          <div className="px-4 py-3">
-            {myNextSlot ? (
-              <>
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="font-bold text-mil-text">{myNextSlot.mt.name}</p>
-                    <p className="text-mil-muted text-sm">{myNextSlot.ts.date} · {myNextSlot.ts.startTime}–{myNextSlot.ts.endTime}</p>
-                  </div>
-                </div>
-
-                {/* Reminder */}
-                <div className="border-t border-mil-border pt-3">
-                  <p className="text-xs text-mil-muted mb-2">תזכורת לפני המשמרת:</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {REMINDER_OPTIONS.map((min) => (
-                      <button
-                        key={min}
-                        onClick={() => { setReminderMin(min); setReminderSet(false); }}
-                        className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                          reminderMin === min
-                            ? 'bg-mil-olive border-mil-olive text-white'
-                            : 'bg-mil-bg border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
-                        }`}
-                      >
-                        {min < 60 ? `${min} דק'` : 'שעה'}
-                      </button>
-                    ))}
-                  </div>
-                  {reminderMin && (
-                    <button
-                      onClick={() => setReminderSet(true)}
-                      className="mt-2 w-full bg-mil-olive-bg border border-mil-olive/40 hover:border-mil-olive text-mil-olive text-sm py-2 rounded-lg transition-colors"
-                    >
-                      {reminderSet ? `✓ תזכורת הוגדרה (${reminderMin < 60 ? `${reminderMin} דק'` : 'שעה'} לפני)` : 'הגדר תזכורת'}
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-mil-muted text-sm">אין משמרות מתוכננות</p>
-            )}
-          </div>
-        </div>
-
-        {/* Leave requests (soldiers only) */}
-        {isSoldier && (
-          <div className="bg-mil-card border border-mil-border rounded-xl overflow-hidden">
-            <div className="bg-mil-surface border-b border-mil-border px-4 py-2.5 flex items-center gap-2">
-              <span className="text-xs font-bold tracking-widest text-mil-text-inv/70">בקשות יציאה</span>
-              <button
-                onClick={() => setShowReqForm((v) => !v)}
-                className="mr-auto text-xs text-mil-sand hover:text-mil-text-inv transition-colors"
-              >
-                {showReqForm ? 'ביטול' : '+ בקשה חדשה'}
-              </button>
-            </div>
-
-            {showReqForm && (
-              <form onSubmit={handleSubmitRequest} className="px-4 py-4 space-y-3 border-b border-mil-border">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-mil-muted mb-1.5">מתאריך</label>
-                    <input type="date" className={inp} value={reqForm.startDate} onChange={(e) => setReqForm((f) => ({ ...f, startDate: e.target.value }))} required />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-mil-muted mb-1.5">משעה</label>
-                    <input type="time" className={inp} value={reqForm.startTime} onChange={(e) => setReqForm((f) => ({ ...f, startTime: e.target.value }))} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-mil-muted mb-1.5">עד תאריך</label>
-                    <input type="date" className={inp} value={reqForm.endDate} onChange={(e) => setReqForm((f) => ({ ...f, endDate: e.target.value }))} required />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-mil-muted mb-1.5">עד שעה</label>
-                    <input type="time" className={inp} value={reqForm.endTime} onChange={(e) => setReqForm((f) => ({ ...f, endTime: e.target.value }))} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-mil-muted mb-1.5">סיבה</label>
-                  <textarea
-                    className={`${inp} resize-none`}
-                    rows={2}
-                    value={reqForm.reason}
-                    onChange={(e) => setReqForm((f) => ({ ...f, reason: e.target.value }))}
-                    placeholder="אירוע משפחתי, פגישה..."
-                    required
-                  />
-                </div>
-                <button type="submit" className="w-full bg-mil-olive hover:bg-mil-olive-light text-white font-bold py-3 rounded-xl text-sm transition-colors">
-                  הגש בקשה
-                </button>
-              </form>
-            )}
-
-            <div className="divide-y divide-mil-border">
-              {myRequests.length === 0 && !showReqForm && (
-                <p className="text-center text-mil-ghost py-4 text-sm">אין בקשות יציאה</p>
-              )}
-              {myRequests.map((req) => (
-                <div key={req.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm text-mil-text">{req.startDate} {req.startTime} – {req.endDate} {req.endTime}</p>
-                      <p className="text-xs text-mil-muted mt-0.5">{req.reason}</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded border flex-shrink-0 ${
-                      req.status === 'pending'  ? 'bg-mil-warn-bg text-mil-warn border-mil-warn-border' :
-                      req.status === 'approved' ? 'bg-mil-success-bg text-mil-success border-mil-success-border' :
-                      'bg-mil-alert-bg text-mil-alert border-mil-alert-border'
-                    }`}>
-                      {{ pending: 'ממתין', approved: 'אושר', rejected: 'נדחה' }[req.status]}
-                    </span>
-                  </div>
-                </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {myQuals.map((q) => (
+                <span
+                  key={q!.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-mil-olive-bg/40 border border-mil-olive/20"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" aria-hidden />
+                  <span className="text-sm font-semibold text-mil-text">{q!.name}</span>
+                  {q!.category && <span className="text-tiny text-mil-muted">· {q!.category}</span>}
+                </span>
               ))}
             </div>
-          </div>
+          )}
+        </Section>
+
+        {/* Operational roles */}
+        {myProfile && myProfile.operationalRoles.length > 0 && (
+          <Section label="תפקידים מבצעיים">
+            <div className="flex flex-wrap gap-2">
+              {myProfile.operationalRoles.map((r) => (
+                <span key={r} className="inline-flex items-center px-3 py-1.5 rounded-full bg-mil-card border border-mil-border text-sm font-semibold text-mil-text">
+                  {r}
+                </span>
+              ))}
+            </div>
+          </Section>
         )}
 
-      </main>
+        {/* Equipment shortcut */}
+        <button
+          onClick={() => navigate('/equipment')}
+          className="w-full flex items-center gap-3 px-5 py-4 bg-mil-card border border-mil-border rounded-2xl hover:border-mil-olive transition-colors text-right"
+        >
+          <div className="flex-1">
+            <Body className="font-semibold">ציוד אישי</Body>
+            <Hint className="block mt-0.5">נשק · אופטיקה · ווסט · קשר</Hint>
+          </div>
+          <span className="text-mil-ghost">←</span>
+        </button>
+
+      </PageMain>
     </div>
   );
 }
 
-const inp = 'w-full bg-mil-bg border border-mil-border rounded-lg px-3 py-2.5 text-sm text-mil-text focus:outline-none focus:ring-1 focus:ring-mil-olive focus:border-mil-olive placeholder:text-mil-ghost';
+// ─── Field primitives ─────────────────────────────────────────────────────
+
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="px-5 py-3.5 flex items-center gap-4">
+      <Body className="font-semibold flex-shrink-0 w-28">{label}</Body>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+function ChoiceRow({
+  label, value, options, onChange,
+}: {
+  label: string; value: string;
+  options: Array<{ id: string; label: string }>;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="px-5 py-3.5 flex items-center gap-4">
+      <Body className="font-semibold flex-shrink-0 w-28">{label}</Body>
+      <div className="flex gap-1.5">
+        {options.map((o) => (
+          <button
+            key={o.id}
+            onClick={() => onChange(o.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+              value === o.id ? 'bg-mil-text text-mil-card' : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const inputCls =
+  'w-full bg-mil-bg border border-mil-border rounded-xl px-3 py-2 text-mil-text focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost text-sm';

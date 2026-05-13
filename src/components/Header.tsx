@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import RoleBadge from './RoleBadge';
 import { roleLabel } from '../utils/permissions';
 import type { UserRole } from '../types';
 
 export default function Header({ title }: { title: string }) {
+  const navigate = useNavigate();
   const { currentUser, currentRole, switchRole, logout, isOnline } = useApp();
   const [showDev, setShowDev] = useState(false);
 
@@ -35,7 +37,21 @@ export default function Header({ title }: { title: string }) {
 
             {showDev && (
               <div className="absolute left-0 top-full mt-1 bg-mil-card border border-mil-border rounded-lg shadow-2xl p-3 min-w-[220px] z-20" dir="rtl">
-                <p className="text-xs text-mil-muted mb-2 border-b border-mil-border pb-2 flex items-center gap-1">
+                {/* User destinations */}
+                <button
+                  onClick={() => { navigate('/profile');   setShowDev(false); }}
+                  className="block w-full text-right text-sm px-2 py-2 rounded hover:bg-mil-ghost/30 transition-colors text-mil-text"
+                >
+                  פרופיל ופרטים אישיים
+                </button>
+                <button
+                  onClick={() => { navigate('/equipment'); setShowDev(false); }}
+                  className="block w-full text-right text-sm px-2 py-2 rounded hover:bg-mil-ghost/30 transition-colors text-mil-text"
+                >
+                  ציוד אישי
+                </button>
+                <hr className="my-2 border-mil-border" />
+                <p className="text-xs text-mil-muted mb-2 flex items-center gap-1">
                   <span className="text-mil-warn">⚙</span> כלי מפתחים — החלפת תפקיד
                 </p>
                 {(['owner', 'manager', 'soldier'] as UserRole[]).map((r) => (

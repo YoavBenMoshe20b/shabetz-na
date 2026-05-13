@@ -130,6 +130,59 @@ export interface Soldier {
   // surface renders a birthday entry on the matching day. Strictly
   // optional — slot creation does not require it.
   dateOfBirth?: string;
+
+  // ── Profile / operational personal data ─────────────────────────────
+  // Edited by the soldier from their /profile surface. Used by the
+  // engine for slot eligibility (e.g. dominant hand → weapon side
+  // pairing rules) and by logistics (sizes). All optional — pre-claim
+  // roster entries don't carry this.
+  dominantHand?:  'right' | 'left';
+  weaponSide?:    'right' | 'left';
+  shirtSize?:     string;       // free-text: S/M/L/XL/2XL/...
+  pantsSize?:     string;       // free-text: 30/32/.../48
+  shoeSize?:      string;       // EU number as string ("42", "44.5")
+}
+
+// ─── Equipment (signed-out gear) ─────────────────────────────────────────────
+//
+// Records every piece of gear formally signed out to a soldier. Distinct
+// from EquipmentItem (the company-wide inventory): SignedEquipment is the
+// per-soldier ledger of "you have this item, signed by X, on date Y."
+//
+// Logistics workflows (sign-in / transfer / return / lost-report) layer
+// on top of this entity in future slices.
+
+export type SignedEquipmentCategory =
+  | 'weapon'
+  | 'optic'
+  | 'comms'
+  | 'protection'        // vest / helmet / kneepads
+  | 'navigation'
+  | 'medical'
+  | 'misc';
+
+export type SignedEquipmentStatus = 'active' | 'returned' | 'lost' | 'in-repair';
+
+export interface SignedEquipment {
+  id: string;
+  companyId: string;
+  soldierId: string;
+  /** Free-text item identity (item name + model/serial when relevant). */
+  itemName: string;
+  category: SignedEquipmentCategory;
+  /** Optional inventory back-reference when the item maps to a company-
+   *  defined EquipmentItem. Free-text gear (personal weapon, etc.) leaves
+   *  this undefined. */
+  equipmentItemId?: string;
+  serialNumber?: string;
+  /** Who signed the item TO the soldier (the logistics-side actor). */
+  signedByUserId: string;
+  signedByName: string;
+  /** Source of the item — usually the company/battalion name. */
+  source: string;
+  signedAt: string;             // ISO
+  status: SignedEquipmentStatus;
+  notes?: string;
 }
 
 export type SoldierStatus =

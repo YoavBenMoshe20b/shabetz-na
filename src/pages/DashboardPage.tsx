@@ -1,21 +1,20 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp, useActivePeriod, useApprovableLeaveRequests, useAlertsForCompany, useMyCompany, useMyPlatoons } from '../context/AppContext';
+import { useApp, useApprovableLeaveRequests, useAlertsForCompany, useMyCompany, useMyPlatoons } from '../context/AppContext';
 import Header from '../components/Header';
 import { isPlatoonLeadership, isCompanyLeadership } from '../utils/permissions';
 import { buildPlatoonTimeline, type OpsEvent } from '../utils/timeline';
+import { materializeWeek } from '../utils/materialize';
 import {
   Card, Button, StatusPill, Section, PageMain, CollapsibleSection,
   PageTitle, CardTitle, Body, Muted, Hint,
 } from '../components/ui';
-import type { TimeSlot, MissionType, Soldier, SoldierStatus } from '../types';
+import type { Soldier, SoldierStatus } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const timeToMins = (t: string) => {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-};
+const hhmm = (d: Date): string =>
+  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 const formatRelative = (mins: number): string => {
   if (mins < 0) return 'עכשיו';
@@ -47,13 +46,22 @@ export default function DashboardPage() {
 
 function CompanyCommanderDashboard() {
   const navigate = useNavigate();
-  const { soldiers, leaves, squads, platoons, overrideAlerts, soldierStatusEvents } = useApp();
+  const {
+    soldiers, leaves, squads, platoons, overrideAlerts, soldierStatusEvents,
+    missions, dutyExclusions,
+  } = useApp();
   const myCompany = useMyCompany();
   const myPlatoons = useMyPlatoons();
   const allAlerts = useAlertsForCompany();
-  const activePeriod = useActivePeriod();
 
   const now = new Date();
+  const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+
+  // Materialize this week's slots once — drives the timeline + future tables.
+  const materializedSlots = useMemo(() => materializeWeek({
+    missions, platoons, squads, soldiers, leaves, dutyExclusions,
+    startDay: todayStart, days: 7,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
 
   const soldiersInPlatoon = (platoonId: string): Soldier[] => {
     const ids = squads.filter((s) => s.platoonId === platoonId).map((s) => s.id);
@@ -92,14 +100,14 @@ function CompanyCommanderDashboard() {
 
   const events = useMemo(() => buildPlatoonTimeline({
     now,
-    period: activePeriod ?? null,
+    materializedSlots,
     leaves,
     soldiers,
     pendingApprovals: 0,
     recentAlerts: allAlerts,
     statusEvents: soldierStatusEvents,
     horizonHours: 12,
-  }), [now, activePeriod, leaves, soldiers, allAlerts, soldierStatusEvents]);
+  }), [now, materializedSlots, leaves, soldiers, allAlerts, soldierStatusEvents]);
 
   const [showActivity, setShowActivity] = useState(false);
   const openAlertCount = overrideAlerts.filter((a) => a.companyId === myCompany?.id && a.status === 'open').length;
@@ -335,54 +343,59 @@ function PlatoonHealthRow({ ps }: { ps: PlatoonHealthRowData }) {
 
 function PlatoonCommanderDashboard() {
   const navigate = useNavigate();
-  const { soldiers, leaves, platoons, currentUser, soldierStatusEvents } = useApp();
-  const activePeriod = useActivePeriod();
+  const {
+    soldiers, leaves, platoons, squads, currentUser, soldierStatusEvents,
+    missions, dutyExclusions,
+  } = useApp();
   const approvableRequests = useApprovableLeaveRequests();
   const myAlerts = useAlertsForCompany();           // platoon-tier sees only their own platoon's alerts
 
   const myPlatoon = platoons.find((g) => g.id === currentUser?.commandedPlatoonId)
     ?? platoons.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
 
-  const today = new Date().toISOString().slice(0, 10);
   // Speak the same operational vocabulary the soldier sees.
   // currentStatus is the source of truth — Leave records only inform why,
-  // not whether. A soldier with status 'home' is at home regardless of
-  // which Leave document describes it; a soldier with status 'in-base'
-  // is in-base even if a leave starts later today.
+  // not whether.
   const inBase     = soldiers.filter((s) => s.currentStatus === 'in-base').length;
   const atHome     = soldiers.filter((s) => s.currentStatus === 'home').length;
   const inactive   = soldiers.filter((s) => s.currentStatus === 'inactive-temp').length;
 
-  // Currently running missions (compact list)
+  // Currently running missions — from materialized slots scoped to my platoon.
   const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  const activeMissions = useMemo(() => {
-    if (!activePeriod) return [];
-    return activePeriod.missionTypes.map((mt) => {
-      const todayDate = activePeriod.missionTypes[0]?.timeSlots[0]?.date ?? today;
-      const slots = mt.timeSlots.filter((ts) => ts.date === todayDate);
-      const active = slots.find((ts) => {
-        const s = timeToMins(ts.startTime);
-        let e   = timeToMins(ts.endTime); if (e <= s) e += 24 * 60;
-        const n = nowMins < s && (s - nowMins) > 12 * 60 ? nowMins + 24 * 60 : nowMins;
-        return n >= s && n < e;
-      });
-      return active ? { mt, ts: active } : null;
-    }).filter(Boolean) as Array<{ mt: MissionType; ts: TimeSlot }>;
-  }, [activePeriod, today, nowMins]);
+  const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const materializedSlots = useMemo(() => materializeWeek({
+    missions, platoons, squads, soldiers, leaves, dutyExclusions,
+    startDay: todayStart, days: 7,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
 
-  // The timeline itself
+  const myPlatoonSlots = useMemo(() =>
+    myPlatoon
+      ? materializedSlots.filter((slot) => slot.ownerPlatoonId === myPlatoon.id)
+      : materializedSlots,
+    [materializedSlots, myPlatoon],
+  );
+
+  const activeMissions = useMemo(() => {
+    return myPlatoonSlots.filter((slot) => {
+      const s = Date.parse(slot.start);
+      const e = Date.parse(slot.end);
+      return s <= now.getTime() && now.getTime() < e;
+    });
+  }, [myPlatoonSlots, now]);
+
+  // The timeline itself — same materialized slots, scoped to my platoon.
   const pendingApprovals = approvableRequests.filter((r) => r.status === 'pending').length;
   const events = useMemo(() => buildPlatoonTimeline({
     now,
-    period: activePeriod ?? null,
+    materializedSlots,
+    ownerPlatoonId: myPlatoon?.id,
     leaves,
     soldiers,
     pendingApprovals,
     recentAlerts: myAlerts,
     statusEvents: soldierStatusEvents,
     horizonHours: 12,
-  }), [now, activePeriod, leaves, soldiers, pendingApprovals, myAlerts, soldierStatusEvents]);
+  }), [now, materializedSlots, myPlatoon, leaves, soldiers, pendingApprovals, myAlerts, soldierStatusEvents]);
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
@@ -406,18 +419,23 @@ function PlatoonCommanderDashboard() {
               </div>
               {activeMissions.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-mil-border space-y-2">
-                  {activeMissions.map(({ mt, ts }) => {
-                    const names = ts.assignedSoldierIds
+                  {activeMissions.map((slot) => {
+                    const ids = [...slot.assignedSoldierIds];
+                    if (slot.commanderSoldierId) ids.push(slot.commanderSoldierId);
+                    const names = ids
                       .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
                       .filter(Boolean) as string[];
+                    const s = new Date(slot.start);
+                    const e = new Date(slot.end);
+                    const hh = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
                     return (
-                      <div key={ts.id} className="flex items-center gap-3">
+                      <div key={slot.id} className="flex items-center gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" />
-                        <Body className="font-semibold">{mt.name}</Body>
+                        <Body className="font-semibold">{slot.missionName}</Body>
                         <Muted className="truncate mr-auto text-mil-olive-dim">
                           {names.length > 0 ? names.join(' · ') : '—'}
                         </Muted>
-                        <Hint className="font-mono">{ts.startTime}–{ts.endTime}</Hint>
+                        <Hint className="font-mono">{hh(s)}–{hh(e)}</Hint>
                       </div>
                     );
                   })}
@@ -443,9 +461,9 @@ function PlatoonCommanderDashboard() {
           variant="primary"
           size="lg"
           fullWidth
-          onClick={() => navigate('/schedule')}
+          onClick={() => navigate('/platoon')}
         >
-          הכנס משימות לשיבוץ ←
+          פתח שבצ״ק השבוע ←
         </Button>
 
       </PageMain>
@@ -511,8 +529,10 @@ function StatGroup({ metric, label, tone }: { metric: number; label: string; ton
 // ─── Soldier Dashboard ────────────────────────────────────────────────────────
 
 function SoldierDashboard() {
-  const { soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest, updateSoldierStatus } = useApp();
-  const activePeriod = useActivePeriod();
+  const {
+    soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest, updateSoldierStatus,
+    missions, dutyExclusions,
+  } = useApp();
   const myPlatoon = platoons.find((p) => p.id === currentUser?.platoonId);
 
   const myProfile = soldiers.find((s) => s.id === currentUser?.soldierProfileId || s.userId === currentUser?.id);
@@ -526,82 +546,70 @@ function SoldierDashboard() {
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
   const [statusToastMsg,   setStatusToastMsg]   = useState('');
 
-  // Current wall-clock time (in minutes since midnight of "today")
   const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const todayIso = useMemo(() => todayStart.toISOString().slice(0, 10), [todayStart]);
 
-  // Use first scheduled date as our "today" for the demo
-  const scheduleDate = useMemo(() => {
-    return activePeriod?.missionTypes[0]?.timeSlots[0]?.date ?? new Date().toISOString().slice(0, 10);
-  }, [activePeriod]);
+  // Materialize this week's slots — drives "now", "next shift", and the
+  // collapsible "my week".
+  const materializedSlots = useMemo(() => materializeWeek({
+    missions, platoons, squads, soldiers, leaves, dutyExclusions,
+    startDay: todayStart, days: 7,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
 
-  // Active right now: per mission, the slot whose [start, end) contains nowMins
+  // My slots — where I'm assigned as a soldier OR commander
+  const mySlots = useMemo(() => {
+    if (!myProfile) return [];
+    return materializedSlots.filter((slot) =>
+      slot.assignedSoldierIds.includes(myProfile.id) || slot.commanderSoldierId === myProfile.id
+    );
+  }, [materializedSlots, myProfile]);
+
+  // Active right now — slots I'm in that contain `now`
   const activeMissions = useMemo(() => {
-    if (!activePeriod) return [];
-    return activePeriod.missionTypes.map((mt) => {
-      const todaySlots = mt.timeSlots.filter((ts) => ts.date === scheduleDate);
-      const active = todaySlots.find((ts) => {
-        const s = timeToMins(ts.startTime);
-        let e = timeToMins(ts.endTime);
-        if (e <= s) e += 24 * 60;
-        const n = nowMins < s && (s - nowMins) > 12 * 60 ? nowMins + 24 * 60 : nowMins;
-        return n >= s && n < e;
-      });
-      return active ? { mt, ts: active } : null;
-    }).filter(Boolean) as Array<{ mt: MissionType; ts: TimeSlot }>;
-  }, [activePeriod, scheduleDate, nowMins]);
-
-  // My next shift (upcoming, with wrap-around to next day)
-  const myNextShift = useMemo(() => {
-    if (!activePeriod || !myProfile) return null;
-    const all: Array<{ mt: MissionType; ts: TimeSlot; minsTo: number }> = [];
-    activePeriod.missionTypes.forEach((mt) => {
-      mt.timeSlots
-        .filter((ts) => ts.assignedSoldierIds.includes(myProfile.id))
-        .forEach((ts) => {
-          const s = timeToMins(ts.startTime);
-          const minsTo = s < nowMins ? s + 24 * 60 - nowMins : s - nowMins;
-          all.push({ mt, ts, minsTo });
-        });
+    return mySlots.filter((slot) => {
+      const s = Date.parse(slot.start);
+      const e = Date.parse(slot.end);
+      return s <= now.getTime() && now.getTime() < e;
     });
-    all.sort((a, b) => a.minsTo - b.minsTo);
-    return all[0] ?? null;
-  }, [activePeriod, myProfile, nowMins]);
+  }, [mySlots, now]);
 
-  const teammates = myNextShift
-    ? myNextShift.ts.assignedSoldierIds
-        .filter((id) => id !== myProfile?.id)
-        .map((id) => soldiers.find((s) => s.id === id))
-        .filter(Boolean) as Soldier[]
-    : [];
+  // Next shift — first upcoming slot I'm in
+  const myNextShift = useMemo(() => {
+    const upcoming = mySlots.filter((slot) => Date.parse(slot.start) > now.getTime());
+    upcoming.sort((a, b) => a.start.localeCompare(b.start));
+    const next = upcoming[0];
+    if (!next) return null;
+    const minsTo = Math.floor((Date.parse(next.start) - now.getTime()) / 60000);
+    return { slot: next, minsTo };
+  }, [mySlots, now]);
+
+  const teammates = useMemo(() => {
+    if (!myNextShift) return [] as Soldier[];
+    const ids = [...myNextShift.slot.assignedSoldierIds];
+    if (myNextShift.slot.commanderSoldierId) ids.push(myNextShift.slot.commanderSoldierId);
+    return ids
+      .filter((id) => id !== myProfile?.id)
+      .map((id) => soldiers.find((s) => s.id === id))
+      .filter(Boolean) as Soldier[];
+  }, [myNextShift, myProfile, soldiers]);
 
   const onLeaveSoldierIds = useMemo(() => {
     const ids = new Set<string>();
     leaves.forEach((lv) => {
-      if (scheduleDate < lv.startDate || scheduleDate > lv.endDate) return;
+      if (todayIso < lv.startDate || todayIso > lv.endDate) return;
       if (lv.scope === 'individual') lv.soldierIds.forEach((id) => ids.add(id));
       else if (lv.scope === 'squad') soldiers.filter((s) => s.squadId === lv.squadId).forEach((s) => ids.add(s.id));
       else soldiers.forEach((s) => ids.add(s.id));
     });
     return ids;
-  }, [leaves, soldiers, scheduleDate]);
+  }, [leaves, soldiers, todayIso]);
 
-  // My upcoming shifts in the published period (sorted, all of them, not just next)
-  const myUpcomingShifts = useMemo(() => {
-    if (!activePeriod || !myProfile) return [];
-    const out: Array<{ mt: MissionType; ts: TimeSlot }> = [];
-    activePeriod.missionTypes.forEach((mt) => {
-      mt.timeSlots
-        .filter((ts) => ts.assignedSoldierIds.includes(myProfile.id))
-        .forEach((ts) => out.push({ mt, ts }));
-    });
-    out.sort((a, b) =>
-      a.ts.date === b.ts.date
-        ? a.ts.startTime.localeCompare(b.ts.startTime)
-        : a.ts.date.localeCompare(b.ts.date),
-    );
-    return out;
-  }, [activePeriod, myProfile]);
+  // My week — all my slots ordered by start time
+  const myUpcomingShifts = useMemo(() =>
+    mySlots.slice().sort((a, b) => a.start.localeCompare(b.start)),
+    [mySlots],
+  );
 
   const submitLeaveRequest = (data: { startDate: string; startTime: string; endDate: string; endTime: string; reason: string }) => {
     if (!myProfile) return;
@@ -660,8 +668,15 @@ function SoldierDashboard() {
           <OperationalStateCard
             soldier={myProfile}
             leaves={leaves}
-            nextShift={myNextShift ? { mission: myNextShift.mt, slot: myNextShift.ts, minsTo: myNextShift.minsTo, teammates } : null}
-            onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.ts.id, minutesBefore: mins, enabled: true })}
+            nextShift={myNextShift ? {
+              id:        myNextShift.slot.id,
+              name:      myNextShift.slot.missionName,
+              startTime: hhmm(new Date(myNextShift.slot.start)),
+              endTime:   hhmm(new Date(myNextShift.slot.end)),
+              minsTo:    myNextShift.minsTo,
+              teammates,
+            } : null}
+            onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.slot.id, minutesBefore: mins, enabled: true })}
             onOpenStatusUpdate={() => setStatusUpdateOpen(true)}
           />
         )}
@@ -671,14 +686,18 @@ function SoldierDashboard() {
           <Section label="מי על שמירה כרגע">
             <Card>
               <div className="divide-y divide-mil-border">
-                {activeMissions.map(({ mt, ts }) => {
-                  const names = ts.assignedSoldierIds
+                {activeMissions.map((slot) => {
+                  const ids = [...slot.assignedSoldierIds];
+                  if (slot.commanderSoldierId) ids.push(slot.commanderSoldierId);
+                  const names = ids
                     .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
                     .filter(Boolean) as string[];
                   return (
-                    <div key={ts.id} className="px-4 py-3 flex items-center gap-3">
-                      <Body className="font-semibold">{mt.name}</Body>
-                      <Hint className="font-mono mr-auto">{ts.startTime}–{ts.endTime}</Hint>
+                    <div key={slot.id} className="px-4 py-3 flex items-center gap-3">
+                      <Body className="font-semibold">{slot.missionName}</Body>
+                      <Hint className="font-mono mr-auto">
+                        {hhmm(new Date(slot.start))}–{hhmm(new Date(slot.end))}
+                      </Hint>
                       <Muted className="truncate max-w-[55%] text-left text-mil-olive-dim">
                         {names.length > 0 ? names.join(' · ') : '—'}
                       </Muted>
@@ -701,13 +720,17 @@ function SoldierDashboard() {
             <Body className="px-4 py-3 text-mil-muted">אין משמרות מתוכננות</Body>
           ) : (
             <div className="divide-y divide-mil-border">
-              {myUpcomingShifts.map(({ mt, ts }) => (
-                <div key={ts.id} className="px-4 py-3 flex items-center gap-3">
-                  <Hint className="w-20 flex-shrink-0">{ts.date}</Hint>
-                  <Body className="font-semibold flex-1 truncate">{mt.name}</Body>
-                  <Muted className="font-mono">{ts.startTime}–{ts.endTime}</Muted>
-                </div>
-              ))}
+              {myUpcomingShifts.map((slot) => {
+                const start = new Date(slot.start);
+                const end   = new Date(slot.end);
+                return (
+                  <div key={slot.id} className="px-4 py-3 flex items-center gap-3">
+                    <Hint className="w-20 flex-shrink-0">{start.toISOString().slice(0, 10)}</Hint>
+                    <Body className="font-semibold flex-1 truncate">{slot.missionName}</Body>
+                    <Muted className="font-mono">{hhmm(start)}–{hhmm(end)}</Muted>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CollapsibleCard>
@@ -887,12 +910,21 @@ function CollapsibleCard({
 // Architecture-ready: the "next transition" slot can later show a combat
 // clock block OR an escalation directive — currently it shows next shift.
 
+interface NextShiftDisplay {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  minsTo: number;
+  teammates: Soldier[];
+}
+
 function OperationalStateCard({
   soldier, leaves, nextShift, onSetReminder, onOpenStatusUpdate,
 }: {
   soldier: Soldier;
   leaves: import('../types').Leave[];
-  nextShift: { mission: MissionType; slot: TimeSlot; minsTo: number; teammates: Soldier[] } | null;
+  nextShift: NextShiftDisplay | null;
   onSetReminder: (mins: 5 | 15 | 30 | 60) => void;
   onOpenStatusUpdate: () => void;
 }) {
@@ -944,9 +976,9 @@ function OperationalStateCard({
         {nextShift && status === 'in-base' && (
           <div className="pt-4 border-t border-mil-border">
             <Hint className="tracking-widest">המשמרת הבאה</Hint>
-            <p className="text-lg font-bold text-mil-text mt-1.5 leading-snug">{nextShift.mission.name}</p>
+            <p className="text-lg font-bold text-mil-text mt-1.5 leading-snug">{nextShift.name}</p>
             <Muted className="mt-1">
-              <span className="font-mono font-semibold text-mil-text">{nextShift.slot.startTime}–{nextShift.slot.endTime}</span>
+              <span className="font-mono font-semibold text-mil-text">{nextShift.startTime}–{nextShift.endTime}</span>
               <span className="mx-2 text-mil-ghost">·</span>
               <span>{formatRelative(nextShift.minsTo)}</span>
             </Muted>

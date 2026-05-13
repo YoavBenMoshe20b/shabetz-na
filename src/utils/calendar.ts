@@ -13,16 +13,16 @@
 //   3. Stamping priority so overlapping entries stack predictably
 //      (mission > guard-shift > leave-period > platoon-time filled > ...).
 //
-// Demo note: the published SchedulePeriod uses hard-coded 2024-05 dates that
-// won't match wall-clock today. To keep the calendar surface meaningful in
-// the demo, guard-shifts fall back to projecting the period's earliest-date
-// slots onto the requested day if no direct match exists — same pattern as
-// utils/timeline.ts. This fallback is purely demo affordance.
+// The legacy SchedulePeriod demo fallback that projected 2024-05 mock slots
+// onto today is gone. Guard-shifts now come from materialized slots produced
+// by utils/materialize.ts — the connector between the Mission engine
+// foundation and visible surfaces.
 
 import type {
   CalendarEntry, CalendarEvent, Leave, Soldier, Platoon, Squad,
-  SchedulePeriod, UserRole,
+  UserRole,
 } from '../types';
+import type { MaterializedSlot } from './materialize';
 
 // ─── Inputs ──────────────────────────────────────────────────────────────────
 
@@ -35,12 +35,14 @@ export interface CalendarViewer {
 }
 
 export interface CalendarSources {
-  calendarEvents: CalendarEvent[];
-  leaves:         Leave[];
-  soldiers:       Soldier[];
-  platoons:       Platoon[];
-  squads:         Squad[];
-  period:         SchedulePeriod | null;
+  calendarEvents:    CalendarEvent[];
+  leaves:            Leave[];
+  soldiers:          Soldier[];
+  platoons:          Platoon[];
+  squads:            Squad[];
+  /** Pre-materialized AssignmentSlots for the visible window. The caller
+   *  produces these via utils/materialize.ts → materializeWeek(). */
+  materializedSlots: MaterializedSlot[];
 }
 
 export interface BuildDayEntriesInput {
@@ -75,11 +77,10 @@ export function buildDayEntries(input: BuildDayEntriesInput): CalendarEntry[] {
     }
   }
 
-  // 3. Guard-shifts from the published period
-  if (sources.period) {
-    for (const gs of projectPeriodSlotsToDay(sources.period, day)) {
-      out.push(gs);
-    }
+  // 3. Guard-shifts from materialized slots (Mission engine projection).
+  for (const slot of sources.materializedSlots) {
+    if (!overlapsDay(slot.start, slot.end, dayStart, dayEnd)) continue;
+    out.push(...slotToEntries(slot));
   }
 
   // 4. Birthdays — any soldier whose dateOfBirth's MM-DD matches today
@@ -231,102 +232,68 @@ function leaveToEntries(lv: Leave, soldiers: Soldier[]): CalendarEntry[] {
   });
 }
 
-// ─── Projection: SchedulePeriod → guard-shift entries for the day ────────────
+// ─── Projection: MaterializedSlot → CalendarEntry[] ──────────────────────────
+//
+// Each slot becomes:
+//   1. One platoon-scoped summary entry (visible to anyone with access to
+//      the owner platoon — commanders, soldiers in that platoon)
+//   2. One personal entry per assigned soldier (so a soldier sees their own
+//      shifts even when the company-wide visibility wouldn't include them)
+//
+// kind: 'mission' for slots whose Mission carries an operational intensity
+// (ambush / active-patrol / readiness); kind: 'guard-shift' for the rest.
 
-interface SlotProjection {
-  ts:        SchedulePeriod['missionTypes'][number]['timeSlots'][number];
-  mt:        SchedulePeriod['missionTypes'][number];
-  startIso:  string;
-  endIso:    string;
-  projected: boolean;   // true when HH:MM was projected from another date
-}
-
-function projectPeriodSlotsToDay(period: SchedulePeriod, day: Date): CalendarEntry[] {
-  const dayIso = isoDate(day);
-
-  // Direct match first.
-  const directHits: SlotProjection[] = [];
-  for (const mt of period.missionTypes) {
-    for (const ts of mt.timeSlots) {
-      if (ts.date !== dayIso) continue;
-      directHits.push({
-        mt, ts,
-        startIso:  toIso(day, ts.startTime),
-        endIso:    toIso(day, ts.endTime, ts.endTime <= ts.startTime ? 1 : 0),
-        projected: false,
-      });
-    }
-  }
-
-  // Demo fallback: no slots dated today, so project the period's earliest
-  // day onto today. Without this, the demo calendar would always be empty
-  // because mock schedule dates are 2024-05.
-  let projections = directHits;
-  if (projections.length === 0) {
-    let earliest = '';
-    for (const mt of period.missionTypes) {
-      for (const ts of mt.timeSlots) {
-        if (!earliest || ts.date < earliest) earliest = ts.date;
-      }
-    }
-    if (earliest) {
-      for (const mt of period.missionTypes) {
-        for (const ts of mt.timeSlots) {
-          if (ts.date !== earliest) continue;
-          projections.push({
-            mt, ts,
-            startIso:  toIso(day, ts.startTime),
-            endIso:    toIso(day, ts.endTime, ts.endTime <= ts.startTime ? 1 : 0),
-            projected: true,
-          });
-        }
-      }
-    }
-  }
-
-  // One CalendarEntry per assigned soldier (personal scope) — so visibility
-  // filtering on the soldier surface naturally hides shifts a viewer isn't on.
-  // For commander surfaces we also emit a single platoon-scoped entry per
-  // slot so the commander sees the slot regardless of who's assigned.
+function slotToEntries(slot: MaterializedSlot): CalendarEntry[] {
   const out: CalendarEntry[] = [];
-  for (const sp of projections) {
-    // Platoon-scoped summary entry (whoever sees the platoon sees this).
-    out.push({
-      id:         `gs-summary-${sp.ts.id}`,
-      kind:       'guard-shift',
-      scope:      'platoon',
-      // The schedule period model doesn't carry platoonId on slots — for now
-      // we tag with a sentinel that matches "any" platoon scope so the
-      // viewer's visibility check resolves via platoonId membership.
-      scopeRefId: '*',
-      start:      sp.startIso,
-      end:        sp.endIso,
-      allDay:     false,
-      title:      sp.mt.name,
-      detail:     sp.ts.assignedSoldierIds.length === 0
-        ? 'לא מאוישת'
-        : `${sp.ts.assignedSoldierIds.length} מאוישים`,
-      priority:   90,
-      locked:     true,
-      sourceRef:  { kind: 'time-slot', id: sp.ts.id },
-    });
+  const isOperational =
+    slot.missionIntensity === 'ambush'        ||
+    slot.missionIntensity === 'active-patrol' ||
+    slot.missionIntensity === 'readiness';
+  const kind = isOperational ? 'mission' : 'guard-shift';
+  const priority = isOperational ? 100 : 90;
 
-    // Personal entry per assigned soldier.
-    for (const sid of sp.ts.assignedSoldierIds) {
-      out.push({
-        id:         `gs-${sp.ts.id}-${sid}`,
-        kind:       'guard-shift',
-        scope:      'personal',
-        scopeRefId: sid,
-        start:      sp.startIso,
-        end:        sp.endIso,
-        allDay:     false,
-        title:      sp.mt.name,
-        priority:   90,
-        locked:     true,
-        sourceRef:  { kind: 'time-slot', id: sp.ts.id },
-      });
-    }
+  const assignedCount = slot.assignedSoldierIds.length + (slot.commanderSoldierId ? 1 : 0);
+  const summaryDetail = (() => {
+    if (slot.status === 'open')              return 'לא מאוישת';
+    if (slot.status === 'partially-staffed') return `${assignedCount}/${slot.requiredCount} מאוישים`;
+    return `${assignedCount} מאוישים`;
+  })();
+
+  // Platoon-scoped summary
+  out.push({
+    id:         `slot-summary-${slot.id}`,
+    kind,
+    scope:      'platoon',
+    scopeRefId: slot.ownerPlatoonId || '*',
+    start:      slot.start,
+    end:        slot.end,
+    allDay:     false,
+    title:      slot.missionName,
+    detail:     summaryDetail,
+    priority,
+    locked:     true,
+    sourceRef:  { kind: 'assignment-slot', id: slot.id },
+  });
+
+  // Personal entries — each assigned soldier + commander
+  const personalIds = [...slot.assignedSoldierIds];
+  if (slot.commanderSoldierId) personalIds.push(slot.commanderSoldierId);
+  for (const sid of personalIds) {
+    const isCommander = sid === slot.commanderSoldierId;
+    out.push({
+      id:         `slot-personal-${slot.id}-${sid}`,
+      kind,
+      scope:      'personal',
+      scopeRefId: sid,
+      start:      slot.start,
+      end:        slot.end,
+      allDay:     false,
+      title:      slot.missionName,
+      detail:     isCommander ? 'מפקד משמרת' : undefined,
+      priority,
+      locked:     true,
+      sourceRef:  { kind: 'assignment-slot', id: slot.id },
+    });
   }
   return out;
 }
@@ -410,13 +377,6 @@ function endOfDay(d: Date): Date {
 }
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
-}
-function toIso(day: Date, hhmm: string, dayOffset = 0): string {
-  const [h, m] = hhmm.split(':').map((x) => parseInt(x, 10));
-  const d = new Date(day);
-  d.setDate(d.getDate() + dayOffset);
-  d.setHours(h || 0, m || 0, 0, 0);
-  return d.toISOString();
 }
 function overlapsDay(startIso: string, endIso: string, dayStart: Date, dayEnd: Date): boolean {
   const s = Date.parse(startIso);

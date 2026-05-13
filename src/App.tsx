@@ -42,6 +42,8 @@ import CalendarPage       from './pages/CalendarPage';
 import MissionsPage       from './pages/MissionsPage';
 import MissionWizardPage  from './pages/MissionWizardPage';
 import CoveragePage       from './pages/CoveragePage';
+import PlatoonWeekPage    from './pages/PlatoonWeekPage';
+import EquipmentPage      from './pages/EquipmentPage';
 
 // Full-screen flows hide the bottom nav AND the emergency banner so
 // new-user wizards aren't competing with operational signals.
@@ -94,11 +96,15 @@ function AppRoutes() {
         } />
         <Route path="/schedule" element={currentUser ? <SchedulePage /> : auth} />
         <Route path="/soldiers" element={currentUser ? <SoldiersPage /> : auth} />
-        <Route path="/profile"  element={currentUser ? <ProfilePage />  : auth} />
+        <Route path="/profile"   element={currentUser ? <ProfilePage />   : auth} />
+        <Route path="/equipment" element={currentUser ? <EquipmentPage /> : auth} />
 
         {/* ── Manager only ─────────────────────────── */}
         <Route path="/leaves" element={
           <ProtectedRoute minRole="platoonCommander"><LeavesPage /></ProtectedRoute>
+        } />
+        <Route path="/platoon" element={
+          <ProtectedRoute minRole="platoonCommander"><PlatoonWeekPage /></ProtectedRoute>
         } />
 
         {/* ── Company commander only ───────────────── */}

@@ -9,6 +9,7 @@ import type {
   Mission, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
+  SignedEquipment,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
@@ -19,6 +20,7 @@ import {
   mockMissions, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
   mockLeaveRotationPolicy, mockLeaveBlocks,
   mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
+  mockSignedEquipment,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -160,6 +162,20 @@ interface AppContextType {
   coverageEvents:      CoverageEvent[];
   dutyExclusions:      DutyExclusion[];
   leaveRotationPlans:  LeaveRotationPlan[];
+
+  // ── Signed equipment (per-soldier ledger) ───────────────────────────
+  signedEquipment:     SignedEquipment[];
+
+  // ── Soldier profile updates (self-edited from /profile) ─────────────
+  updateSoldierProfile: (data: {
+    soldierId:     string;
+    dominantHand?: 'right' | 'left';
+    weaponSide?:   'right' | 'left';
+    shirtSize?:    string;
+    pantsSize?:    string;
+    shoeSize?:     string;
+    dateOfBirth?:  string;
+  }) => void;
 
   // ── Roster-first auth ────────────────────────────────────────────────
   // Sign in for already-claimed identities
@@ -366,6 +382,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [coverageEvents]     = useState<CoverageEvent[]>(mockCoverageEvents);
   const [dutyExclusions]     = useState<DutyExclusion[]>(mockDutyExclusions);
   const [leaveRotationPlans] = useState<LeaveRotationPlan[]>(mockLeaveRotationPlans);
+
+  // ── Signed equipment (per-soldier gear ledger) ─────────────────────
+  const [signedEquipment]    = useState<SignedEquipment[]>(mockSignedEquipment);
+
+  // Soldier self-edit of profile fields.
+  const updateSoldierProfile = (data: {
+    soldierId: string;
+    dominantHand?: 'right' | 'left'; weaponSide?: 'right' | 'left';
+    shirtSize?: string; pantsSize?: string; shoeSize?: string;
+    dateOfBirth?: string;
+  }) => {
+    setAllSoldiers((prev) => prev.map((s) => s.id === data.soldierId
+      ? {
+          ...s,
+          dominantHand: data.dominantHand ?? s.dominantHand,
+          weaponSide:   data.weaponSide   ?? s.weaponSide,
+          shirtSize:    data.shirtSize    ?? s.shirtSize,
+          pantsSize:    data.pantsSize    ?? s.pantsSize,
+          shoeSize:     data.shoeSize     ?? s.shoeSize,
+          dateOfBirth:  data.dateOfBirth  ?? s.dateOfBirth,
+        }
+      : s
+    ));
+  };
 
   // ── Calendar events (slice 1: state + write actions, no UI uses them yet) ──
   // Slice 1 ships read-only. The actions are wired so slice 2 (week view +
@@ -757,6 +797,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       missions, addMission, qualifications, equipmentItems, soldierQualifications,
       leaveRotationPolicy, leaveBlocks,
       coverageEvents, dutyExclusions, leaveRotationPlans,
+      signedEquipment, updateSoldierProfile,
       signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
       logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,

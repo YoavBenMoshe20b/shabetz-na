@@ -11,9 +11,10 @@
 // backend exists this can use proper ISO timestamps end-to-end.
 
 import type {
-  SchedulePeriod, Leave, OverrideAlert, MissionType, TimeSlot, Soldier,
+  Leave, OverrideAlert, Soldier,
   SoldierStatusEvent,
 } from '../types';
+import type { MaterializedSlot } from './materialize';
 
 export type OpsEventKind =
   | 'shiftEnd'
@@ -87,35 +88,16 @@ function relativeAgo(isoTimestamp: string, now: Date = new Date()): string {
   return `לפני ${Math.floor(hours / 24)} ימים`;
 }
 
-// ─── Slot derivations ─────────────────────────────────────────────────────────
-
-interface SlotProjection {
-  mt: MissionType;
-  ts: TimeSlot;
-  startsAt: Date;
-  endsAt: Date;
-}
-
-// Project each slot's HH:MM onto the wall-clock date so we can sort and
-// filter against `now`. Handles overnight slots (end time ≤ start time).
-function projectAllSlots(period: SchedulePeriod, now: Date): SlotProjection[] {
-  const out: SlotProjection[] = [];
-  for (const mt of period.missionTypes) {
-    for (const ts of mt.timeSlots) {
-      const startsAt = projectOnto(now, ts.startTime);
-      let endsAt     = projectOnto(now, ts.endTime);
-      if (endsAt <= startsAt) endsAt = projectOnto(now, ts.endTime, 1);  // overnight
-      out.push({ mt, ts, startsAt, endsAt });
-    }
-  }
-  return out;
-}
-
 // ─── Main entry: platoon-scope timeline ──────────────────────────────────────
 
 export interface PlatoonTimelineInput {
   now:               Date;
-  period:            SchedulePeriod | null;
+  /** Pre-materialized AssignmentSlots — produced by utils/materialize.ts. */
+  materializedSlots: MaterializedSlot[];
+  /** Optional scope filter — when set, only slots with this ownerPlatoonId
+   *  contribute shiftStart/shiftEnd events. Used by PC home so the
+   *  commander only sees their commanded platoon's shifts. */
+  ownerPlatoonId?:   string;
   leaves:            Leave[];
   soldiers:          Soldier[];
   pendingApprovals:  number;
@@ -129,43 +111,47 @@ export interface PlatoonTimelineInput {
 }
 
 export function buildPlatoonTimeline(input: PlatoonTimelineInput): OpsEvent[] {
-  const { now, period, leaves, pendingApprovals, recentAlerts } = input;
+  const { now, materializedSlots, leaves, pendingApprovals, recentAlerts } = input;
   const events: OpsEvent[] = [];
   const horizonEnd = new Date(now.getTime() + input.horizonHours * 3600 * 1000);
 
   // 1. Active shifts ending soon + upcoming shift starts within horizon
-  if (period) {
-    const slots = projectAllSlots(period, now);
-    for (const sp of slots) {
-      // Shift ending in window
-      if (sp.endsAt > now && sp.endsAt <= horizonEnd) {
-        events.push({
-          id: `slot-end-${sp.ts.id}`,
-          whenIso: sp.endsAt.toISOString(),
-          whenLabel: formatRelative(now, sp.endsAt),
-          kind: 'shiftEnd',
-          title: `${sp.mt.name} מסתיימת`,
-          detail: sp.ts.assignedSoldierIds.length > 0
-            ? `${sp.ts.assignedSoldierIds.length} חיילים במשמרת`
-            : undefined,
-          severity: 'normal',
-        });
-      }
-      // Shift starting in window (only if not currently running)
-      if (sp.startsAt > now && sp.startsAt <= horizonEnd) {
-        const understaffed = sp.ts.assignedSoldierIds.length < sp.mt.minSoldiers;
-        events.push({
-          id: `slot-start-${sp.ts.id}`,
-          whenIso: sp.startsAt.toISOString(),
-          whenLabel: formatRelative(now, sp.startsAt),
-          kind: 'shiftStart',
-          title: `${sp.mt.name} מתחילה`,
-          detail: understaffed
-            ? `לא מאוישת במלואה (${sp.ts.assignedSoldierIds.length}/${sp.mt.minSoldiers})`
-            : undefined,
-          severity: understaffed ? 'warn' : 'normal',
-        });
-      }
+  const inScope = input.ownerPlatoonId
+    ? materializedSlots.filter((s) => s.ownerPlatoonId === input.ownerPlatoonId)
+    : materializedSlots;
+
+  for (const slot of inScope) {
+    const startsAt = new Date(slot.start);
+    const endsAt   = new Date(slot.end);
+    const assignedCount = slot.assignedSoldierIds.length + (slot.commanderSoldierId ? 1 : 0);
+
+    // Shift ending in window
+    if (endsAt > now && endsAt <= horizonEnd) {
+      events.push({
+        id: `slot-end-${slot.id}`,
+        whenIso: endsAt.toISOString(),
+        whenLabel: formatRelative(now, endsAt),
+        kind: 'shiftEnd',
+        title: `${slot.missionName} מסתיימת`,
+        detail: assignedCount > 0 ? `${assignedCount} חיילים במשמרת` : undefined,
+        severity: 'normal',
+      });
+    }
+
+    // Shift starting in window
+    if (startsAt > now && startsAt <= horizonEnd) {
+      const understaffed = assignedCount < slot.requiredCount;
+      events.push({
+        id: `slot-start-${slot.id}`,
+        whenIso: startsAt.toISOString(),
+        whenLabel: formatRelative(now, startsAt),
+        kind: 'shiftStart',
+        title: `${slot.missionName} מתחילה`,
+        detail: understaffed
+          ? `לא מאוישת במלואה (${assignedCount}/${slot.requiredCount})`
+          : undefined,
+        severity: understaffed ? 'warn' : 'normal',
+      });
     }
   }
 

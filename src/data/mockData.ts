@@ -7,6 +7,7 @@ import type {
   Mission, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
+  SignedEquipment,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -42,7 +43,8 @@ export const mockSoldiers: Soldier[] = [
   // currentStatus drives every operational view. statusSetAt is the
   // canonical "since" timestamp; statusExpectedUntil is set when going
   // home so the system knows when they should be back.
-  { id: 's1',  name: 'משה ישראלי',  phone: '0509876543', idLast4: '1111', companyId: 'co1', status: 'active', claimedAt: '2024-05-08T09:00:00', userId: 'u3', operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's1',  name: 'משה ישראלי',  phone: '0509876543', idLast4: '1111', companyId: 'co1', status: 'active', claimedAt: '2024-05-08T09:00:00', userId: 'u3', operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2,
+    dateOfBirth: '1998-03-14', dominantHand: 'right', weaponSide: 'right', shirtSize: 'L', pantsSize: '34', shoeSize: '43' },
   { id: 's2',  name: 'רוני שמש',    phone: '0502222111', idLast4: '2222', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'home',    statusSetAt: '2024-05-12T00:00:00', statusExpectedUntil: '2024-05-14T22:00:00', availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
   { id: 's3',  name: 'אורן פרץ',    phone: '0503333222', idLast4: '3333', companyId: 'co1', status: 'active', operationalRoles: ['נגביסט'],          teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 3 },
   { id: 's4',  name: 'נועם כץ',     phone: '0504444333', idLast4: '4444', companyId: 'co1', status: 'active', operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'inactive-temp', statusSetAt: YESTERDAY_AM, availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
@@ -897,3 +899,58 @@ export const mockDutyExclusions: DutyExclusion[] = [
 
 // Empty until slice L6 wires the rotation planner.
 export const mockLeaveRotationPlans: LeaveRotationPlan[] = [];
+
+// ─── Signed equipment (per-soldier gear ledger) ─────────────────────────────
+// Seeded for a few soldiers so the /equipment surface has demo content.
+
+export const mockSignedEquipment: SignedEquipment[] = [
+  {
+    id:             'se-1', companyId: 'co1', soldierId: 's1',
+    itemName:       'M16A2',       category: 'weapon',
+    serialNumber:   '7745321',
+    signedByUserId: 'u-rasap',     signedByName: 'רס״פ אבי כהן',
+    source:         'גדוד 51',     signedAt: '2024-05-01T08:30:00',
+    status:         'active',
+  },
+  {
+    id:             'se-2', companyId: 'co1', soldierId: 's1',
+    itemName:       'מאיר 1',      category: 'optic',
+    serialNumber:   'M1-0234',
+    signedByUserId: 'u-rasap',     signedByName: 'רס״פ אבי כהן',
+    source:         'גדוד 51',     signedAt: '2024-05-01T08:35:00',
+    status:         'active',
+  },
+  {
+    id:             'se-3', companyId: 'co1', soldierId: 's1',
+    itemName:       'ווסט קרבי',   category: 'protection',
+    signedByUserId: 'u-rasap',     signedByName: 'רס״פ אבי כהן',
+    source:         'גדוד 51',     signedAt: '2024-05-01T08:40:00',
+    status:         'active',
+    notes:          'מידה L',
+  },
+  {
+    id:             'se-4', companyId: 'co1', soldierId: 's1',
+    itemName:       'מכשיר קשר',   category: 'comms',
+    serialNumber:   'R-PRC-152-014',
+    signedByUserId: 'u-rasap',     signedByName: 'רס״פ אבי כהן',
+    source:         'גדוד 51',     signedAt: '2024-05-08T09:15:00',
+    status:         'active',
+  },
+  {
+    id:             'se-5', companyId: 'co1', soldierId: 's7',
+    itemName:       'רחפן מאוויק 3', category: 'comms',
+    serialNumber:   'DJI-MVK3-007',
+    equipmentItemId: 'eq-drone-mvk',
+    signedByUserId: 'u-rasap',     signedByName: 'רס״פ אבי כהן',
+    source:         'מאגר חטיבתי', signedAt: '2025-03-02T10:00:00',
+    status:         'active',
+    notes:          'בדיקה רבעונית עברה — 2026/03',
+  },
+  {
+    id:             'se-6', companyId: 'co1', soldierId: 's9',
+    itemName:       'תיק חובש',    category: 'medical',
+    signedByUserId: 'u-rasap',     signedByName: 'רס״פ אבי כהן',
+    source:         'גדוד 51',     signedAt: '2024-11-20T07:00:00',
+    status:         'active',
+  },
+];
