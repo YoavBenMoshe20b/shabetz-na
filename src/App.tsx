@@ -38,6 +38,7 @@ import SoldiersPage       from './pages/SoldiersPage';
 import SchedulePage       from './pages/SchedulePage';
 import LeavesPage         from './pages/LeavesPage';
 import ProfilePage        from './pages/ProfilePage';
+import CalendarPage       from './pages/CalendarPage';
 
 // Full-screen flows hide the bottom nav AND the emergency banner so
 // new-user wizards aren't competing with operational signals.
@@ -84,6 +85,9 @@ function AppRoutes() {
         {/* ── Authed + has a group ─────────────────── */}
         <Route path="/home" element={
           !currentUser ? auth : !hasPlatoon ? <Navigate to="/start" replace /> : <DashboardPage />
+        } />
+        <Route path="/calendar" element={
+          !currentUser ? auth : !hasPlatoon ? <Navigate to="/start" replace /> : <CalendarPage />
         } />
         <Route path="/schedule" element={currentUser ? <SchedulePage /> : auth} />
         <Route path="/soldiers" element={currentUser ? <SoldiersPage /> : auth} />

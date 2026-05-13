@@ -3,6 +3,7 @@ import type {
   EquipmentRequirements, SoldierHistory, MiluimPeriod, Company, Squad,
   CompanyMission, OverrideAlert,
   SoldierStatusEvent, Delegation,
+  CalendarEvent,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -47,7 +48,7 @@ export const mockSoldiers: Soldier[] = [
   { id: 's7',  name: 'שי אברהם',    phone: '0507777666', idLast4: '7777', companyId: 'co1', status: 'active', operationalRoles: ['רחפן', 'קלע'],    teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
   // s8: UNCLAIMED slot
   { id: 's8',  name: 'יניב שלום',   phone: '0508888777', idLast4: '8888', companyId: 'co1', status: 'active', operationalRoles: ['קלע'],             teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [{ type: 'location', description: 'לא נמצא בבסיס', startDate: '2024-05-12', endDate: '2024-05-13' }], currentLoad: 0 },
-  { id: 's9',  name: 'ניסים דהן',   phone: '0509999888', idLast4: '9999', companyId: 'co1', status: 'active', operationalRoles: ['חובש', 'סמל'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's9',  name: 'ניסים דהן',   phone: '0509999888', idLast4: '9999', companyId: 'co1', status: 'active', operationalRoles: ['חובש', 'סמל'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2, dateOfBirth: (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 26); return d.toISOString().slice(0, 10); })() },
   { id: 's10', name: 'אלון ברק',    phone: '0501010101', idLast4: '1010', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'מאגיסט'],  teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
 
   // ── HISTORICAL — invisible to operational selectors ──
@@ -503,4 +504,162 @@ export const mockAuditLogs: AuditLog[] = [
   { id: 'al6', actorName: 'דוד לוי',    actorRole: 'manager', action: 'הפעיל בלת״מ',       target: 'נועם כץ — לא זמין', timestamp: '2024-05-12T06:30:00' },
   { id: 'al7', actorName: 'דוד לוי',    actorRole: 'manager', action: 'חישב שיבוץ מחדש',  target: 'שבוע 12–18 במאי', timestamp: '2024-05-12T06:32:00' },
   { id: 'al8', actorName: 'יוסי כהן',   actorRole: 'owner',   action: 'יצר תקופת שיבוץ',  target: 'שבוע 19–25 במאי', timestamp: '2024-05-14T09:00:00' },
+];
+
+// ─── Calendar events (operational calendar spine) ────────────────────────────
+//
+// First-class events the app owns: combat-blocks (daily rhythm), locked
+// dates, and announcements. Derived entries (guard-shifts from TimeSlot,
+// leave-periods from Leave, birthdays from Soldier.dateOfBirth, missions
+// from CompanyMission) are computed at read time by utils/calendar.ts and
+// are NOT stored here.
+//
+// For the demo, event timestamps are anchored to whatever wall-clock
+// "today" is when the module loads, so the calendar always renders a
+// meaningful day regardless of when the demo is opened.
+
+const todayAt = (hhmm: string, dayOffset = 0): string => {
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+};
+
+const dayBounds = (dayOffset = 0): { start: string; end: string } => {
+  const s = new Date(); s.setDate(s.getDate() + dayOffset); s.setHours(0, 0, 0, 0);
+  const e = new Date(); e.setDate(e.getDate() + dayOffset); e.setHours(23, 59, 59, 0);
+  return { start: s.toISOString(), end: e.toISOString() };
+};
+
+const SEED_CO = 'co1';
+const SEED_PLATOON = 'g1';                       // primary mock platoon
+const SEED_CREATED = new Date().toISOString();
+
+export const mockCalendarEvents: CalendarEvent[] = [
+  // ── Today — company combat-clock rhythm + one platoon-time slot ──
+  {
+    id:        'ce-mess-am',
+    companyId: SEED_CO,
+    kind:      'combat-block',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    start:     todayAt('07:00'),
+    end:       todayAt('07:45'),
+    allDay:    false,
+    title:     'ארוחת בוקר',
+    combatBlock: { kind: 'mess' },
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:        'ce-briefing-am',
+    companyId: SEED_CO,
+    kind:      'combat-block',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    start:     todayAt('08:00'),
+    end:       todayAt('08:30'),
+    allDay:    false,
+    title:     'תדריך בוקר',
+    detail:    'מ״פ + מ״מים',
+    combatBlock: { kind: 'briefing' },
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:        'ce-pt-empty',
+    companyId: SEED_CO,
+    kind:      'combat-block',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    start:     todayAt('10:00'),
+    end:       todayAt('12:00'),
+    allDay:    false,
+    title:     'זמן מחלקה',
+    combatBlock: { kind: 'platoon-time' },        // unfilled
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:        'ce-pt-filled',
+    companyId: SEED_CO,
+    kind:      'combat-block',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    start:     todayAt('13:00'),
+    end:       todayAt('15:00'),
+    allDay:    false,
+    title:     'זמן מחלקה',
+    combatBlock: {
+      kind: 'platoon-time',
+      platoonFill: {
+        platoonId: SEED_PLATOON,
+        title:     'ירי קצר באקדח',
+        detail:    'כיתה ב׳ במטווח',
+        filledBy:  'u-pc',
+        filledAt:  SEED_CREATED,
+      },
+    },
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:        'ce-mess-pm',
+    companyId: SEED_CO,
+    kind:      'combat-block',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    start:     todayAt('19:00'),
+    end:       todayAt('19:45'),
+    allDay:    false,
+    title:     'ארוחת ערב',
+    combatBlock: { kind: 'mess' },
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+
+  // ── Today (all-day) — company announcement ──
+  {
+    id:        'ce-anno-1',
+    companyId: SEED_CO,
+    kind:      'announcement',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    ...dayBounds(0),
+    allDay:    true,
+    title:     'ביקור מח״ט מחר 09:00',
+    detail:    'מסדר מוכנות · מדים א׳',
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+
+  // ── Tomorrow — locked date + morning briefing ──
+  {
+    id:        'ce-lock-1',
+    companyId: SEED_CO,
+    kind:      'locked-date',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    ...dayBounds(1),
+    allDay:    true,
+    title:     'יום נעול — ביקור מח״ט',
+    lockedDate: { reason: 'ביקור מח״ט', allowsLeave: false },
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
+  {
+    id:        'ce-briefing-tmrw',
+    companyId: SEED_CO,
+    kind:      'combat-block',
+    scope:     'company',
+    scopeRefId: SEED_CO,
+    start:     todayAt('08:00', 1),
+    end:       todayAt('08:30', 1),
+    allDay:    false,
+    title:     'תדריך לפני ביקור',
+    combatBlock: { kind: 'briefing' },
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+  },
 ];

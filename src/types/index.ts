@@ -125,6 +125,11 @@ export interface Soldier {
   availability: boolean;           // @deprecated — derive from currentStatus
   availabilityNotes: AvailabilityNote[];
   currentLoad: number;
+
+  // Optional date of birth (ISO YYYY-MM-DD). When present, the calendar
+  // surface renders a birthday entry on the matching day. Strictly
+  // optional — slot creation does not require it.
+  dateOfBirth?: string;
 }
 
 export type SoldierStatus =
@@ -570,6 +575,109 @@ export interface ReminderSetting {
 // atomically with the Soldier.status change. Selectors should always read
 // these from currentUser (the active picture) and never iterate over the
 // historical Soldier records.
+
+// ─── Calendar spine (operational calendar/timeline) ──────────────────────────
+//
+// The calendar is the chronological projection of the same operational data
+// the rest of the app already owns. Two layers:
+//
+//   STORAGE  — CalendarEvent: things the app *owns* and that don't already
+//              exist as some other entity (combat-block, locked-date,
+//              announcement). Stored in AppContext, mutated via actions.
+//
+//   UI ENTRY — CalendarEntry: what every view consumes after projection.
+//              Includes both the storage events above AND derived entries
+//              from existing entities (guard-shift from TimeSlot, leave-
+//              period from Leave, birthday from Soldier.dateOfBirth).
+//              Calendar pages never read storage directly — they call
+//              buildDayEntries() in utils/calendar.ts.
+
+export type CombatBlockKind =
+  | 'platoon-time'   // can be filled by PC/PS of a platoon
+  | 'training'
+  | 'briefing'
+  | 'mess'
+  | 'rest'
+  | 'free';
+
+export type CalendarEventKind =
+  | 'combat-block'
+  | 'locked-date'
+  | 'announcement';
+
+// Storage entity. CC creates these; PC fills platoon-time blocks for their
+// platoon. All times are ISO strings. allDay events use 00:00 → 23:59 of
+// the same day with allDay: true.
+export interface CalendarEvent {
+  id: string;
+  companyId: string;                       // tenant scope
+  kind: CalendarEventKind;
+  scope: 'company' | 'platoon';            // who sees / owns this event
+  scopeRefId: string;                      // company.id | platoon.id
+
+  start: string;                           // ISO
+  end: string;                             // ISO (== start for instantaneous)
+  allDay: boolean;
+
+  title: string;
+  detail?: string;
+
+  // Discriminated payloads — only one is present, based on `kind`.
+  combatBlock?: {
+    kind: CombatBlockKind;
+    /** Populated iff combatBlock.kind === 'platoon-time' AND a platoon has
+     *  filled the slot. Empty platoon-time blocks render as "לא מולא". */
+    platoonFill?: {
+      platoonId: string;
+      title: string;
+      detail?: string;
+      filledBy: string;                    // userId
+      filledAt: string;                    // ISO
+    };
+  };
+  lockedDate?: {
+    reason: string;
+    /** Even on a locked date, certain leave kinds may still be allowed.
+     *  When false, the leave flow must reject requests covering this day. */
+    allowsLeave: boolean;
+  };
+
+  createdBy: string;                       // userId
+  createdAt: string;                       // ISO
+}
+
+// UI-facing entry. Pages render CalendarEntry[], not CalendarEvent[].
+export type CalendarEntryKind =
+  | 'guard-shift'    // derived from TimeSlot
+  | 'mission'        // derived from MissionType / CompanyMission
+  | 'leave-period'   // derived from approved Leave
+  | 'combat-block'   // from CalendarEvent (operational sub-kinds)
+  | 'platoon-time'   // from CalendarEvent.combatBlock.kind === 'platoon-time'
+  | 'locked-date'    // from CalendarEvent
+  | 'announcement'   // from CalendarEvent
+  | 'birthday';      // from Soldier.dateOfBirth
+
+export interface CalendarEntry {
+  id: string;
+  kind: CalendarEntryKind;
+  scope: 'personal' | 'platoon' | 'company';
+  scopeRefId: string;                      // soldierId | platoonId | companyId
+  start: string;                           // ISO
+  end: string;                             // ISO
+  allDay: boolean;
+  title: string;
+  detail?: string;
+  /** Higher priority wins when entries overlap visually.
+   *  mission (100) > guard-shift (90) > leave-period (70) >
+   *  platoon-time filled (50) > combat-block operational (40) >
+   *  announcement (30) > combat-block background (20) >
+   *  platoon-time empty (10) > locked-date / birthday (5). */
+  priority: number;
+  /** True for events that can't be moved/edited by the calendar surface
+   *  (missions, locked dates, guard shifts produced by the scheduler). */
+  locked: boolean;
+  sourceRef: { kind: string; id: string };
+}
 
 export interface MockUser {
   id: string;                         // stable across membership transfers

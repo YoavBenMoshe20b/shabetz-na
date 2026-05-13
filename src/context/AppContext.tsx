@@ -5,12 +5,14 @@ import type {
   ShiftWarning, FairnessScore, Company, CompanySettings, Squad,
   CompanyMission, OverrideAlert,
   SoldierStatus, SoldierStatusEvent, Delegation,
+  CalendarEvent,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockPlatoons, mockLeaves, mockLeaveRequests,
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
   mockSoldierStatusEvents, mockDelegations,
+  mockCalendarEvents,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -108,6 +110,29 @@ interface AppContextType {
   recordOverrideAlert: (data: Omit<OverrideAlert, 'id' | 'timestamp' | 'status'>) => OverrideAlert;
   acknowledgeAlert:    (id: string, byUserId: string) => void;
   resolveAlert:        (id: string, byUserId: string) => void;
+
+  // ── Calendar spine ─────────────────────────────────────────────────
+  // First-class events the app owns. Other entry kinds (guard-shift,
+  // leave-period, birthday, mission) are derived at read time in
+  // utils/calendar.ts and don't live here.
+  calendarEvents:   CalendarEvent[];
+  /** Create a combat-block, locked-date, or announcement. CC-only at the
+   *  UI tier — no permission check inside the action itself yet. */
+  addCalendarEvent: (data: Omit<CalendarEvent, 'id' | 'createdAt'>) => CalendarEvent;
+  /** Attach a platoon's content to a 'platoon-time' combat-block. */
+  fillPlatoonTime:  (data: {
+    eventId:   string;
+    platoonId: string;
+    title:     string;
+    detail?:   string;
+  }) => void;
+  /** Convenience helper for the locked-date creation path (slice 3 UI). */
+  setLockedDate:    (data: {
+    companyId: string;
+    dayIso:    string;            // YYYY-MM-DD
+    reason:    string;
+    allowsLeave?: boolean;
+  }) => CalendarEvent;
 
   // ── Roster-first auth ────────────────────────────────────────────────
   // Sign in for already-claimed identities
@@ -288,6 +313,64 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? { ...a, status: 'resolved', resolvedByUserId: byUserId, resolvedAt: new Date().toISOString() }
       : a
     ));
+
+  // ── Calendar events (slice 1: state + write actions, no UI uses them yet) ──
+  // Slice 1 ships read-only. The actions are wired so slice 2 (week view +
+  // platoon-time fill modal) and slice 3 (CC combat-block builder + locked
+  // date picker) can call them without further refactoring.
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(mockCalendarEvents);
+
+  const addCalendarEvent = (data: Omit<CalendarEvent, 'id' | 'createdAt'>): CalendarEvent => {
+    const ev: CalendarEvent = {
+      ...data,
+      id: `ce-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: new Date().toISOString(),
+    };
+    setCalendarEvents((prev) => [...prev, ev]);
+    return ev;
+  };
+
+  const fillPlatoonTime = (data: {
+    eventId: string; platoonId: string; title: string; detail?: string;
+  }) => {
+    if (!currentUser) return;
+    const now = new Date().toISOString();
+    setCalendarEvents((prev) => prev.map((e) => {
+      if (e.id !== data.eventId) return e;
+      if (e.kind !== 'combat-block' || e.combatBlock?.kind !== 'platoon-time') return e;
+      return {
+        ...e,
+        combatBlock: {
+          ...e.combatBlock,
+          platoonFill: {
+            platoonId: data.platoonId,
+            title:     data.title,
+            detail:    data.detail,
+            filledBy:  currentUser.id,
+            filledAt:  now,
+          },
+        },
+      };
+    }));
+  };
+
+  const setLockedDate = (data: {
+    companyId: string; dayIso: string; reason: string; allowsLeave?: boolean;
+  }): CalendarEvent => {
+    const start = `${data.dayIso}T00:00:00`;
+    const end   = `${data.dayIso}T23:59:59`;
+    return addCalendarEvent({
+      companyId:  data.companyId,
+      kind:       'locked-date',
+      scope:      'company',
+      scopeRefId: data.companyId,
+      start, end,
+      allDay:     true,
+      title:      `יום נעול — ${data.reason}`,
+      lockedDate: { reason: data.reason, allowsLeave: data.allowsLeave ?? false },
+      createdBy:  currentUser?.id ?? 'system',
+    });
+  };
 
   const setGenerationResult = (periodId: string, warnings: ShiftWarning[], fairness: FairnessScore[]) => {
     setLastGeneratedPeriodId(periodId);
@@ -617,6 +700,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createCompany, inviteOfficer, inviteSoldier,
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
+      calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
       signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
       logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
