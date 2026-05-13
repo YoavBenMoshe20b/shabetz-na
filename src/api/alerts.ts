@@ -61,6 +61,27 @@ export function listForCompany(inputs: ProjectionInputs): Promise<Alert[]> {
     }
   }
 
+  // 5. Open equipment gaps awaiting Rasap attention (round 6)
+  const gaps = read.signedEquipment(); void gaps; // touch to keep adapter happy
+  for (const g of read.equipmentGaps?.() ?? []) {
+    if (g.companyId !== companyId) continue;
+    if (platoonId && g.reportedByPlatoonId !== platoonId) continue;
+    if (g.status === 'resolved' || g.status === 'dismissed') continue;
+    out.push({
+      id:        `alert-gap-${g.id}`,
+      companyId: g.companyId,
+      kind:      'override-open', // reuse kind — UI groups by source
+      severity:  g.status === 'forwarded-to-rasap' ? 'warning' : 'info',
+      title:     `ליקוי ציוד · ${g.itemName}`,
+      message:   g.description ?? g.reportedByName,
+      occurredAt: g.createdAt,
+      source:    { kind: 'override-alert', id: g.id },
+      suggestedAction: 'פתח רס״פ',
+      actionHref: '/rasap',
+      platoonId:  g.reportedByPlatoonId,
+    });
+  }
+
   // Sort by severity then time
   const sevRank: Record<AlertSeverity, number> = { critical: 0, warning: 1, info: 2 };
   out.sort((a, b) => {

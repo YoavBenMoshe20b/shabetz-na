@@ -9,7 +9,8 @@ import type {
   Mission, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
-  SignedEquipment,
+  SignedEquipment, SignedEquipmentStatus,
+  EquipmentCondition, EquipmentLifecycleEvent,
   CommandDelegation, EquipmentGap, EquipmentGapKind, EquipmentGapStatus,
   CommandAuthority, OperationalRole,
   MissionNote,
@@ -17,6 +18,7 @@ import type {
   Announcement, AnnouncementStatus,
   EscalationEvent, PlatoonLeaveCycle, PlatoonLeaveCycleSegment,
 } from '../types';
+import { newId } from '../utils/id';
 import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle } from '../utils/permissions';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockPlatoons, mockLeaves, mockLeaveRequests,
@@ -186,6 +188,32 @@ interface AppContextType {
 
   // ── Signed equipment (per-soldier ledger) ───────────────────────────
   signedEquipment:     SignedEquipment[];
+  /** Append-only audit log of every equipment state transition (round 6). */
+  equipmentLifecycle:  EquipmentLifecycleEvent[];
+  /** Rasap actions — write paths go through the state machine + log. */
+  signOutEquipment:    (data: {
+    soldierId: string;
+    itemName: string;
+    category: SignedEquipment['category'];
+    equipmentItemId?: string;
+    serialNumber?: string;
+    source?: string;
+    notes?: string;
+    initialCondition?: EquipmentCondition;
+  }) => SignedEquipment | null;
+  returnEquipment:     (data: {
+    signedEquipmentId: string;
+    partial?: boolean;
+    damageDescription?: string;
+    finalCondition?: EquipmentCondition;
+  }) => void;
+  markEquipmentDamage: (data: {
+    signedEquipmentId: string;
+    description: string;
+    newCondition?: EquipmentCondition;
+  }) => void;
+  /** Bulk replace inventory (CSV import). */
+  setInventoryItems:   (items: EquipmentItem[]) => void;
 
   // ── Soldier profile updates (self-edited from /profile) ─────────────
   updateSoldierProfile: (data: {
@@ -362,7 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
     // Append to the log
     setSoldierStatusEvents((prev) => [...prev, {
-      id: `sse-${Date.now()}`,
+      id: newId('sse'),
       soldierId: data.soldierId,
       value: data.next,
       setAt: now,
@@ -397,7 +425,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addSquad = (data: { platoonId: string; name: string }): Squad => {
     const newSu: Squad = {
-      id: `su-${Date.now()}`,
+      id: newId('su'),
       platoonId: data.platoonId,
       name: data.name,
       soldierIds: [],
@@ -427,7 +455,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCompanyMission = (data: Omit<CompanyMission, 'id' | 'createdAt'>): CompanyMission => {
     const cm: CompanyMission = {
       ...data,
-      id: `cm-${Date.now()}`,
+      id: newId('cm'),
       createdAt: new Date().toISOString(),
     };
     setCompanyMissions((prev) => [...prev, cm]);
@@ -445,7 +473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const recordOverrideAlert = (data: Omit<OverrideAlert, 'id' | 'timestamp' | 'status'>): OverrideAlert => {
     const alert: OverrideAlert = {
       ...data,
-      id: `al-ov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: newId('al-ov'),
       timestamp: new Date().toISOString(),
       status: 'open',
     };
@@ -474,7 +502,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addMission = (data: Omit<Mission, 'id' | 'createdAt'>): Mission => {
     const m: Mission = {
       ...data,
-      id:        `mi-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id:        newId('mi'),
       createdAt: new Date().toISOString(),
     };
     setMissions((prev) => [...prev, m]);
@@ -498,7 +526,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addOrder = (data: Omit<OperationalOrder, 'id' | 'createdAt'>): OperationalOrder => {
     const o: OperationalOrder = {
       ...data,
-      id:        `order-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id:        newId('order'),
       createdAt: new Date().toISOString(),
     };
     setOrders((prev) => [...prev, o]);
@@ -521,7 +549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     text: string;
   }): MissionNote => {
     const note: MissionNote = {
-      id:           `mn-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id:           newId('mn'),
       missionId:    data.missionId,
       scope:        data.scope,
       platoonId:    data.platoonId,
@@ -554,7 +582,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isConsumable?: boolean;
     unitCount?: number;
   }): { id: string } => {
-    const id = `eq-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const id = newId('eq');
     const item: EquipmentItem = {
       id,
       companyId:    currentUser?.companyId ?? '',
@@ -576,7 +604,141 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [leaveRotationPlans] = useState<LeaveRotationPlan[]>(mockLeaveRotationPlans);
 
   // ── Signed equipment (per-soldier gear ledger) ─────────────────────
-  const [signedEquipment]    = useState<SignedEquipment[]>(mockSignedEquipment);
+  const [signedEquipment, setSignedEquipment] = useState<SignedEquipment[]>(mockSignedEquipment);
+  // ── Equipment lifecycle event log (round 6) — append-only audit ────
+  const [equipmentLifecycle, setEquipmentLifecycle] = useState<EquipmentLifecycleEvent[]>([]);
+  // ── Equipment inventory items (CC-defined catalogue) ──────────────
+  // We expose a setter alongside the existing addEquipmentItem so the
+  // Rasap module can do bulk updates (CSV import, write-off, etc.) without
+  // re-implementing the create-only path.
+  const setEquipmentItemsState = (next: EquipmentItem[]) => setEquipmentItems(next);
+
+  // ── Helpers ────────────────────────────────────────────────────────
+  const appendLifecycle = (data: Omit<EquipmentLifecycleEvent, 'id' | 'occurredAt' | 'actorUserId' | 'actorName' | 'actorRole'>) => {
+    if (!currentUser) return;
+    const ev: EquipmentLifecycleEvent = {
+      ...data,
+      id: newId('eql'),
+      actorUserId: currentUser.id,
+      actorName:   currentUser.name,
+      actorRole:   currentRole,
+      occurredAt:  new Date().toISOString(),
+    };
+    setEquipmentLifecycle((prev) => [ev, ...prev]);
+  };
+
+  /** Sign an item OUT to a soldier — creates a new SignedEquipment record
+   *  AND appends a sign-out LifecycleEvent. */
+  const signOutEquipment = (data: {
+    soldierId: string;
+    itemName: string;
+    category: SignedEquipment['category'];
+    equipmentItemId?: string;
+    serialNumber?: string;
+    source?: string;
+    notes?: string;
+    initialCondition?: EquipmentCondition;
+  }): SignedEquipment | null => {
+    if (!currentUser) return null;
+    const now = new Date().toISOString();
+    const se: SignedEquipment = {
+      id: newId('se'),
+      companyId: currentUser.companyId ?? '',
+      soldierId: data.soldierId,
+      itemName:  data.itemName,
+      category:  data.category,
+      equipmentItemId: data.equipmentItemId,
+      serialNumber:    data.serialNumber,
+      signedByUserId:  currentUser.id,
+      signedByName:    currentUser.name,
+      source:          data.source ?? 'מחסן רס״פ',
+      signedAt:        now,
+      status:          'active',
+      notes:           data.notes,
+      condition:       data.initialCondition ?? 'good',
+      currentLocation: 'אצל החייל',
+      lastTransitionAt: now,
+      eventCount: 1,
+    };
+    setSignedEquipment((prev) => [...prev, se]);
+    appendLifecycle({
+      companyId: se.companyId,
+      signedEquipmentId: se.id,
+      equipmentItemId: data.equipmentItemId,
+      kind: 'sign-out',
+      description: `החתמת ${data.itemName} ל-${data.soldierId}`,
+      conditionAfter: se.condition,
+      locationAfter:  se.currentLocation,
+      toSoldierId: data.soldierId,
+    });
+    return se;
+  };
+
+  /** Return an item — full or partial. Partial means damage was noted on
+   *  return; the item transitions to 'in-repair' or 'returned' accordingly. */
+  const returnEquipment = (data: {
+    signedEquipmentId: string;
+    partial?: boolean;
+    damageDescription?: string;
+    finalCondition?: EquipmentCondition;
+  }) => {
+    const now = new Date().toISOString();
+    setSignedEquipment((prev) => prev.map((se) => {
+      if (se.id !== data.signedEquipmentId) return se;
+      const nextStatus: SignedEquipmentStatus = data.partial ? 'in-repair' : 'returned';
+      const cond = data.finalCondition ?? (data.partial ? 'damaged' : 'good');
+      return {
+        ...se,
+        status: nextStatus,
+        condition: cond,
+        currentLocation: data.partial ? 'מחסן רס״פ — תיקון' : 'מחסן רס״פ',
+        lastTransitionAt: now,
+        eventCount: (se.eventCount ?? 0) + 1,
+      };
+    }));
+    const se = signedEquipment.find((x) => x.id === data.signedEquipmentId);
+    if (se) {
+      appendLifecycle({
+        companyId: se.companyId,
+        signedEquipmentId: se.id,
+        equipmentItemId: se.equipmentItemId,
+        kind: data.partial ? 'return-partial' : 'return-full',
+        description: data.damageDescription
+          ?? (data.partial ? 'החזרת ציוד עם בלאי' : 'החזרת ציוד תקין'),
+        conditionAfter: data.finalCondition ?? (data.partial ? 'damaged' : 'good'),
+        locationAfter:  data.partial ? 'מחסן רס״פ — תיקון' : 'מחסן רס״פ',
+        fromSoldierId: se.soldierId,
+      });
+    }
+  };
+
+  /** Mark damage WITHOUT a return — the item stays with the soldier but
+   *  the audit log captures the damage. Used by soldiers in the field. */
+  const markEquipmentDamage = (data: {
+    signedEquipmentId: string;
+    description: string;
+    newCondition?: EquipmentCondition;
+  }) => {
+    const now = new Date().toISOString();
+    setSignedEquipment((prev) => prev.map((se) => se.id !== data.signedEquipmentId ? se : {
+      ...se,
+      condition: data.newCondition ?? 'damaged',
+      lastTransitionAt: now,
+      eventCount: (se.eventCount ?? 0) + 1,
+    }));
+    const se = signedEquipment.find((x) => x.id === data.signedEquipmentId);
+    if (se) {
+      appendLifecycle({
+        companyId: se.companyId,
+        signedEquipmentId: se.id,
+        equipmentItemId: se.equipmentItemId,
+        kind: 'damage-report',
+        description: data.description,
+        conditionAfter: data.newCondition ?? 'damaged',
+        locationAfter:  se.currentLocation,
+      });
+    }
+  };
 
   // Soldier self-edit of profile fields.
   const updateSoldierProfile = (data: {
@@ -641,7 +803,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const target = users.find((u) => u.id === data.toUserId);
     const cd: CommandDelegation = {
-      id:           `cd-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id:           newId('cd'),
       companyId:    currentUser.companyId ?? '',
       fromUserId:   currentUser.id,
       fromUserName: currentUser.name,
@@ -703,7 +865,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? platoons.find((p) => squads.find((sq) => sq.id === soldier.squadId)?.platoonId === p.id)
       : undefined;
     const gap: EquipmentGap = {
-      id:                  `eg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id:                  newId('eg'),
       companyId:           soldier?.companyId ?? currentUser?.companyId ?? '',
       reportedByUserId:    currentUser?.id ?? '',
       reportedBySoldierId: data.soldierId,
@@ -757,7 +919,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addCalendarEvent = (data: Omit<CalendarEvent, 'id' | 'createdAt'>): CalendarEvent => {
     const ev: CalendarEvent = {
       ...data,
-      id: `ce-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: newId('ce'),
       createdAt: new Date().toISOString(),
     };
     setCalendarEvents((prev) => [...prev, ev]);
@@ -895,7 +1057,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const isNewUser = !user;
     if (!user) {
       user = {
-        id: `u-${Date.now()}`,
+        id: newId('u'),
         name: slot.name,
         role: 'soldier',
         phone, idLast4, password,
@@ -1014,18 +1176,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const createCompany = (data: CreateCompanyInput): string => {
     if (!currentUser) return '';
-    const companyId  = `co-${Date.now()}`;
+    const companyId  = newId('co');
     const inviteCode = `CO-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // Create platoons + sub-units first so we can reference their ids
     const newPlatoons: Platoon[] = [];
     const newSquads: Squad[] = [];
     data.platoons.forEach((p, idx) => {
-      const platoonId = `g-${Date.now()}-${idx}`;
+      const platoonId = newId(`g-${idx}`);
       const platoonCode = `UNIT-${Math.floor(1000 + Math.random() * 9000)}`;
       const squadIds: string[] = [];
       p.squadNames.forEach((suName, sIdx) => {
-        const suId = `su-${Date.now()}-${idx}-${sIdx}`;
+        const suId = newId(`su-${idx}-${sIdx}`);
         squadIds.push(suId);
         newSquads.push({ id: suId, platoonId, name: suName, soldierIds: [] });
       });
@@ -1091,7 +1253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updatePeriod = (p: SchedulePeriod) => setPeriods((prev) => prev.map((x) => x.id === p.id ? p : x));
 
   const addAuditLog = (entry: Omit<AuditLog, 'id' | 'timestamp'>) =>
-    setAuditLogs((prev) => [{ ...entry, id: `al-${Date.now()}`, timestamp: new Date().toISOString() }, ...prev]);
+    setAuditLogs((prev) => [{ ...entry, id: newId('al'), timestamp: new Date().toISOString() }, ...prev]);
 
   const updateSoldierAvailability = (id: string, available: boolean) =>
     setSoldiers((prev) => prev.map((s) => s.id === id ? { ...s, availability: available } : s));
@@ -1100,7 +1262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setReminders((prev) => [...prev.filter((x) => x.timeSlotId !== r.timeSlotId), r]);
 
   const addLeave = (leave: Omit<Leave, 'id'>) =>
-    setLeaves((prev) => [...prev, { ...leave, id: `lv-${Date.now()}` }]);
+    setLeaves((prev) => [...prev, { ...leave, id: newId('lv') }]);
 
   const removeLeave = (id: string) =>
     setLeaves((prev) => prev.filter((l) => l.id !== id));
@@ -1108,7 +1270,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addLeaveRequest = (req: Omit<LeaveRequest, 'id' | 'status' | 'submittedAt'>) =>
     setLeaveRequests((prev) => [...prev, {
       ...req,
-      id: `lr-${Date.now()}`,
+      id: newId('lr'),
       status: 'pending',
       submittedAt: new Date().toISOString(),
     }]);
@@ -1142,7 +1304,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!canCreateAnnouncement(currentUser, delegations)) return null;
     const ann: Announcement = {
       ...data,
-      id: `ann-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: newId('ann'),
       createdByUserId: currentUser.id,
       createdByName:   currentUser.name,
       createdAt:       new Date().toISOString(),
@@ -1186,7 +1348,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!canDeclareEscalation(currentUser, delegations)) return null;
     const ev: EscalationEvent = {
       ...data,
-      id: `esc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: newId('esc'),
       status: 'active',
       openedByUserId: currentUser.id,
       openedByName:   currentUser.name,
@@ -1255,7 +1417,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!canEditLeaveCycle(currentUser, delegations)) return null;
     const c: PlatoonLeaveCycle = {
       ...data,
-      id: `plc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: newId('plc'),
       segments: data.segments ?? [],
       status: data.status ?? 'draft',
       createdByUserId: currentUser.id,
@@ -1278,7 +1440,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!currentUser || !canEditLeaveCycle(currentUser, delegations)) return;
     const seg: PlatoonLeaveCycleSegment = {
       ...segment,
-      id: `seg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: newId('seg'),
     };
     setPlatoonLeaveCycles((prev) => prev.map((c) => c.id === cycleId
       ? { ...c, segments: [...c.segments, seg], updatedAt: new Date().toISOString() }
@@ -1329,7 +1491,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,
       leaveRotationPolicy, leaveBlocks,
       coverageEvents, dutyExclusions, leaveRotationPlans,
-      signedEquipment, updateSoldierProfile,
+      signedEquipment, equipmentLifecycle,
+      signOutEquipment, returnEquipment, markEquipmentDamage,
+      setInventoryItems: setEquipmentItemsState,
+      updateSoldierProfile,
       updateSoldierSquad, updateSoldierOperationalRoles,
       commandDelegations, activeCommandDelegations,
       createCommandDelegation, revokeCommandDelegation,

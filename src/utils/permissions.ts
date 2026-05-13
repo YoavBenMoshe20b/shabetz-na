@@ -82,6 +82,8 @@ const ALL_TOKENS: PermissionToken[] = [
   'logistics.signOut', 'logistics.signIn', 'logistics.viewAll',
   'report.viewCompanyState', 'report.viewPlatoonState',
   'announcement.create', 'leaveCycle.edit',
+  'rasap.viewInventory', 'rasap.signOut', 'rasap.return',
+  'rasap.markDamaged',   'rasap.resolveGap',
   'delegation.grant',
 ];
 
@@ -426,4 +428,43 @@ export function canDeclareEscalation(user: MockUser, delegations: Delegation[] =
 /** דוח 1 — same scope as the company-wide state report. */
 export function canViewReport1(user: MockUser, delegations: Delegation[] = []): boolean {
   return hasPermission(user, 'report.viewCompanyState', undefined, delegations);
+}
+
+// ─── Rasap / logistics module (round 6) ────────────────────────────────
+//
+// Rasap permissions are granted to:
+//   • CC / Deputy by default (they always carry every token)
+//   • soldiers carrying the 'רס״פ' OperationalRole or functionalRoles.rasap
+//   • anyone with an active Delegation
+//
+// The role-only checks fall through to hasPermission() which already
+// respects delegations. For functional-role detection we expose a tiny
+// helper used by the dashboard NavTile + the /rasap route gate.
+
+export function isRasap(user: MockUser): boolean {
+  if (user.operationalRoles.includes('רס״פ')) return true;
+  const fn = (user as MockUser & { functionalRoles?: string[] }).functionalRoles;
+  return !!fn && fn.includes('rasap');
+}
+
+export function canManageEquipment(user: MockUser, delegations: Delegation[] = []): boolean {
+  // CC/Deputy always; Rasap soldiers always; delegated users via token.
+  if (isCompanyLeadership(user.role)) return true;
+  if (isRasap(user)) return true;
+  return hasPermission(user, 'rasap.signOut', undefined, delegations);
+}
+
+/** Anyone can VIEW inventory (commanders + Rasap). Editing is separate. */
+export function canViewInventory(user: MockUser, delegations: Delegation[] = []): boolean {
+  if (isCompanyLeadership(user.role) || isPlatoonLeadership(user.role)) return true;
+  if (isRasap(user)) return true;
+  return hasPermission(user, 'rasap.viewInventory', undefined, delegations);
+}
+
+/** Anyone in the chain can REPORT damage. The scope of where the report
+ *  routes depends on the viewer's role, but the CTA itself is universal. */
+export function canReportDamage(_user: MockUser): boolean {
+  // Every authenticated user can report damage on equipment they signed for
+  // or that they're commanding. UI scope-aware filtering applies elsewhere.
+  return true;
 }

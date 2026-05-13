@@ -23,6 +23,7 @@ import type {
   Soldier, Mission, Announcement, EscalationEvent, Leave, LeaveRequest,
   OverrideAlert, PlatoonLeaveCycle, Platoon, Squad, Company,
   OperationalOrder, SoldierStatusEvent,
+  SignedEquipment, EquipmentGap, EquipmentItem,
 } from '../types';
 
 // ─── Live registry — populated by AppContext on mount ────────────────────
@@ -49,6 +50,9 @@ export interface LiveSnapshot {
   companies?:          Company[];
   orders?:             OperationalOrder[];
   statusEvents?:       SoldierStatusEvent[];
+  signedEquipment?:    SignedEquipment[];
+  equipmentGaps?:      EquipmentGap[];
+  equipmentItems?:     EquipmentItem[];
 }
 
 let live: LiveSnapshot = {};
@@ -73,6 +77,9 @@ export const read = {
   companies:          () => live.companies          ?? mock.mockCompanies,
   orders:             () => live.orders             ?? mock.mockOperationalOrders,
   statusEvents:       () => live.statusEvents       ?? mock.mockSoldierStatusEvents,
+  signedEquipment:    () => live.signedEquipment    ?? mock.mockSignedEquipment,
+  equipmentGaps:      () => live.equipmentGaps      ?? mock.mockEquipmentGaps,
+  equipmentItems:     () => live.equipmentItems     ?? mock.mockEquipmentItems,
 };
 
 // ─── Simulated network — used for write paths that resolve to identity ───

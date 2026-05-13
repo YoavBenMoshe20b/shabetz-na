@@ -16,7 +16,9 @@ import { useApp } from '../context/AppContext';
 import { getSoldierDetailScope, canSeeSoldierSection } from '../utils/permissions';
 import Header from '../components/Header';
 import TourOfDutyCard from '../components/TourOfDutyCard';
+import DamageReportSheet from '../components/DamageReportSheet';
 import { materializeWeek } from '../utils/materialize';
+import type { SignedEquipment } from '../types';
 import type {
   OperationalRole, SignedEquipmentCategory, SoldierStatus,
 } from '../types';
@@ -131,6 +133,9 @@ export default function SoldierDetailPage() {
   const [editSquadOpen, setEditSquadOpen] = useState(false);
   const [rolesDraft, setRolesDraft] = useState<OperationalRole[]>(target.operationalRoles);
   const [squadDraft, setSquadDraft] = useState<string | null>(target.squadId ?? null);
+  // Round 6 — damage reporting (commanders can report on this soldier's items)
+  const [damageOpen, setDamageOpen] = useState(false);
+  const [damageFor, setDamageFor] = useState<SignedEquipment | null>(null);
   const saveRoles = () => { updateSoldierOperationalRoles(target.id, rolesDraft); setEditRolesOpen(false); };
   const saveSquad = () => { updateSoldierSquad(target.id, squadDraft); setEditSquadOpen(false); };
 
@@ -336,7 +341,17 @@ export default function SoldierDetailPage() {
 
         {/* Equipment */}
         {can('equipment') && (
-          <Section label="ציוד חתום">
+          <Section
+            label="ציוד חתום"
+            action={can('edit-controls') && (
+              <button
+                onClick={() => { setDamageFor(null); setDamageOpen(true); }}
+                className="text-tiny font-semibold text-mil-alert hover:text-mil-alert/80"
+              >
+                דווח בלאי
+              </button>
+            )}
+          >
             {myEquipment.length === 0 ? (
               <Muted className="text-tiny">אין ציוד חתום</Muted>
             ) : (
@@ -350,12 +365,29 @@ export default function SoldierDetailPage() {
                         <Hint className="text-tiny font-mono tabular-nums">{item.serialNumber}</Hint>
                       )}
                     </div>
+                    {can('edit-controls') && (
+                      <button
+                        onClick={() => { setDamageFor(item); setDamageOpen(true); }}
+                        className="text-xxs font-semibold text-mil-alert hover:text-mil-alert/80"
+                      >
+                        בלאי
+                      </button>
+                    )}
                     <Hint className="text-tiny">{item.source}</Hint>
                   </div>
                 ))}
               </div>
             )}
           </Section>
+        )}
+
+        {damageOpen && (
+          <DamageReportSheet
+            open
+            onClose={() => { setDamageOpen(false); setDamageFor(null); }}
+            forItem={damageFor}
+            reportedBySoldierId={target.id}
+          />
         )}
 
         {/* Tour of duty (ימי קו) — visible to anyone with operational-status access */}

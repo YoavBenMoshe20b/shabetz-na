@@ -38,6 +38,9 @@ export type PermissionToken =
   | 'report.viewCompanyState' | 'report.viewPlatoonState'
   // Announcements + leave cycles (added in product round 4)
   | 'announcement.create' | 'leaveCycle.edit'
+  // Rasap / logistics module (round 6)
+  | 'rasap.viewInventory' | 'rasap.signOut' | 'rasap.return'
+  | 'rasap.markDamaged'   | 'rasap.resolveGap'
   // Meta
   | 'delegation.grant';
 
@@ -191,6 +194,16 @@ export interface SignedEquipment {
   signedAt: string;             // ISO
   status: SignedEquipmentStatus;
   notes?: string;
+  /** Round-6 additions ─────────────────────────────────────────────────
+   *  These four fields denormalize the latest LifecycleEvent so reads are
+   *  cheap. The event log remains the source of truth — writes ALWAYS
+   *  append an event then update these fields. */
+  condition?: EquipmentCondition;
+  currentLocation?: EquipmentLocation;
+  lastTransitionAt?: string;
+  /** Total LifecycleEvents recorded — surfaces "history depth" in the UI
+   *  without re-querying. */
+  eventCount?: number;
 }
 
 export type SoldierStatus =
@@ -779,6 +792,13 @@ export interface EquipmentItem {
   category?: string;
   isConsumable: boolean;                 // batteries vs ladders
   unitCount: number;                     // how many the company owns
+  /** Default storage location for un-signed units. Free text. */
+  defaultLocation?: EquipmentLocation;
+  /** Optional manufacturer / serial-prefix metadata. Imported from CSV. */
+  manufacturer?: string;
+  serialPrefix?: string;
+  /** Total deployed (signed out) count — derived but cached when present. */
+  deployedCount?: number;
 }
 
 // Soldier ↔ Qualification join. Annual recerts use expiresAt.
@@ -2035,6 +2055,72 @@ export interface MockUser {
   // Audit trail
   createdAt?: string;
   lastSignInAt?: string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  RASAP / LOGISTICS MODULE — round 6                                      ║
+// ║                                                                          ║
+// ║  Adds three things on top of the existing EquipmentItem +                ║
+// ║  SignedEquipment + EquipmentGap entities:                                ║
+// ║                                                                          ║
+// ║  1. Location tracking on every SignedEquipment record.                   ║
+// ║  2. Condition score (0–100) representing wear / damage state.            ║
+// ║  3. Lifecycle event log — an append-only audit of every transition       ║
+// ║     (sign-out, return-full, return-partial, damage-report, repair,      ║
+// ║     loss, write-off). The log is the source of truth; the SignedEquip   ║
+// ║     record itself just denormalizes the latest state.                    ║
+// ║                                                                          ║
+// ║  State machine for a signed item:                                        ║
+// ║                                                                          ║
+// ║     ┌─ active ──── damage-reported ──── in-repair ── returned/lost      ║
+// ║     │      │                                                            ║
+// ║     │      └───── returned (full or partial)                            ║
+// ║     │                                                                   ║
+// ║     └── lost                                                            ║
+// ║                                                                          ║
+// ║  Transitions are validated in AppContext actions. Each transition       ║
+// ║  appends an EquipmentLifecycleEvent for audit. The server will mirror   ║
+// ║  this exact state machine.                                              ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+/** Coarse condition buckets shown on the inventory ledger. */
+export type EquipmentCondition = 'new' | 'good' | 'worn' | 'damaged' | 'unusable';
+
+/** A free-text location label — "מחסן רס״פ", "תעוז 4", "אצל החייל". */
+export type EquipmentLocation = string;
+
+export type EquipmentLifecycleEventKind =
+  | 'sign-out'         // item handed to a soldier
+  | 'return-full'      // soldier returns item in expected condition
+  | 'return-partial'   // soldier returns item with damage / missing parts
+  | 'damage-report'    // damage reported (by soldier or commander) without return
+  | 'repair-start'     // sent to repair
+  | 'repair-complete'  // returned from repair
+  | 'lost'             // item declared lost
+  | 'write-off';       // item retired from inventory
+
+export interface EquipmentLifecycleEvent {
+  id: string;
+  companyId: string;
+  /** Either references a SignedEquipment (per-soldier ledger) or a base
+   *  EquipmentItem (inventory-level event). At least one is present. */
+  signedEquipmentId?: string;
+  equipmentItemId?:   string;
+  kind: EquipmentLifecycleEventKind;
+  /** Free-text describing what happened. */
+  description?: string;
+  /** Snapshot of condition after this event. */
+  conditionAfter?: EquipmentCondition;
+  /** Snapshot of location after this event. */
+  locationAfter?:  EquipmentLocation;
+  /** Who triggered the event. */
+  actorUserId: string;
+  actorName:   string;
+  actorRole:   UserRole;
+  /** When item changes hands: the soldier on the other side. */
+  fromSoldierId?: string;
+  toSoldierId?:   string;
+  occurredAt: string;
 }
 
 // ╔══════════════════════════════════════════════════════════════════════════╗

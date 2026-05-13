@@ -62,6 +62,9 @@ const AnnouncementsPage  = lazy(() => import('./pages/AnnouncementsPage'));
 const LeaveCyclePage     = lazy(() => import('./pages/LeaveCyclePage'));
 // Round 5
 const AlertsPage         = lazy(() => import('./pages/AlertsPage'));
+// Round 6 — Rasap / logistics module
+const RasapPage              = lazy(() => import('./pages/RasapPage'));
+const EquipmentInventoryPage = lazy(() => import('./pages/EquipmentInventoryPage'));
 
 // Calm Suspense fallback — single subtle skeleton so the transition
 // feels intentional rather than a flash of blank.
@@ -170,6 +173,15 @@ function AppRoutes() {
         {/* ── Round 5: התראות ─── */}
         <Route path="/alerts"         element={
           <ProtectedRoute minRole="platoonCommander"><AlertsPage /></ProtectedRoute>
+        } />
+        {/* ── Round 6: לוגיסטיקה ורס״פ ─── */}
+        {/* Rasap pages open to platoonCommander+ via the route gate. Per-
+            page logic gates writes to canManageEquipment (CC + Rasap role). */}
+        <Route path="/rasap"                 element={
+          <ProtectedRoute minRole="platoonCommander"><RasapPage /></ProtectedRoute>
+        } />
+        <Route path="/equipment/inventory"   element={
+          <ProtectedRoute minRole="platoonCommander"><EquipmentInventoryPage /></ProtectedRoute>
         } />
         {/* Announcements: read open to everyone; create gated inside the page. */}
         <Route path="/announcements"  element={currentUser ? <AnnouncementsPage /> : auth} />
