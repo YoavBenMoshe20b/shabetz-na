@@ -593,6 +593,7 @@ function CalmCard() {
 // ─── Soldier Dashboard ────────────────────────────────────────────────────────
 
 function SoldierDashboard() {
+  const navigate = useNavigate();
   const {
     soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest, updateSoldierStatus,
     missions, dutyExclusions,
@@ -734,6 +735,7 @@ function SoldierDashboard() {
             leaves={leaves}
             nextShift={myNextShift ? {
               id:        myNextShift.slot.id,
+              missionId: myNextShift.slot.missionId,
               name:      myNextShift.slot.missionName,
               startTime: hhmm(new Date(myNextShift.slot.start)),
               endTime:   hhmm(new Date(myNextShift.slot.end)),
@@ -742,6 +744,7 @@ function SoldierDashboard() {
             } : null}
             onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.slot.id, minutesBefore: mins, enabled: true })}
             onOpenStatusUpdate={() => setStatusUpdateOpen(true)}
+            onOpenMission={(missionId) => navigate(`/mission/${missionId}`)}
           />
         )}
 
@@ -976,6 +979,7 @@ function CollapsibleCard({
 
 interface NextShiftDisplay {
   id: string;
+  missionId: string;
   name: string;
   startTime: string;
   endTime: string;
@@ -984,13 +988,14 @@ interface NextShiftDisplay {
 }
 
 function OperationalStateCard({
-  soldier, leaves, nextShift, onSetReminder, onOpenStatusUpdate,
+  soldier, leaves, nextShift, onSetReminder, onOpenStatusUpdate, onOpenMission,
 }: {
   soldier: Soldier;
   leaves: import('../types').Leave[];
   nextShift: NextShiftDisplay | null;
   onSetReminder: (mins: 5 | 15 | 30 | 60) => void;
   onOpenStatusUpdate: () => void;
+  onOpenMission: (missionId: string) => void;
 }) {
   const status = soldier.currentStatus;
   const now = new Date();
@@ -1039,7 +1044,15 @@ function OperationalStateCard({
         {/* — Next operational transition — */}
         {nextShift && status === 'in-base' && (
           <div className="pt-4 border-t border-mil-border">
-            <Hint>המשמרת הבאה</Hint>
+            <div className="flex items-baseline gap-3">
+              <Hint>המשמרת הבאה</Hint>
+              <button
+                onClick={() => onOpenMission(nextShift.missionId)}
+                className="mr-auto text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
+              >
+                פרטים →
+              </button>
+            </div>
             <p className="text-lg font-bold text-mil-text mt-1.5 leading-snug">{nextShift.name}</p>
             <Muted className="mt-1">
               <span className="font-mono font-semibold text-mil-text">{nextShift.startTime}–{nextShift.endTime}</span>

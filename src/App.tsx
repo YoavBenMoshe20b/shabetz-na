@@ -24,30 +24,47 @@
 // audit-log → /home alerts feed) or is reached via wizard inside another
 // flow (create-mission → SchedulePage modal). Old URLs redirect to /home.
 
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppProvider, useApp, useOperationalEmergency } from './context/AppContext';
 import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
+import DelegationBanner from './components/DelegationBanner';
 import { EmergencyBanner } from './components/ui';
 
+// Eager — entry surfaces every authed user lands on
 import LoginPage          from './pages/LoginPage';
 import StartPage          from './pages/StartPage';
-import CreateCompanyPage  from './pages/CreateCompanyPage';
-import DashboardPage      from './pages/DashboardPage';   // renders the Home variants
-import SoldiersPage       from './pages/SoldiersPage';
-import SchedulePage       from './pages/SchedulePage';
-import LeavesPage         from './pages/LeavesPage';
-import ProfilePage        from './pages/ProfilePage';
-import CalendarPage       from './pages/CalendarPage';
-import MissionsPage       from './pages/MissionsPage';
-import MissionWizardPage  from './pages/MissionWizardPage';
-import MissionDetailPage  from './pages/MissionDetailPage';
-import CoveragePage       from './pages/CoveragePage';
-import PlatoonWeekPage    from './pages/PlatoonWeekPage';
-import EquipmentPage      from './pages/EquipmentPage';
-import SoldierDetailPage  from './pages/SoldierDetailPage';
-import PlatoonGapsPage    from './pages/PlatoonGapsPage';
-import DelegationsPage    from './pages/DelegationsPage';
+import DashboardPage      from './pages/DashboardPage';
+
+// Lazy — heavier surfaces loaded on demand. Cuts the initial bundle
+// substantially since these (wizard, calendar, coverage, week, detail
+// pages) ship a lot of code that isn't needed for the first paint.
+const CreateCompanyPage  = lazy(() => import('./pages/CreateCompanyPage'));
+const SoldiersPage       = lazy(() => import('./pages/SoldiersPage'));
+const SchedulePage       = lazy(() => import('./pages/SchedulePage'));
+const LeavesPage         = lazy(() => import('./pages/LeavesPage'));
+const ProfilePage        = lazy(() => import('./pages/ProfilePage'));
+const CalendarPage       = lazy(() => import('./pages/CalendarPage'));
+const MissionsPage       = lazy(() => import('./pages/MissionsPage'));
+const MissionWizardPage  = lazy(() => import('./pages/MissionWizardPage'));
+const MissionDetailPage  = lazy(() => import('./pages/MissionDetailPage'));
+const CoveragePage       = lazy(() => import('./pages/CoveragePage'));
+const PlatoonWeekPage    = lazy(() => import('./pages/PlatoonWeekPage'));
+const EquipmentPage      = lazy(() => import('./pages/EquipmentPage'));
+const SoldierDetailPage  = lazy(() => import('./pages/SoldierDetailPage'));
+const PlatoonGapsPage    = lazy(() => import('./pages/PlatoonGapsPage'));
+const DelegationsPage    = lazy(() => import('./pages/DelegationsPage'));
+
+// Calm Suspense fallback — single subtle skeleton so the transition
+// feels intentional rather than a flash of blank.
+function RouteFallback() {
+  return (
+    <div className="min-h-screen bg-mil-bg flex items-center justify-center" dir="rtl">
+      <div className="w-1.5 h-1.5 rounded-full bg-mil-olive animate-pulse" aria-hidden />
+    </div>
+  );
+}
 
 // Full-screen flows hide the bottom nav AND the emergency banner so
 // new-user wizards aren't competing with operational signals.
@@ -76,6 +93,9 @@ function AppRoutes() {
         />
       )}
 
+      {currentUser && !isFullScreen && <DelegationBanner />}
+
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         {/* ── Public ────────────────────────────────── */}
         <Route path="/login" element={
@@ -146,6 +166,7 @@ function AppRoutes() {
           <Navigate to={currentUser ? (hasPlatoon ? '/home' : '/start') : '/login'} replace />
         } />
       </Routes>
+      </Suspense>
 
       {showNav && <BottomNav />}
     </>

@@ -14,6 +14,7 @@
 // up on the calendar.
 
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Header from '../components/Header';
 import { buildDayEntries, type CalendarViewer, type CalendarSources } from '../utils/calendar';
@@ -316,24 +317,42 @@ function MonthView({
 // ─── Agenda row + All-day row (used by Day view) ───────────────────────────
 
 function AgendaRow({ entry }: { entry: CalendarEntry }) {
+  const navigate = useNavigate();
   const accent = ACCENT[entry.kind];
   const label  = KIND_LABEL[entry.kind];
   const start  = new Date(entry.start);
   const end    = new Date(entry.end);
+  const clickable = !!entry.missionId;
 
-  return (
-    <div className="bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden">
+  const inner = (
+    <>
       <div className={`w-1 ${accent} flex-shrink-0`} aria-hidden />
       <div className="flex-1 px-4 py-3">
         <div className="flex items-baseline gap-2">
           <span className="text-tiny font-mono tabular-nums text-mil-text font-semibold">
             {formatTime(start)}–{formatTime(end)}
           </span>
-          <span className="text-tiny text-mil-ghost tracking-wide">{label}</span>
+          <span className="text-tiny text-mil-ghost">{label}</span>
         </div>
         <Body className="font-semibold mt-1">{entry.title}</Body>
         {entry.detail && <Muted className="mt-0.5">{entry.detail}</Muted>}
       </div>
+    </>
+  );
+
+  if (clickable) {
+    return (
+      <button
+        onClick={() => navigate(`/mission/${entry.missionId}`)}
+        className="w-full text-right bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden hover:border-mil-olive/50 transition-colors"
+      >
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <div className="bg-mil-card border border-mil-border rounded-2xl flex overflow-hidden">
+      {inner}
     </div>
   );
 }

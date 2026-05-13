@@ -739,6 +739,9 @@ export interface CalendarEntry {
   allDay: boolean;
   title: string;
   detail?: string;
+  /** Mission id when the entry came from a mission/guard-shift slot.
+   *  UI uses this to navigate from a calendar row → /mission/:id. */
+  missionId?: string;
   /** Higher priority wins when entries overlap visually.
    *  mission (100) > guard-shift (90) > leave-period (70) >
    *  platoon-time filled (50) > combat-block operational (40) >

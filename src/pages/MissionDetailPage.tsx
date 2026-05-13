@@ -34,6 +34,7 @@ export default function MissionDetailPage() {
     missions, missionNotes, platoons, squads, soldiers, leaves, dutyExclusions,
     qualifications, equipmentItems,
     addMissionNote, editMissionNote, deleteMissionNote,
+    setMissionStatus,
   } = useApp();
   const myCompany = useMyCompany();
 
@@ -152,13 +153,28 @@ export default function MissionDetailPage() {
             <MissionStatusPill status={mission.status} />
           </div>
           {mission.description && <Muted className="mt-1.5">{mission.description}</Muted>}
-          <Hint className="mt-2 block tracking-wide">
+          <Hint className="mt-2 block">
             {myCompany?.name ?? '—'}
             {mission.assignedPlatoonIds.length > 0 && (
               <> · {mission.assignedPlatoonIds.map((pid) => platoons.find((p) => p.id === pid)?.name).filter(Boolean).join(' · ')}</>
             )}
           </Hint>
         </header>
+
+        {/* CC-only status toggle — pause/activate/archive */}
+        {isCC && (
+          <Section label="מצב משימה">
+            <div className="flex gap-1.5 flex-wrap">
+              <StatusToggleBtn active={mission.status === 'active'}   onClick={() => setMissionStatus(mission.id, 'active')}>פעילה</StatusToggleBtn>
+              <StatusToggleBtn active={mission.status === 'paused'}   onClick={() => setMissionStatus(mission.id, 'paused')}>מושהית</StatusToggleBtn>
+              <StatusToggleBtn active={mission.status === 'draft'}    onClick={() => setMissionStatus(mission.id, 'draft')}>טיוטה</StatusToggleBtn>
+              <StatusToggleBtn active={mission.status === 'archived'} onClick={() => setMissionStatus(mission.id, 'archived')}>בארכיון</StatusToggleBtn>
+            </div>
+            <Hint className="block mt-2 text-mil-muted">
+              משימה מושהית/בארכיון אינה מייצרת משמרות במנוע השיבוץ.
+            </Hint>
+          </Section>
+        )}
 
         {/* Structured summary (operational prose) */}
         <Section label="הגדרה מבצעית">
@@ -331,6 +347,21 @@ function NoteCard({
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
+
+function StatusToggleBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-sm font-bold transition-colors ${
+        active
+          ? 'bg-mil-olive text-white'
+          : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function ScopeBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (

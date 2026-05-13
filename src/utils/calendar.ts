@@ -272,6 +272,7 @@ function slotToEntries(slot: MaterializedSlot): CalendarEntry[] {
     detail:     summaryDetail,
     priority,
     locked:     true,
+    missionId:  slot.missionId,
     sourceRef:  { kind: 'assignment-slot', id: slot.id },
   });
 
@@ -292,6 +293,7 @@ function slotToEntries(slot: MaterializedSlot): CalendarEntry[] {
       detail:     isCommander ? 'מפקד משמרת' : undefined,
       priority,
       locked:     true,
+      missionId:  slot.missionId,
       sourceRef:  { kind: 'assignment-slot', id: slot.id },
     });
   }
