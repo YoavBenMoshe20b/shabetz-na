@@ -9,20 +9,21 @@
 // operational picture first; the editing affordances layer on top.
 
 import { useMemo } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
-import type { Soldier } from '../types';
+import type { Soldier, MissionNote } from '../types';
 import {
   Section, PageMain, PageTitle, Body, Muted, Hint, StatusPill,
 } from '../components/ui';
 
 export default function PlatoonWeekPage() {
+  const navigate = useNavigate();
   const {
     currentRole, currentUser,
-    soldiers, leaves, platoons, squads, missions, dutyExclusions,
+    soldiers, leaves, platoons, squads, missions, dutyExclusions, missionNotes,
   } = useApp();
 
   if (!isPlatoonLeadership(currentRole)) return <Navigate to="/home" replace />;
@@ -99,6 +100,9 @@ export default function PlatoonWeekPage() {
                 isToday={date.getTime() === todayStart.getTime()}
                 slots={slots}
                 soldiers={soldiers}
+                missionNotes={missionNotes}
+                myPlatoonId={myPlatoon?.id}
+                onSlotClick={(slot) => navigate(`/mission/${slot.missionId}`)}
               />
             ))}
           </div>
@@ -112,9 +116,11 @@ export default function PlatoonWeekPage() {
 // ─── Day section ──────────────────────────────────────────────────────────
 
 function DaySection({
-  date, isToday, slots, soldiers,
+  date, isToday, slots, soldiers, missionNotes, myPlatoonId, onSlotClick,
 }: {
   date: Date; isToday: boolean; slots: MaterializedSlot[]; soldiers: Soldier[];
+  missionNotes: MissionNote[]; myPlatoonId?: string;
+  onSlotClick: (slot: MaterializedSlot) => void;
 }) {
   const dayName = HE_DAYS[date.getDay()];
   const dateLabel = `${date.getDate()} ב${HE_MONTHS[date.getMonth()]}`;
@@ -134,14 +140,37 @@ function DaySection({
         <Muted className="text-tiny">יום פנוי</Muted>
       ) : (
         <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
-          {slots.map((slot) => <SlotRow key={slot.id} slot={slot} soldiers={soldiers} />)}
+          {slots.map((slot) => {
+            // Notes relevant to this slot in this platoon context
+            const slotNotes = missionNotes.filter((n) =>
+              n.missionId === slot.missionId && (
+                n.scope === 'company' || (n.scope === 'platoon' && n.platoonId === myPlatoonId)
+              )
+            );
+            return (
+              <SlotRow
+                key={slot.id}
+                slot={slot}
+                soldiers={soldiers}
+                notes={slotNotes}
+                onClick={() => onSlotClick(slot)}
+              />
+            );
+          })}
         </div>
       )}
     </section>
   );
 }
 
-function SlotRow({ slot, soldiers }: { slot: MaterializedSlot; soldiers: Soldier[] }) {
+function SlotRow({
+  slot, soldiers, notes, onClick,
+}: {
+  slot: MaterializedSlot;
+  soldiers: Soldier[];
+  notes: MissionNote[];
+  onClick: () => void;
+}) {
   const start = new Date(slot.start);
   const end   = new Date(slot.end);
   const timeRange = `${hhmm(start)}–${hhmm(end)}`;
@@ -162,7 +191,10 @@ function SlotRow({ slot, soldiers }: { slot: MaterializedSlot; soldiers: Soldier
     'bg-mil-olive-dim';
 
   return (
-    <div className="flex overflow-hidden">
+    <button
+      onClick={onClick}
+      className="w-full text-right flex overflow-hidden hover:bg-mil-card-warm/40 transition-colors"
+    >
       <div className={`w-1 ${stripe} flex-shrink-0`} aria-hidden />
       <div className="flex-1 px-4 py-3.5">
         {/* First line: time range · mission name · status */}
@@ -195,8 +227,23 @@ function SlotRow({ slot, soldiers }: { slot: MaterializedSlot; soldiers: Soldier
           {slot.commanderRequired && ' · מפקד נדרש'}
           {slot.qualifications.length > 0 && ` · ${slot.qualifications.length} כישורים`}
         </Hint>
+
+        {/* Notes preview — top 2 lines */}
+        {notes.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-mil-border space-y-1">
+            {notes.slice(0, 2).map((n) => (
+              <div key={n.id} className="flex items-baseline gap-2">
+                <span className={`w-1 h-1 rounded-full ${n.scope === 'company' ? 'bg-mil-olive-dim' : 'bg-mil-sand'} flex-shrink-0 self-center mt-0.5`} aria-hidden />
+                <span className="text-tiny text-mil-muted line-clamp-1 leading-snug">{n.text}</span>
+              </div>
+            ))}
+            {notes.length > 2 && (
+              <Hint className="text-mil-olive-dim font-bold">+ {notes.length - 2} הערות</Hint>
+            )}
+          </div>
+        )}
       </div>
-    </div>
+    </button>
   );
 }
 

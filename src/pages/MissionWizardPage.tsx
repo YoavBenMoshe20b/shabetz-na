@@ -38,6 +38,9 @@ interface WizardDraft {
   fatigue?:           MissionFatigueProfile;
   qualifications:     QualificationRequirement[];
   equipment:          EquipmentRequirement[];
+  /** Optional company-level operational notes — published as a single
+   *  MissionNote with scope='company' alongside the mission. */
+  companyNotes?:      string;
 }
 
 const EMPTY_DRAFT: WizardDraft = {
@@ -56,7 +59,10 @@ type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export default function MissionWizardPage() {
   const navigate = useNavigate();
-  const { currentRole, currentUser, addMission, qualifications, equipmentItems, platoons } = useApp();
+  const {
+    currentRole, currentUser, addMission, addMissionNote,
+    qualifications, equipmentItems, platoons,
+  } = useApp();
   const myCompany = useMyCompany();
   const myPlatoons = useMyPlatoons();
 
@@ -97,7 +103,7 @@ export default function MissionWizardPage() {
     if (!draft.timeModel || !draft.manpower || !draft.command || !draft.rotation || !draft.fatigue) {
       return;                                                   // step 6 wouldn't be reachable
     }
-    addMission({
+    const created = addMission({
       companyId:          myCompany.id,
       name:               draft.name,
       description:        draft.description || undefined,
@@ -118,6 +124,15 @@ export default function MissionWizardPage() {
       requiresDailyConfirmation: false,
       status,
     });
+    // Attach the free-text company note as a separate MissionNote so it
+    // stays editable independent of the mission's structured definition.
+    if (draft.companyNotes && draft.companyNotes.trim()) {
+      addMissionNote({
+        missionId: created.id,
+        scope:     'company',
+        text:      draft.companyNotes.trim(),
+      });
+    }
     sessionStorage.removeItem(SESSION_KEY);
     navigate('/missions');
   };
@@ -674,6 +689,29 @@ function Step5Rotation({
   equipmentItems: ReturnType<typeof useApp>['equipmentItems'];
   myPlatoons: ReturnType<typeof useMyPlatoons>;
 }) {
+  const { addEquipmentItem } = useApp();
+  const [showAddEquip, setShowAddEquip] = useState(false);
+  const [newEquipName, setNewEquipName] = useState('');
+  const [newEquipCat,  setNewEquipCat]  = useState('');
+
+  const commitNewEquip = () => {
+    const name = newEquipName.trim();
+    if (!name) return;
+    const { id } = addEquipmentItem({
+      name,
+      category: newEquipCat.trim() || undefined,
+    });
+    patch({
+      equipment: [
+        ...draft.equipment,
+        { equipmentItemId: id, count: 1, perSoldier: false },
+      ],
+    });
+    setNewEquipName('');
+    setNewEquipCat('');
+    setShowAddEquip(false);
+  };
+
   const rotationKinds: Array<{
     kind: MissionRotation['kind'];
     label: string;
@@ -800,9 +838,74 @@ function Step5Rotation({
                   </button>
                 );
               })}
+              {!showAddEquip && (
+                <button
+                  onClick={() => setShowAddEquip(true)}
+                  className="px-3 py-1.5 rounded-full text-sm font-semibold bg-mil-card border border-dashed border-mil-olive/40 text-mil-olive-dim hover:border-mil-olive transition-colors"
+                >
+                  + ציוד חדש
+                </button>
+              )}
             </div>
+
+            {showAddEquip && (
+              <div className="mt-3 bg-mil-card border border-mil-border rounded-xl px-4 py-3 space-y-3">
+                <div>
+                  <Hint className="block mb-1.5">שם הציוד</Hint>
+                  <input
+                    type="text"
+                    value={newEquipName}
+                    onChange={(e) => setNewEquipName(e.target.value)}
+                    placeholder="לדוגמה: סולם / מפתחות חמ״ל / רחפן"
+                    className={inputCls}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <Hint className="block mb-1.5">קטגוריה (אופציונלי)</Hint>
+                  <input
+                    type="text"
+                    value={newEquipCat}
+                    onChange={(e) => setNewEquipCat(e.target.value)}
+                    placeholder="לדוגמה: ציוד פריצה / תקשורת"
+                    className={inputCls}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={commitNewEquip}
+                    disabled={!newEquipName.trim()}
+                    className="flex-1 bg-mil-olive hover:bg-mil-olive-light disabled:opacity-40 text-white font-bold py-2.5 rounded-xl text-sm transition-colors"
+                  >
+                    הוסף ושמור
+                  </button>
+                  <button
+                    onClick={() => { setShowAddEquip(false); setNewEquipName(''); setNewEquipCat(''); }}
+                    className="px-4 py-2.5 rounded-xl text-sm font-semibold text-mil-muted hover:text-mil-text"
+                  >
+                    בטל
+                  </button>
+                </div>
+                <Hint className="text-mil-muted">
+                  פריט שיתווסף יישמר במאגר הציוד הפלוגתי וניתן יהיה לבחור בו במשימות אחרות.
+                </Hint>
+              </div>
+            )}
           </div>
         </div>
+      </Accordion>
+
+      <Accordion label="הערות מבצעיות מ״פ" defaultOpen={!!draft.companyNotes} hint="הוראות שיתפסו על כל המחלקות שיריצו את המשימה">
+        <textarea
+          value={draft.companyNotes ?? ''}
+          onChange={(e) => patch({ companyNotes: e.target.value })}
+          rows={4}
+          placeholder={'לדוגמה:\n• להחליף כל שעה\n• לא להכניס מי שחזר עכשיו מהבית\n• לבדוק קשר לפני יציאה'}
+          className={`${inputCls} resize-none`}
+        />
+        <Hint className="mt-2 block text-mil-muted">
+          ההערות נשמרות בנפרד מההגדרה המבנית. ניתן לערוך אותן בכל זמן מעמוד המשימה.
+        </Hint>
       </Accordion>
     </div>
   );

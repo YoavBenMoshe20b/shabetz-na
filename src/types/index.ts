@@ -1461,6 +1461,40 @@ export interface CoverageReport {
   unstaffedHours:    number;
 }
 
+// ─── Mission notes — free-text operational extensions ──────────────────────
+//
+// Mission = structured rules + free operational extensions. The engine
+// uses the structured fields (time / manpower / command / fatigue /
+// requirements) for scheduling. Notes never feed the algorithm — they
+// surface to commanders + soldiers as operational guidance:
+//
+//   "להחליף כל שעה"
+//   "לא להכניס מי שחזר עכשיו מהבית"
+//   "לבדוק קשר לפני יציאה"
+//   "יוסי אחראי"
+//   "כיתה ב תופסת לילה ראשון"
+//
+// Two scopes:
+//   scope='company'  — CC-authored guidance, visible across all platoons
+//                      running the mission
+//   scope='platoon'  — PC/PS execution detail, visible only inside that
+//                      platoon (other platoons running the same mission
+//                      don't see this note)
+
+export interface MissionNote {
+  id: string;
+  missionId: string;
+  scope: 'company' | 'platoon';
+  /** Required when scope='platoon'. */
+  platoonId?: string;
+  authorUserId: string;
+  authorName:   string;
+  authorRole:   UserRole;
+  text:         string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 // ─── Temporary command delegation ───────────────────────────────────────────
 //
 // Distinct from the PermissionToken / Delegation entity (which grants

@@ -12,6 +12,7 @@ import type {
   SignedEquipment,
   CommandDelegation, EquipmentGap, EquipmentGapKind, EquipmentGapStatus,
   CommandAuthority, OperationalRole,
+  MissionNote,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
@@ -24,6 +25,7 @@ import {
   mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
   mockSignedEquipment,
   mockCommandDelegations, mockEquipmentGaps,
+  mockMissionNotes,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -200,6 +202,26 @@ interface AppContextType {
     reason?:     string;
   }) => CommandDelegation;
   revokeCommandDelegation: (id: string, reason?: string) => void;
+
+  // ── Mission notes (free-text operational extensions) ───────────────
+  missionNotes:    MissionNote[];
+  addMissionNote:  (data: {
+    missionId:   string;
+    scope:       'company' | 'platoon';
+    platoonId?:  string;
+    text:        string;
+  }) => MissionNote;
+  editMissionNote: (id: string, text: string) => void;
+  deleteMissionNote: (id: string) => void;
+
+  // ── Equipment items (CC/PC inline addition while authoring missions) ──
+  /** Add a new EquipmentItem to the company's reusable inventory. */
+  addEquipmentItem: (data: {
+    name: string;
+    category?: string;
+    isConsumable?: boolean;
+    unitCount?: number;
+  }) => { id: string };
 
   // ── Equipment gap reports ──────────────────────────────────────────
   equipmentGaps:         EquipmentGap[];
@@ -410,8 +432,64 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMissions((prev) => [...prev, m]);
     return m;
   };
+
+  // Mission notes — separate state so they can be authored independently
+  // of the mission's structured definition (commanders annotate without
+  // re-publishing the mission).
+  const [missionNotes, setMissionNotes] = useState<MissionNote[]>(mockMissionNotes);
+
+  const addMissionNote = (data: {
+    missionId: string;
+    scope: 'company' | 'platoon';
+    platoonId?: string;
+    text: string;
+  }): MissionNote => {
+    const note: MissionNote = {
+      id:           `mn-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      missionId:    data.missionId,
+      scope:        data.scope,
+      platoonId:    data.platoonId,
+      authorUserId: currentUser?.id ?? 'system',
+      authorName:   currentUser?.name ?? '—',
+      authorRole:   currentUser?.role ?? 'soldier',
+      text:         data.text,
+      createdAt:    new Date().toISOString(),
+    };
+    setMissionNotes((prev) => [...prev, note]);
+    return note;
+  };
+
+  const editMissionNote = (id: string, text: string) => {
+    setMissionNotes((prev) => prev.map((n) => n.id === id
+      ? { ...n, text, updatedAt: new Date().toISOString() }
+      : n
+    ));
+  };
+
+  const deleteMissionNote = (id: string) => {
+    setMissionNotes((prev) => prev.filter((n) => n.id !== id));
+  };
   const [qualifications]        = useState<Qualification[]>(mockQualifications);
-  const [equipmentItems]        = useState<EquipmentItem[]>(mockEquipmentItems);
+  const [equipmentItems, setEquipmentItems] = useState<EquipmentItem[]>(mockEquipmentItems);
+
+  const addEquipmentItem = (data: {
+    name: string;
+    category?: string;
+    isConsumable?: boolean;
+    unitCount?: number;
+  }): { id: string } => {
+    const id = `eq-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const item: EquipmentItem = {
+      id,
+      companyId:    currentUser?.companyId ?? '',
+      name:         data.name,
+      category:     data.category,
+      isConsumable: !!data.isConsumable,
+      unitCount:    data.unitCount ?? 1,
+    };
+    setEquipmentItems((prev) => [...prev, item]);
+    return { id };
+  };
   const [soldierQualifications] = useState<SoldierQualification[]>(mockSoldierQualifications);
   const [leaveRotationPolicy]   = useState<LeaveRotationPolicy | null>(mockLeaveRotationPolicy);
   const [leaveBlocks]           = useState<LeaveBlock[]>(mockLeaveBlocks);
@@ -981,7 +1059,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       companyMissions, addCompanyMission, removeCompanyMission,
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
-      missions, addMission, qualifications, equipmentItems, soldierQualifications,
+      missions, addMission,
+      missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
+      qualifications, equipmentItems, addEquipmentItem, soldierQualifications,
       leaveRotationPolicy, leaveBlocks,
       coverageEvents, dutyExclusions, leaveRotationPlans,
       signedEquipment, updateSoldierProfile,

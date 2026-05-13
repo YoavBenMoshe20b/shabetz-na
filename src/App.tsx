@@ -41,6 +41,7 @@ import ProfilePage        from './pages/ProfilePage';
 import CalendarPage       from './pages/CalendarPage';
 import MissionsPage       from './pages/MissionsPage';
 import MissionWizardPage  from './pages/MissionWizardPage';
+import MissionDetailPage  from './pages/MissionDetailPage';
 import CoveragePage       from './pages/CoveragePage';
 import PlatoonWeekPage    from './pages/PlatoonWeekPage';
 import EquipmentPage      from './pages/EquipmentPage';
@@ -124,6 +125,7 @@ function AppRoutes() {
         <Route path="/missions/new" element={
           <ProtectedRoute minRole="companyCommander"><MissionWizardPage /></ProtectedRoute>
         } />
+        <Route path="/mission/:id" element={currentUser ? <MissionDetailPage /> : auth} />
         <Route path="/coverage"     element={
           <ProtectedRoute minRole="companyCommander"><CoveragePage /></ProtectedRoute>
         } />

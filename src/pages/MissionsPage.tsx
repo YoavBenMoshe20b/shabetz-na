@@ -63,6 +63,7 @@ export default function MissionsPage() {
                   platoons={platoons}
                   qualifications={qualifications}
                   equipmentItems={equipmentItems}
+                  onClick={() => navigate(`/mission/${m.id}`)}
                 />
               ))}
             </div>
@@ -83,9 +84,10 @@ interface MissionRowProps {
   platoons:       Platoon[];
   qualifications: Parameters<typeof buildMissionSummary>[0]['qualifications'];
   equipmentItems: Parameters<typeof buildMissionSummary>[0]['equipmentItems'];
+  onClick:        () => void;
 }
 
-function MissionRow({ mission, platoons, qualifications, equipmentItems }: MissionRowProps) {
+function MissionRow({ mission, platoons, qualifications, equipmentItems, onClick }: MissionRowProps) {
   // Take the first two sentences as the row preview (time + manpower).
   const lines = buildMissionSummary({ mission, platoons, qualifications, equipmentItems });
   const preview = lines.slice(1, 3).join(' ');                  // skip the identity line
@@ -102,7 +104,10 @@ function MissionRow({ mission, platoons, qualifications, equipmentItems }: Missi
   }[mission.status];
 
   return (
-    <div className="px-5 py-4 flex items-start gap-3">
+    <button
+      onClick={onClick}
+      className="w-full text-right px-5 py-4 flex items-start gap-3 hover:bg-mil-card-warm/40 transition-colors"
+    >
       <span className={`w-1.5 h-1.5 rounded-full ${statusTone} flex-shrink-0 mt-2.5`} aria-hidden />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 min-w-0">
@@ -111,6 +116,7 @@ function MissionRow({ mission, platoons, qualifications, equipmentItems }: Missi
         </div>
         {preview && <Muted className="mt-1 line-clamp-2">{preview}</Muted>}
       </div>
-    </div>
+      <span className="text-mil-ghost mt-2">←</span>
+    </button>
   );
 }

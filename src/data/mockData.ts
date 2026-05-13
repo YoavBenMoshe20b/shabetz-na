@@ -9,6 +9,7 @@ import type {
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment,
   CommandDelegation, EquipmentGap,
+  MissionNote,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -976,5 +977,42 @@ export const mockEquipmentGaps: EquipmentGap[] = [
     description:         'עינית פנימית סדוקה — נדרשת החלפה',
     status:              'reported',
     createdAt:           todayAt('07:30', -1),
+  },
+];
+
+// ─── Mission notes — free-text operational extensions ───────────────────────
+// Seeded so the demo shows both company-level and platoon-execution notes.
+
+export const mockMissionNotes: MissionNote[] = [
+  {
+    id:           'mn-1',
+    missionId:    'mi-night-patrol',
+    scope:        'company',
+    authorUserId: 'u-cc',
+    authorName:   'מ״פ',
+    authorRole:   'companyCommander',
+    text:         'לבדוק קשר ושני מטענים נטענים לפני יציאה. החלפה כל שעתיים.',
+    createdAt:    SEED_CREATED,
+  },
+  {
+    id:           'mn-2',
+    missionId:    'mi-night-patrol',
+    scope:        'platoon',
+    platoonId:    'g1',
+    authorUserId: 'u-pc',
+    authorName:   'מ״מ א׳',
+    authorRole:   'platoonCommander',
+    text:         'כיתה ב תופסת לילה ראשון. ניסים אחראי על קשר.',
+    createdAt:    SEED_CREATED,
+  },
+  {
+    id:           'mn-3',
+    missionId:    'mi-gate-north',
+    scope:        'company',
+    authorUserId: 'u-cc',
+    authorName:   'מ״פ',
+    authorRole:   'companyCommander',
+    text:         'לא להכניס למשמרת לילה חיילים שחזרו מהבית באותו יום.',
+    createdAt:    SEED_CREATED,
   },
 ];
