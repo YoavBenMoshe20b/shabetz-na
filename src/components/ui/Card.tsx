@@ -1,12 +1,17 @@
-// Card primitive — single source of truth for the surface containers.
-// Variants are arranged by VISUAL WEIGHT (calm → heavy) so the eye
-// scans the screen in the intended order:
+// Card primitive — single source of truth for surface containers.
 //
-//   muted     calmest, no border, just a soft tint — purely informational
-//   default   the everyday card — white, 1 px subtle border
-//   hero      the one primary card per screen — olive 2 px border + soft shadow
-//   highlight needs attention (warning state) — warm sand tint + border
-//   critical  live operational issue — alert tint, prominent border, shadow
+// Design language: refined minimalism for an operational product.
+// Shadows are reserved for floating elements (modals, FAB) — surfaces
+// here rely on the warm border + subtle bg shift for layering. Calmer
+// reads better under pressure than depth-via-shadow.
+//
+//   muted      calmest — warm tint, no border. Empty states + asides.
+//   default    everyday card — bg-mil-card, hairline border, no shadow
+//   hero       the ONE primary surface per page — slightly stronger
+//              olive-tinted border + a single soft shadow (the only
+//              shadow we still use in non-floating surfaces)
+//   highlight  warning state — warm sand tint + sand border, no shadow
+//   critical   live operational issue — alert tint + alert border
 
 import type { ReactNode } from 'react';
 
@@ -14,10 +19,10 @@ type CardVariant = 'muted' | 'default' | 'hero' | 'highlight' | 'critical';
 
 const VARIANT: Record<CardVariant, string> = {
   muted:     'bg-mil-card-warm border border-transparent',
-  default:   'bg-mil-card border border-mil-border shadow-card',
-  hero:      'bg-mil-card border-2 border-mil-olive/40 shadow-hero',
-  highlight: 'bg-mil-warn-bg border border-mil-warn-border shadow-card',
-  critical:  'bg-mil-alert-bg border-2 border-mil-alert/50 shadow-card',
+  default:   'bg-mil-card border border-mil-border',
+  hero:      'bg-mil-card border border-mil-olive/30 shadow-hero',
+  highlight: 'bg-mil-warn-bg border border-mil-warn-border',
+  critical:  'bg-mil-alert-bg border border-mil-alert/40',
 };
 
 interface CardProps {
@@ -29,8 +34,11 @@ interface CardProps {
 
 export function Card({ children, variant = 'default', className = '', onClick }: CardProps) {
   const base = `rounded-2xl overflow-hidden ${VARIANT[variant]}`;
+  // Touch feel: subtle border shift + slight press. No shadow lift (would
+  // betray the "calm" direction); no scale (would feel toy-like). The
+  // border-olive transition is enough to read as "tappable".
   const interactive = onClick
-    ? 'text-right hover:shadow-card-hover hover:border-mil-olive/40 active:scale-[0.99] transition-all cursor-pointer'
+    ? 'text-right hover:border-mil-olive/50 active:scale-[0.995] transition-colors duration-150 cursor-pointer'
     : '';
   if (onClick) {
     return (

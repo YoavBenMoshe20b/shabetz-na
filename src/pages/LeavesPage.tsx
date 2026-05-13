@@ -140,7 +140,7 @@ export default function LeavesPage() {
             {showForm && isManager && (
               <form onSubmit={handleSave} className="bg-mil-card border border-mil-border rounded-xl overflow-hidden">
                 <div className="bg-mil-surface px-4 py-2.5 border-b border-mil-border">
-                  <p className="text-xs font-bold tracking-widest text-mil-text-inv/70">יציאה חדשה</p>
+                  <p className="text-xs font-bold text-mil-text-inv/70">יציאה חדשה</p>
                 </div>
                 <div className="px-4 py-4 space-y-4">
 

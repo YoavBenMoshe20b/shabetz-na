@@ -13,7 +13,7 @@ export default function Header({ title }: { title: string }) {
   return (
     <header className="bg-mil-surface border-b border-mil-border px-4 py-3 flex items-center justify-between sticky top-0 z-10">
       <div className="flex items-center gap-3">
-        <span className="text-mil-sand font-bold tracking-widest text-base">שבץ־נא</span>
+        <span className="text-mil-sand font-bold text-base">שבץ־נא</span>
         <span className="text-mil-ghost">|</span>
         <span className="text-mil-text-inv/70 text-sm">{title}</span>
       </div>

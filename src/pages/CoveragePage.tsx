@@ -201,7 +201,7 @@ function DayRowView({ row }: { row: DayRow }) {
     <section className={row.isToday ? 'border-r-2 border-mil-olive pr-3' : ''}>
       <div className="flex items-baseline gap-2 mb-2.5">
         {row.isToday && (
-          <span className="text-tiny font-bold text-mil-olive-dim tracking-widest uppercase">היום</span>
+          <span className="text-tiny font-bold text-mil-olive-dim">היום</span>
         )}
         <Body className="font-semibold">{dayName}</Body>
         <Muted className="text-tiny">· {dateLine}</Muted>

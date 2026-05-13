@@ -116,7 +116,7 @@ export default function LoginPage() {
       <PageMain>
 
         <div className="text-center pt-6">
-          <h1 className="text-4xl font-extrabold text-mil-olive tracking-widest">שבץ־נא</h1>
+          <h1 className="text-4xl font-extrabold text-mil-olive">שבץ־נא</h1>
           <Muted className="mt-2">מערכת מוכנות מבצעית</Muted>
         </div>
 

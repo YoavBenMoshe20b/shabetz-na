@@ -17,7 +17,7 @@ import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import type { Soldier, Squad, SoldierStatus } from '../types';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint,
 } from '../components/ui';
 
 export default function SoldiersPage() {
@@ -69,7 +69,7 @@ function CompanyHierarchyView() {
     <>
       {/* Hierarchy hero: battalion → company */}
       <header>
-        <Hint className="tracking-widest uppercase">{myCompany?.unitName ?? 'גדוד'}</Hint>
+        <Eyebrow>{myCompany?.unitName ?? 'גדוד'}</Eyebrow>
         <PageTitle className="mt-1">{myCompany?.name ?? 'פלוגה'}</PageTitle>
         <Muted className="mt-1.5 tabular-nums">
           {myPlatoons.length} מחלקות · {soldiers.length} חיילים
@@ -171,7 +171,7 @@ function PlatoonRosterView() {
   return (
     <>
       <header>
-        {myPlatoon.unitName && <Hint className="tracking-widest uppercase">{myPlatoon.unitName}</Hint>}
+        {myPlatoon.unitName && <Eyebrow>{myPlatoon.unitName}</Eyebrow>}
         <PageTitle className="mt-1">{myPlatoon.name}</PageTitle>
         <Muted className="mt-1.5 tabular-nums">
           {inBase} בבסיס · {atHome} בבית{inactive > 0 ? ` · ${inactive} לא פעיל` : ''}

@@ -13,7 +13,7 @@ import type {
   EquipmentGapKind,
 } from '../types';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint, Button,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Button,
 } from '../components/ui';
 
 export default function EquipmentPage() {
@@ -77,7 +77,7 @@ export default function EquipmentPage() {
       <PageMain>
 
         <header>
-          <Hint className="tracking-widest uppercase">{currentUser.name}</Hint>
+          <Eyebrow>{currentUser.name}</Eyebrow>
           <PageTitle className="mt-1">ציוד חתום</PageTitle>
           <Muted className="mt-1.5 tabular-nums">{totalActive} פריטים פעילים</Muted>
         </header>

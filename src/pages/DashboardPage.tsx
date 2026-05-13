@@ -407,53 +407,93 @@ function PlatoonCommanderDashboard() {
     horizonHours: 12,
   }), [now, materializedSlots, myPlatoon, leaves, soldiers, pendingApprovals, myAlerts, soldierStatusEvents]);
 
+  // Platoon-floor + readiness — same pattern as CC home so the visual
+  // language stays cohesive across roles.
+  const platoonFloor = myPlatoon?.minSoldiersOnBase ?? 0;
+  const totalAssigned = inBase + atHome + inactive;
+  const platoonHealth: 'ready' | 'warning' | 'critical' =
+    platoonFloor > 0 && inBase < platoonFloor      ? 'critical' :
+    platoonFloor > 0 && inBase === platoonFloor    ? 'warning'  :
+    'ready';
+  const readinessPct = totalAssigned > 0 ? (inBase / totalAssigned) * 100 : 0;
+
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title={myPlatoon?.name ?? 'מחלקה'} />
       <PageMain>
 
-        {/* Greeting */}
-        <div>
-          <PageTitle>{myPlatoon?.name ?? 'מחלקה'}</PageTitle>
-          {myPlatoon?.unitName && <Muted className="mt-1">{myPlatoon.unitName}</Muted>}
-        </div>
+        {/* ── STATUS NOW — typographic hero, same shape as CC home ──────── */}
+        <header>
+          <div className="flex items-baseline gap-1.5 text-tiny text-mil-muted">
+            {myPlatoon?.unitName && (
+              <>
+                <span>{myPlatoon.unitName}</span>
+                <span className="text-mil-ghost">·</span>
+              </>
+            )}
+            <span>{myPlatoon?.name ?? 'מחלקה'}</span>
+          </div>
 
-        {/* ── עכשיו ─────────────────────────────────── */}
-        <Section label="עכשיו">
-          <Card>
-            <div className="px-5 py-4">
-              <div className="flex items-baseline gap-4 flex-wrap">
-                <StatGroup metric={inBase}   label="בבסיס"   tone="olive" />
-                <StatGroup metric={atHome}   label="בבית"     tone="sand"  />
-                <StatGroup metric={inactive} label="לא פעיל" tone="ghost" />
-              </div>
-              {activeMissions.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-mil-border space-y-2">
-                  {activeMissions.map((slot) => {
-                    const ids = [...slot.assignedSoldierIds];
-                    if (slot.commanderSoldierId) ids.push(slot.commanderSoldierId);
-                    const names = ids
-                      .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
-                      .filter(Boolean) as string[];
-                    const s = new Date(slot.start);
-                    const e = new Date(slot.end);
-                    const hh = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                    return (
-                      <div key={slot.id} className="flex items-center gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" />
-                        <Body className="font-semibold">{slot.missionName}</Body>
-                        <Muted className="truncate mr-auto text-mil-olive-dim">
-                          {names.length > 0 ? names.join(' · ') : '—'}
-                        </Muted>
-                        <Hint className="font-mono">{hh(s)}–{hh(e)}</Hint>
-                      </div>
-                    );
-                  })}
-                </div>
+          <div className="mt-3 flex items-baseline gap-2.5 flex-wrap">
+            <span className="text-[48px] leading-[0.9] font-extrabold tabular-nums tracking-tight text-mil-text">
+              {inBase}
+            </span>
+            <span className="text-mil-ghost text-lg tabular-nums">
+              / {totalAssigned}
+            </span>
+            <span className="text-sm font-semibold text-mil-text mr-1">בבסיס עכשיו</span>
+
+            <div className="mr-auto flex items-baseline gap-3">
+              {atHome > 0 && (
+                <span className="text-tiny text-mil-muted">
+                  <span className="tabular-nums font-bold text-mil-text">{atHome}</span> בבית
+                </span>
+              )}
+              {inactive > 0 && (
+                <span className="text-tiny text-mil-muted">
+                  <span className="tabular-nums font-bold text-mil-text">{inactive}</span> לא פעיל
+                </span>
               )}
             </div>
-          </Card>
-        </Section>
+          </div>
+
+          <ReadinessBar pct={readinessPct} health={platoonHealth} />
+
+          {platoonFloor > 0 && inBase < platoonFloor && (
+            <div className="mt-3 inline-flex items-center gap-2 text-mil-alert font-semibold text-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-mil-alert" aria-hidden />
+              <span>חסר {platoonFloor - inBase} לרצפת המחלקה ({inBase}/{platoonFloor})</span>
+            </div>
+          )}
+        </header>
+
+        {/* ── Active missions (calmer presentation now hero replaces stats card) ── */}
+        {activeMissions.length > 0 && (
+          <Section label="פעיל עכשיו">
+            <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+              {activeMissions.map((slot) => {
+                const ids = [...slot.assignedSoldierIds];
+                if (slot.commanderSoldierId) ids.push(slot.commanderSoldierId);
+                const names = ids
+                  .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
+                  .filter(Boolean) as string[];
+                const s = new Date(slot.start);
+                const e = new Date(slot.end);
+                const hh = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                return (
+                  <div key={slot.id} className="px-5 py-3.5 flex items-center gap-3">
+                    <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" aria-hidden />
+                    <Body className="font-semibold">{slot.missionName}</Body>
+                    <Muted className="truncate mr-auto text-mil-olive-dim">
+                      {names.length > 0 ? names.join(' · ') : '—'}
+                    </Muted>
+                    <Hint className="font-mono tabular-nums">{hh(s)}–{hh(e)}</Hint>
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        )}
 
         {/* ── השעות הקרובות ──────────────────────────── */}
         <Section label="השעות הקרובות">
@@ -549,18 +589,6 @@ function CalmCard() {
   );
 }
 
-function StatGroup({ metric, label, tone }: { metric: number; label: string; tone: 'olive' | 'sand' | 'ghost' }) {
-  const color =
-    tone === 'olive' ? 'text-mil-olive' :
-    tone === 'sand'  ? 'text-mil-sand'  :
-    'text-mil-ghost';
-  return (
-    <div className="flex items-baseline gap-1.5">
-      <span className={`text-2xl font-extrabold tabular-nums ${color}`}>{metric}</span>
-      <Muted className="font-medium">{label}</Muted>
-    </div>
-  );
-}
 
 // ─── Soldier Dashboard ────────────────────────────────────────────────────────
 
@@ -987,7 +1015,7 @@ function OperationalStateCard({
 
         {/* — Current state — */}
         <div>
-          <Hint className="tracking-widest">המצב שלך</Hint>
+          <Hint>המצב שלך</Hint>
           <p className={`text-hero font-extrabold leading-tight mt-1.5 ${presentation.accentClass}`}>
             {presentation.label}
           </p>
@@ -1011,7 +1039,7 @@ function OperationalStateCard({
         {/* — Next operational transition — */}
         {nextShift && status === 'in-base' && (
           <div className="pt-4 border-t border-mil-border">
-            <Hint className="tracking-widest">המשמרת הבאה</Hint>
+            <Hint>המשמרת הבאה</Hint>
             <p className="text-lg font-bold text-mil-text mt-1.5 leading-snug">{nextShift.name}</p>
             <Muted className="mt-1">
               <span className="font-mono font-semibold text-mil-text">{nextShift.startTime}–{nextShift.endTime}</span>

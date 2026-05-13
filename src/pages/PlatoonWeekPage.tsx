@@ -16,7 +16,7 @@ import Header from '../components/Header';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import type { Soldier, MissionNote } from '../types';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint, StatusPill,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, StatusPill,
 } from '../components/ui';
 
 export default function PlatoonWeekPage() {
@@ -70,7 +70,7 @@ export default function PlatoonWeekPage() {
       <PageMain>
 
         <header>
-          <Hint className="tracking-widest uppercase">{myPlatoon?.name ?? 'מחלקה'}</Hint>
+          <Eyebrow>{myPlatoon?.name ?? 'מחלקה'}</Eyebrow>
           <PageTitle className="mt-1">{periodLabel}</PageTitle>
           <div className="mt-3 flex items-baseline gap-3 text-tiny text-mil-muted">
             <span>
@@ -129,7 +129,7 @@ function DaySection({
     <section className={isToday ? 'border-r-2 border-mil-olive pr-3' : ''}>
       <div className="flex items-baseline gap-2 mb-2.5">
         {isToday && (
-          <span className="text-tiny font-bold text-mil-olive-dim tracking-widest uppercase">היום</span>
+          <span className="text-tiny font-bold text-mil-olive-dim">היום</span>
         )}
         <Body className="font-semibold">{dayName}</Body>
         <Muted className="text-tiny">· {dateLabel}</Muted>

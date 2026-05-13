@@ -15,8 +15,12 @@ export function Section({ label, action, children, className = '' }: SectionProp
   return (
     <section className={className}>
       {label && (
-        <div className="flex items-center justify-between mb-2 px-1">
-          <p className="text-xs font-bold tracking-widest text-mil-muted uppercase">{label}</p>
+        // Hebrew labels: no uppercase (Hebrew has no case), no tracking-
+        // widest (spreads letters awkwardly). Bold + muted-tone for a
+        // confident-but-quiet section eyebrow that reads cleanly at any
+        // size on mobile.
+        <div className="flex items-baseline justify-between mb-2.5 px-1">
+          <p className="text-xs font-bold text-mil-muted">{label}</p>
           {action}
         </div>
       )}

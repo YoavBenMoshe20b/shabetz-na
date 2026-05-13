@@ -20,7 +20,7 @@ import { buildDayEntries, type CalendarViewer, type CalendarSources } from '../u
 import { materializeWeek } from '../utils/materialize';
 import type { CalendarEntry, CalendarEntryKind } from '../types';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint,
 } from '../components/ui';
 
 type Tab = 'day' | 'week' | 'month';
@@ -112,9 +112,9 @@ function DayView({
   return (
     <>
       <header>
-        <Hint className="tracking-widest uppercase">
+        <Eyebrow>
           {isToday ? 'היום · ' : ''}{formatHebrewDayName(day)}
-        </Hint>
+        </Eyebrow>
         <PageTitle className="mt-1">{formatHebrewDate(day)}</PageTitle>
       </header>
 
@@ -184,7 +184,7 @@ function DayBlock({
     <section className={isToday ? 'border-r-2 border-mil-olive pr-3' : ''}>
       <button onClick={onOpen} className="w-full text-right flex items-baseline gap-2 mb-2.5">
         {isToday && (
-          <span className="text-tiny font-bold text-mil-olive-dim tracking-widest uppercase">היום</span>
+          <span className="text-tiny font-bold text-mil-olive-dim">היום</span>
         )}
         <Body className="font-semibold">{HE_DAYS[day.getDay()]}</Body>
         <Muted className="text-tiny">· {day.getDate()} ב{HE_MONTHS[day.getMonth()]}</Muted>
@@ -253,7 +253,7 @@ function MonthView({
   return (
     <>
       <header>
-        <Hint className="tracking-widest uppercase">חודשי</Hint>
+        <Eyebrow>חודשי</Eyebrow>
         <PageTitle className="mt-1">{monthLabel}</PageTitle>
       </header>
 
@@ -292,7 +292,7 @@ function MonthView({
                   }`}>
                     {d.getDate()}
                   </span>
-                  {isToday && <span className="text-[8px] text-mil-olive-dim font-bold tracking-widest">היום</span>}
+                  {isToday && <span className="text-[8px] text-mil-olive-dim font-bold">היום</span>}
                 </div>
                 {info && info.eventCount > 0 && inMonth && (
                   <div className="mt-1 flex items-center gap-0.5">

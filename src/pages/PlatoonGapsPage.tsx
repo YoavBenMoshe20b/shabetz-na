@@ -18,7 +18,7 @@ import { isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import type { EquipmentGap, EquipmentGapKind, EquipmentGapStatus } from '../types';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint, StatusPill, Button,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, StatusPill, Button,
 } from '../components/ui';
 
 export default function PlatoonGapsPage() {
@@ -70,7 +70,7 @@ export default function PlatoonGapsPage() {
       <PageMain>
 
         <header>
-          <Hint className="tracking-widest uppercase">{myPlatoon?.name ?? 'מחלקה'}</Hint>
+          <Eyebrow>{myPlatoon?.name ?? 'מחלקה'}</Eyebrow>
           <PageTitle className="mt-1">ליקויי ציוד</PageTitle>
           <Muted className="mt-1.5 tabular-nums">
             {openCount} פתוחים · {counts.forwarded} נשלחו לרס״פ · {counts.resolved} נסגרו

@@ -20,7 +20,7 @@ export default function StartPage() {
       <PageMain>
 
         <div className="text-center pt-6">
-          <h1 className="text-3xl font-extrabold text-mil-olive tracking-widest">שבץ־נא</h1>
+          <h1 className="text-3xl font-extrabold text-mil-olive">שבץ־נא</h1>
           {firstName && <Muted className="mt-2">שלום, {firstName}</Muted>}
         </div>
 

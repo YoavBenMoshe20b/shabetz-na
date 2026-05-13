@@ -304,7 +304,7 @@ export default function CreateCompanyPage() {
             <Card variant="hero">
               <div className="px-5 py-5 space-y-4 text-center">
                 <Hint>קוד הצטרפות לפלוגה</Hint>
-                <HeroTitle className="font-mono tracking-widest text-mil-olive-dim">{inviteCode}</HeroTitle>
+                <HeroTitle className="font-mono text-mil-olive-dim">{inviteCode}</HeroTitle>
                 <div className="bg-mil-bg border border-mil-border rounded-xl px-4 py-3">
                   <Hint>קישור הצטרפות</Hint>
                   <p className="text-tiny font-mono text-mil-olive dir-ltr text-left mt-1">shavatz.app/join/{inviteCode}</p>

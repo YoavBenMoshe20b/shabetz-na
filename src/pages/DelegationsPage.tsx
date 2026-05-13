@@ -16,7 +16,7 @@ import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import type { CommandAuthority, CommandDelegation, MockUser } from '../types';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill,
 } from '../components/ui';
 
 export default function DelegationsPage() {
@@ -57,7 +57,7 @@ export default function DelegationsPage() {
       <PageMain>
 
         <header>
-          <Hint className="tracking-widest uppercase">{myCompany?.name ?? 'פלוגה'}</Hint>
+          <Eyebrow>{myCompany?.name ?? 'פלוגה'}</Eyebrow>
           <PageTitle className="mt-1">פיקוד זמני</PageTitle>
           <Muted className="mt-1.5">העברת סמכויות לתקופה מוגדרת</Muted>
         </header>

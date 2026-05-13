@@ -367,7 +367,7 @@ export default function SchedulePage() {
         {/* ── Period Selector ─────────────────────────────────────────────────── */}
         <div className="bg-mil-card border border-mil-border rounded-xl overflow-hidden">
           <div className="bg-mil-surface border-b border-mil-border px-4 py-2.5 flex items-center gap-2">
-            <span className="text-xs font-bold tracking-widest text-mil-text-inv/80">תקופות שיבוץ</span>
+            <span className="text-xs font-bold text-mil-text-inv/80">תקופות שיבוץ</span>
           </div>
           <div className="flex gap-2 p-3 overflow-x-auto">
             {visiblePeriods.map((p) => {
@@ -480,7 +480,7 @@ export default function SchedulePage() {
             {canViewCommanderNotes(currentRole) && period.commanderNotes.length > 0 && (
               <div className="bg-mil-card border border-mil-olive/20 rounded-xl overflow-hidden">
                 <div className="bg-mil-surface border-b border-mil-border px-4 py-2.5 flex items-center gap-2">
-                  <span className="text-xs font-bold tracking-widest text-mil-sand">הערות מנהל</span>
+                  <span className="text-xs font-bold text-mil-sand">הערות מנהל</span>
                   <span className="text-xs text-mil-text-inv/40">(מוסתר מחיילים)</span>
                 </div>
                 <div className="px-4 py-3 space-y-1.5">
@@ -895,7 +895,7 @@ function MissionWizard({
 function WizSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <p className="text-xs font-bold text-mil-muted uppercase tracking-widest">{title}</p>
+      <p className="text-xs font-bold text-mil-muted">{title}</p>
       {children}
     </div>
   );
@@ -939,7 +939,7 @@ function ManagerWarningsPanel({ warnings }: { warnings: ShiftWarning[] }) {
   return (
     <div className="bg-mil-card border border-mil-border rounded-xl overflow-hidden">
       <div className="bg-mil-surface border-b border-mil-border px-4 py-2.5 flex items-center gap-2">
-        <span className="text-xs font-bold tracking-widest text-mil-text-inv/80">אזהרות מנהל</span>
+        <span className="text-xs font-bold text-mil-text-inv/80">אזהרות מנהל</span>
         <span className="text-xs text-mil-text-inv/50">(מוסתר מחיילים)</span>
         <span className="text-xs text-mil-text-inv/70 mr-auto">{warnings.length} סה״כ</span>
       </div>
@@ -986,7 +986,7 @@ function FairnessPanel({ fairness, expanded, onToggle }: { fairness: FairnessSco
         onClick={onToggle}
         className="w-full bg-mil-surface px-4 py-2.5 flex items-center gap-2 hover:bg-mil-surface-hover transition-colors"
       >
-        <span className="text-xs font-bold tracking-widest text-mil-text-inv/80">איזון עומסים</span>
+        <span className="text-xs font-bold text-mil-text-inv/80">איזון עומסים</span>
         <span className="text-xs text-mil-text-inv/50">(מוסתר מחיילים)</span>
         {overloaded > 0 && <span className="text-xs bg-mil-alert/80 text-white px-1.5 py-0.5 rounded">{overloaded} עמוסים</span>}
         {underloaded > 0 && <span className="text-xs bg-mil-sand/80 text-white px-1.5 py-0.5 rounded">{underloaded} פנויים</span>}

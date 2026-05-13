@@ -11,7 +11,7 @@ import { useApp } from '../context/AppContext';
 import Header from '../components/Header';
 import { roleLabel } from '../utils/permissions';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint, Card,
+  Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, Card,
 } from '../components/ui';
 
 export default function ProfilePage() {
@@ -100,7 +100,7 @@ export default function ProfilePage() {
 
         {/* Identity hero */}
         <header>
-          <Hint className="tracking-widest uppercase">{roleLabel(currentRole)}</Hint>
+          <Eyebrow>{roleLabel(currentRole)}</Eyebrow>
           <PageTitle className="mt-1">{currentUser.name}</PageTitle>
           <Muted className="mt-1.5">
             {myPlatoon?.name ?? '—'}
