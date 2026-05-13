@@ -544,6 +544,11 @@ export interface OverrideAlert {
   affectedSoldierIds?: string[];
   requiresImmediateAttention?: boolean;
   suggestedAction?: string;
+
+  /** Back-link to the Override audit record this alert was raised from.
+   *  Present only for alerts produced by the engine (slice E3+); legacy
+   *  alerts (pre-engine) have no Override and leave this undefined. */
+  overrideId?: string;
 }
 
 // ─── Miluim period (the overall reserve duty window) ─────────────────────────
@@ -854,24 +859,64 @@ export interface Mission {
 
 // ─── Engine: schedule outputs (produced by phases 4 + 7) ────────────────────
 //
-// ScheduleSlot replaces TimeSlot's responsibilities. Both exist for one
-// transitional commit; engine slice E3+ will start producing ScheduleSlot.
+// AssignmentSlot is the unit soldiers are assigned to. It is the bridge
+// between Mission (policy) and Assignment (execution). Crucially, every
+// requirement on the slot is a SNAPSHOT captured at generation time —
+// editing a Mission's policy later does NOT retroactively change slots
+// that were already generated. You don't change what was scheduled; you
+// re-generate from the new policy going forward.
+//
+// Replaces TimeSlot's responsibilities. Both exist for one transitional
+// phase while engine slice E3+ starts producing AssignmentSlot.
 
-export interface ScheduleSlot {
+export type AssignmentSlotStatus =
+  | 'open'                                                 // no one assigned yet
+  | 'partially-staffed'                                    // some assignments < required
+  | 'fully-staffed'                                        // requiredCount + commander coverage met
+  | 'over-staffed'                                         // assignments > max (allowed under override)
+  | 'cancelled';                                           // mission paused / day rescheduled / locked-date overlap
+
+export interface AssignmentSlot {
   id: string;
+  companyId: string;
   missionId: string;
-  start: string;
-  end: string;
-  /** Manpower snapshot at the moment the slot was generated. */
+
+  // Concrete time window
+  start: string;                                           // ISO
+  end:   string;
+
+  // ── Manpower snapshot — frozen at generation ──
   requiredCount: number;
-  commanderRequired: boolean;
-  commanderRanks: CommandRank[];
-  /** Owner platoon after rotation resolution. */
+  minCount?:     number;                                   // present when mission.manpower is range / window-varies
+  maxCount?:     number;
+  idealCount?:   number;
+
+  // ── Commander snapshot ──
+  commanderRequired:         boolean;
+  commanderCount:            number;                       // typically 0 or 1
+  commanderRanks:            CommandRank[];
+  commanderCountsAsManpower: boolean;
+
+  // ── Requirement snapshots ──
+  qualifications: QualificationRequirement[];
+  equipment:      EquipmentRequirement[];
+  squadPolicy:    { mode: 'mix' | 'no-mix' | 'specific'; allowedSquadIds?: string[] };
+
+  // ── Ownership — resolved by Phase 3 (rotation) ──
   ownerPlatoonId: string;
+
+  // ── Lifecycle ──
+  status: AssignmentSlotStatus;
+
+  // ── Audit ──
+  generatedAt:      string;                                // engine run timestamp
+  generatedBy:      'engine' | 'manual';
+  createdByUserId?: string;                                // populated when generatedBy='manual'
 }
 
 export interface Assignment {
   id: string;
+  /** Back-reference to the AssignmentSlot this fills. */
   slotId: string;
   soldierId: string;
   role: 'soldier' | 'commander';
@@ -879,6 +924,120 @@ export interface Assignment {
   createdAt: string;
   /** Link to the OverrideAlert when this assignment broke an engine rule. */
   overrideAlertId?: string;
+  /** Link to the Override audit record (always present when an override
+   *  occurred — alerts are produced only for medium/high risk). */
+  overrideId?: string;
+}
+
+// ─── Engine: overrides — audit record vs upward alert ────────────────────────
+//
+// Override is the immutable, always-emitted audit record of a rule-breaking
+// action. OverrideAlert (declared earlier in this file) is the visible
+// escalation surface — only produced when riskLevel ≥ medium. This separation
+// means every rule break is documented for accountability while only the
+// ones that need attention surface upward.
+//
+// Operational principle: the engine NEVER blocks an action. The action
+// commits first; the Override is logged after the fact.
+
+export type OverrideActionKind =
+  | 'manual-assignment'         // PC assigned a specific soldier outside engine recommendation
+  | 'manpower-below-min'        // slot left below minimum manpower
+  | 'rest-violation'            // soldier assigned within minRestAfterHours window
+  | 'sleep-violation'           // soldier assigned despite sleep-protected state
+  | 'qualification-missing'     // slot doesn't satisfy a qualification requirement
+  | 'commander-missing'         // commander-required slot has no commander
+  | 'leave-floor-breach'        // leave plan dropped company/platoon below floor
+  | 'locked-date-leave'         // leave scheduled on a locked date
+  | 'custom';
+
+export interface Override {
+  id: string;
+  companyId: string;
+
+  action: OverrideActionKind;
+  /** Human-readable summary, e.g. "מאמ סימן את ש' שאול לסיור למרות שעבד בלילה". */
+  description: string;
+
+  // Who — under the "never block" principle, the actor IS the approver.
+  actorUserId: string;
+  actorName:   string;
+  actorRole:   UserRole;
+
+  // What rules were broken — Observation/Rule back-references.
+  brokenRuleIds: string[];
+  /** Free-text summary of the rule(s), e.g. "rest-after-ambush · 6h < 12h required". */
+  ruleSummary: string;
+
+  // Reason — required when riskLevel='high'; optional otherwise.
+  reason?:        string;
+  reasonRequired: boolean;
+
+  riskLevel: 'low' | 'medium' | 'high';
+
+  /** Scope of impact — any/all may be present depending on the action. */
+  affected: {
+    soldierIds?: string[];
+    slotIds?:    string[];
+    missionIds?: string[];
+    platoonIds?: string[];
+  };
+
+  timestamp: string;
+
+  /** When risk ≥ medium, the engine raises an OverrideAlert and links it
+   *  here. Low-risk overrides log silently for audit only. */
+  alertId?: string;
+}
+
+// ─── Engine: future availability — eligibility across time ──────────────────
+//
+// Phase 2 of the engine answers "is soldier X available for slot Y?" — but
+// Y can be hours, days, or weeks ahead. AvailabilityForecast is the per-
+// soldier sequence of back-to-back state windows over a horizon. Aligning
+// windows to state transitions (leave start / leave end / assignment
+// start / rest-window end) gives back-to-back coverage with no gaps, so
+// any caller can answer any time-point question via lookup.
+//
+// Computation lands in slice E3 (phase 2). E1 declares the shapes only.
+
+export type AvailabilityState =
+  | 'available'         // free for assignment in this window
+  | 'on-leave'          // confirmed Leave / LeaveBlock overlaps
+  | 'on-mission'        // already assigned to a slot overlapping this window
+  | 'resting'           // within minRestAfterHours of a previous shift
+  | 'sleep-protected'   // would breach sleep window (e.g. ambush last night)
+  | 'inactive-temp'     // Soldier.currentStatus = 'inactive-temp'
+  | 'unknown';          // future state cannot be determined
+
+export type AvailabilityBlockedBy =
+  | { kind: 'leave-block';  leaveBlockId: string }
+  | { kind: 'leave';        leaveId: string }
+  | { kind: 'assignment';   slotId: string; missionId: string }
+  | { kind: 'rest-window';  previousSlotId: string; restEndsAt: string }
+  | { kind: 'sleep-window'; previousSlotId: string; sleepEndsAt: string }
+  | { kind: 'status';       value: 'inactive-temp' };
+
+export interface AvailabilityWindow {
+  soldierId: string;
+  from: string;                                          // ISO
+  to:   string;
+  state: AvailabilityState;
+  /** Source explaining why state !== 'available'. */
+  blockedBy?: AvailabilityBlockedBy;
+  /** firm — backed by a confirmed assignment / leave.
+   *  planned — on the rotation plan but not yet confirmed.
+   *  projected — computed from rotation policy + history alone. */
+  confidence: 'firm' | 'planned' | 'projected';
+}
+
+export interface AvailabilityForecast {
+  soldierId:    string;
+  horizonStart: string;
+  horizonEnd:   string;
+  generatedAt:  string;
+  /** Back-to-back windows covering [horizonStart, horizonEnd] with no gaps. */
+  windows: AvailabilityWindow[];
 }
 
 // ─── Engine: leave framework (refactor of existing Leave) ──────────────────
