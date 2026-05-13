@@ -54,7 +54,7 @@ export default function Header({ title }: { title: string }) {
                 <p className="text-xs text-mil-muted mb-2 flex items-center gap-1">
                   <span className="text-mil-warn">⚙</span> כלי מפתחים — החלפת תפקיד
                 </p>
-                {(['owner', 'manager', 'soldier'] as UserRole[]).map((r) => (
+                {(['companyCommander', 'platoonCommander', 'soldier'] as UserRole[]).map((r) => (
                   <button
                     key={r}
                     onClick={() => { switchRole(r); setShowDev(false); }}

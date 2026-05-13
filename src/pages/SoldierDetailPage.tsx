@@ -23,9 +23,11 @@ import {
   Section, PageMain, PageTitle, Body, Muted, Hint, StatusPill,
 } from '../components/ui';
 
-// All operational roles for the multi-select edit affordance
+// All operational roles for the multi-select edit affordance. Order
+// reflects command hierarchy first, then specialty roles.
 const ALL_OPERATIONAL_ROLES: OperationalRole[] = [
-  'מ״פ','סמ״פ','מ״מ','קשר מ״מ','סמל','מ״כ',
+  'מ״פ','סמ״פ','מ״מ','סמל','מ״כ',
+  'רס״פ','שליש','מש״ק קשר','קשר מ״מ',
   'חובש','נגביסט','קלע','מאגיסט','רחפן',
 ];
 

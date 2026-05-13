@@ -40,7 +40,7 @@ export interface CreateCompanyInput {
   settings: CompanySettings;
   /** Internal platoons defined during setup. At least one is required. */
   platoons: Array<{
-    name: string;                  // e.g. "מחלקה א׳" or "חפ״ק"
+    name: string;                  // e.g. "מחלקה 1" or "חפ״ק"
     isSpecial?: boolean;
     /** Sub-unit names to seed under this platoon. Empty for special platoons
      *  whose structure the platoon commander will define later. */
@@ -905,7 +905,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       idLast4: data.idLast4,
       password: data.password,
       operationalRoles: ['מ״פ'],
-      teamClass: 'מפקדה',
+      teamClass: 'חפ״ק',
       createdAt: now,
     };
     setUsers((prev) => [...prev, newUser]);

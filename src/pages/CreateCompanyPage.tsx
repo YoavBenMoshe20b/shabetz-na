@@ -27,9 +27,11 @@ interface PlatoonDraft {
 }
 
 const DEFAULT_PLATOONS: () => PlatoonDraft[] = () => [
-  { id: 'p1', name: 'מחלקה א׳', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
-  { id: 'p2', name: 'מחלקה ב׳', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
-  { id: 'p3', name: 'מחלקה ג׳', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
+  { id: 'p1', name: 'חפ״ק',    isSpecial: true,  squadsCsv: 'צוות חפ״ק' },
+  { id: 'p2', name: 'מחלקה 1', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
+  { id: 'p3', name: 'מחלקה 2', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
+  { id: 'p4', name: 'מחלקה 3', isSpecial: false, squadsCsv: 'כיתה א, כיתה ב, כיתה ג' },
+  { id: 'p5', name: 'מפלג',    isSpecial: true,  squadsCsv: 'לוגיסטיקה, אספקה' },
 ];
 
 export default function CreateCompanyPage() {
@@ -166,7 +168,7 @@ export default function CreateCompanyPage() {
                       )}
                     </div>
                     <Field label="שם המחלקה">
-                      <input className={inp} value={p.name} onChange={(e) => patchPlatoon(p.id, { name: e.target.value })} placeholder="מחלקה א׳" />
+                      <input className={inp} value={p.name} onChange={(e) => patchPlatoon(p.id, { name: e.target.value })} placeholder="מחלקה 1" />
                     </Field>
                     <Field label="כיתות (מופרדות בפסיק)">
                       <input
@@ -249,7 +251,7 @@ export default function CreateCompanyPage() {
                   />
                   <div>
                     <Body className="font-semibold">מחלקות מיוחדות יוצאות עם הפלוגה</Body>
-                    <Muted className="mt-0.5">אם כבוי, חפ״ק וכיתת סיור ינהלו רוטציית יציאות נפרדת.</Muted>
+                    <Muted className="mt-0.5">אם כבוי, חפ״ק ומפלג ינהלו רוטציית יציאות נפרדת.</Muted>
                   </div>
                 </label>
               </div>

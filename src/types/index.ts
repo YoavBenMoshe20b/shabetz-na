@@ -56,9 +56,15 @@ export interface Delegation {
   expiresAt?: string;
 }
 
+// Operational roles — Hebrew labels displayed directly in UI. The
+// operational truth of the company is expressed via these tags; soldiers
+// can carry multiple (e.g. ['קלע', 'חובש']). All operational job titles
+// the product surfaces live here — there are no generic "manager" /
+// "admin" / "מנהל" / "בעלים" concepts.
 export type OperationalRole =
   | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'מ״כ'
-  | 'חובש' | 'נגביסט' | 'קלע' | 'מאגיסט' | 'רחפן';
+  | 'חובש' | 'נגביסט' | 'קלע' | 'מאגיסט' | 'רחפן'
+  | 'רס״פ' | 'שליש' | 'מש״ק קשר';
 
 // @deprecated — sub-unit structure is now per-platoon and free-form via SubUnit.
 // Kept as a `string` alias so legacy annotations still compile during migration.
@@ -508,7 +514,7 @@ export type PlatoonKind =
   | 'combat'           // מחלקת לחימה
   | 'forward-command'  // חפ״ק
   | 'logistics'        // מפלג
-  | 'hq'               // מפקדה — hosts רס״פ / שליש / מש״ק קשר
+  | 'hq'               // small command attachment (חפ״ק / מטה פלוגתי)
   | 'custom';
 
 // ─── Company-level missions ──────────────────────────────────────────────────

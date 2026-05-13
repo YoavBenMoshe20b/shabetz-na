@@ -41,22 +41,50 @@ const YESTERDAY_AM = '2024-05-11T07:00:00';
 const TWO_DAYS_AGO = '2024-05-10T14:00:00';
 
 export const mockSoldiers: Soldier[] = [
-  // ── מחלקה א׳ ─────────────────────────────────────────────────────────
+  // ── מחלקה 1 ─────────────────────────────────────────────────────────
   // currentStatus drives every operational view. statusSetAt is the
   // canonical "since" timestamp; statusExpectedUntil is set when going
   // home so the system knows when they should be back.
-  { id: 's1',  name: 'משה ישראלי',  phone: '0509876543', idLast4: '1111', companyId: 'co1', status: 'active', claimedAt: '2024-05-08T09:00:00', userId: 'u3', operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2,
+  { id: 's1',  name: 'משה ישראלי',  phone: '0509876543', idLast4: '1111', companyId: 'co1', status: 'active', claimedAt: '2024-05-08T09:00:00', userId: 'u3', operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה א', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2,
     dateOfBirth: '1998-03-14', dominantHand: 'right', weaponSide: 'right', shirtSize: 'L', pantsSize: '34', shoeSize: '43' },
-  { id: 's2',  name: 'רוני שמש',    phone: '0502222111', idLast4: '2222', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'home',    statusSetAt: '2024-05-12T00:00:00', statusExpectedUntil: '2024-05-14T22:00:00', availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
-  { id: 's3',  name: 'אורן פרץ',    phone: '0503333222', idLast4: '3333', companyId: 'co1', status: 'active', operationalRoles: ['נגביסט'],          teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 3 },
-  { id: 's4',  name: 'נועם כץ',     phone: '0504444333', idLast4: '4444', companyId: 'co1', status: 'active', operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'inactive-temp', statusSetAt: YESTERDAY_AM, availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
-  { id: 's5',  name: 'איתי בן דוד', phone: '0505555444', idLast4: '5555', companyId: 'co1', status: 'active', operationalRoles: ['סמ״פ', 'רחפן'],   teamClass: 'מפקדה',  squadId: 'su-g1-hq', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
-  { id: 's6',  name: 'גל מזרחי',    phone: '0506666555', idLast4: '6666', companyId: 'co1', status: 'active', operationalRoles: ['מאגיסט', 'סמל'],  teamClass: 'כיתה 2', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2 },
-  { id: 's7',  name: 'שי אברהם',    phone: '0507777666', idLast4: '7777', companyId: 'co1', status: 'active', operationalRoles: ['רחפן', 'קלע'],    teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
+  { id: 's2',  name: 'רוני שמש',    phone: '0502222111', idLast4: '2222', companyId: 'co1', status: 'active', userId: 'u2', operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה א', squadId: 'su-g1-a',  currentStatus: 'home',    statusSetAt: '2024-05-12T00:00:00', statusExpectedUntil: '2024-05-14T22:00:00', availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
+  { id: 's3',  name: 'אורן פרץ',    phone: '0503333222', idLast4: '3333', companyId: 'co1', status: 'active', operationalRoles: ['נגביסט'],          teamClass: 'כיתה ב', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 3 },
+  { id: 's4',  name: 'נועם כץ',     phone: '0504444333', idLast4: '4444', companyId: 'co1', status: 'active', operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה ב', squadId: 'su-g1-b',  currentStatus: 'inactive-temp', statusSetAt: YESTERDAY_AM, availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
+  // s5 — סמ"פ, lives in חפ"ק (sq-chap-1) rather than a combat platoon
+  { id: 's5',  name: 'איתי בן דוד', phone: '0505555444', idLast4: '5555', companyId: 'co1', status: 'active', operationalRoles: ['סמ״פ', 'רחפן'],   teamClass: 'חפ״ק',   squadId: 'sq-chap-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
+  { id: 's6',  name: 'גל מזרחי',    phone: '0506666555', idLast4: '6666', companyId: 'co1', status: 'active', operationalRoles: ['מאגיסט'],         teamClass: 'כיתה ב', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2 },
+  { id: 's7',  name: 'שי אברהם',    phone: '0507777666', idLast4: '7777', companyId: 'co1', status: 'active', operationalRoles: ['רחפן', 'קלע'],    teamClass: 'כיתה ג', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
   // s8: UNCLAIMED slot
-  { id: 's8',  name: 'יניב שלום',   phone: '0508888777', idLast4: '8888', companyId: 'co1', status: 'active', operationalRoles: ['קלע'],             teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [{ type: 'location', description: 'לא נמצא בבסיס', startDate: '2024-05-12', endDate: '2024-05-13' }], currentLoad: 0 },
-  { id: 's9',  name: 'ניסים דהן',   phone: '0509999888', idLast4: '9999', companyId: 'co1', status: 'active', operationalRoles: ['חובש', 'סמל'],    teamClass: 'כיתה 1', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2, dateOfBirth: (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 26); return d.toISOString().slice(0, 10); })() },
-  { id: 's10', name: 'אלון ברק',    phone: '0501010101', idLast4: '1010', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ', 'מאגיסט'],  teamClass: 'כיתה 3', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
+  { id: 's8',  name: 'יניב שלום',   phone: '0508888777', idLast4: '8888', companyId: 'co1', status: 'active', operationalRoles: ['קלע'],             teamClass: 'כיתה ג', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [{ type: 'location', description: 'לא נמצא בבסיס', startDate: '2024-05-12', endDate: '2024-05-13' }], currentLoad: 0 },
+  { id: 's9',  name: 'ניסים דהן',   phone: '0509999888', idLast4: '9999', companyId: 'co1', status: 'active', userId: 'u5', operationalRoles: ['סמל', 'חובש'],    teamClass: 'כיתה א', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2, dateOfBirth: (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 26); return d.toISOString().slice(0, 10); })() },
+  { id: 's10', name: 'אלון ברק',    phone: '0501010101', idLast4: '1010', companyId: 'co1', status: 'active', operationalRoles: ['מ״כ', 'מאגיסט'],  teamClass: 'כיתה ג', squadId: 'su-g1-c',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
+
+  // ── חפ"ק ─────────────────────────────────────────────────────────────
+  // Small command attachment around the מ"פ and סמ"פ. Carries the
+  // communication soldiers attached directly to company command.
+  { id: 's12', name: 'אורי לביא',   phone: '0501212121', idLast4: '1212', companyId: 'co1', status: 'active', operationalRoles: ['מש״ק קשר', 'קשר מ״מ'], teamClass: 'חפ״ק',   squadId: 'sq-chap-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+  { id: 's13', name: 'טל מאור',     phone: '0501313131', idLast4: '1313', companyId: 'co1', status: 'active', operationalRoles: ['מש״ק קשר'],            teamClass: 'חפ״ק',   squadId: 'sq-chap-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+
+  // ── מחלקה 2 ──────────────────────────────────────────────────────────
+  { id: 's14', name: 'עומר בר',     phone: '0501414141', idLast4: '1414', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ'],                  teamClass: 'כיתה א', squadId: 'su-g2-a',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+  { id: 's15', name: 'נדב חרל״פ',   phone: '0501515151', idLast4: '1515', companyId: 'co1', status: 'active', operationalRoles: ['קלע'],                  teamClass: 'כיתה א', squadId: 'su-g2-a',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 2 },
+  { id: 's16', name: 'תום הירש',    phone: '0501616161', idLast4: '1616', companyId: 'co1', status: 'active', operationalRoles: ['חובש'],                 teamClass: 'כיתה ב', squadId: 'su-g2-b',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 2 },
+  { id: 's17', name: 'אדם עוזרי',   phone: '0501717171', idLast4: '1717', companyId: 'co1', status: 'active', operationalRoles: ['נגביסט'],              teamClass: 'כיתה ב', squadId: 'su-g2-b',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+  { id: 's18', name: 'אייל גלעד',   phone: '0501818181', idLast4: '1818', companyId: 'co1', status: 'active', operationalRoles: ['סמל'],                  teamClass: 'כיתה ג', squadId: 'su-g2-c',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 2 },
+
+  // ── מחלקה 3 ──────────────────────────────────────────────────────────
+  { id: 's19', name: 'יואב סער',    phone: '0501919191', idLast4: '1919', companyId: 'co1', status: 'active', operationalRoles: ['מ״מ'],                  teamClass: 'כיתה א', squadId: 'su-g3-a',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+  { id: 's20', name: 'דניאל אריה',  phone: '0502020202', idLast4: '2020', companyId: 'co1', status: 'active', operationalRoles: ['קלע'],                  teamClass: 'כיתה א', squadId: 'su-g3-a',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+  { id: 's21', name: 'שגיא ברנר',   phone: '0502121212', idLast4: '2121', companyId: 'co1', status: 'active', operationalRoles: ['סמל'],                  teamClass: 'כיתה ב', squadId: 'su-g3-b',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 2 },
+  { id: 's22', name: 'אסף קמין',    phone: '0502222122', idLast4: '2222', companyId: 'co1', status: 'active', operationalRoles: ['מאגיסט'],              teamClass: 'כיתה ב', squadId: 'su-g3-b',   currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+
+  // ── מפלג ─────────────────────────────────────────────────────────────
+  // Logistics platoon, commanded by the רס״פ. Coordinates supply,
+  // equipment, food, cleaning task assignment, etc. — does not "do all
+  // cleaning" itself.
+  { id: 's23', name: 'אבי כהן',     phone: '0502323232', idLast4: '2323', companyId: 'co1', status: 'active', userId: 'u6', operationalRoles: ['רס״פ'],                 teamClass: 'מפלג',   squadId: 'su-meflag-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1, functionalRoles: ['rasap'] },
+  { id: 's24', name: 'רון אביב',    phone: '0502424242', idLast4: '2424', companyId: 'co1', status: 'active', operationalRoles: ['שליש'],                 teamClass: 'מפלג',   squadId: 'su-meflag-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+  { id: 's25', name: 'ניר טל',      phone: '0502525252', idLast4: '2525', companyId: 'co1', status: 'active', operationalRoles: [],                       teamClass: 'מפלג',   squadId: 'su-meflag-2', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 0 },
 
   // ── HISTORICAL — invisible to operational selectors ──
   { id: 's11', name: 'יוסי כהן',   phone: '0501234567', idLast4: '0001', companyId: 'co2',
@@ -84,16 +112,17 @@ export const mockUsers: MockUser[] = [
     // BOOTSTRAP CC — registered before any roster existed
     id: 'u1', name: 'יוסי כהן', role: 'companyCommander',
     phone: '0501234567', idLast4: '0001', password: 'Test@1234',
-    operationalRoles: ['מ״פ'], teamClass: 'מפקדה',
+    operationalRoles: ['מ״פ'], teamClass: 'חפ״ק',
     companyId: 'co1',
     createdAt: '2024-04-20T08:00:00',
   },
   {
-    // Claimed PC slot in co1
-    id: 'u2', name: 'דוד לוי', role: 'platoonCommander',
-    phone: '0507654321', idLast4: '2468', password: 'Test@1234',
+    // Claimed PC slot — מ"מ of מחלקה 1 (roster soldier s2)
+    id: 'u2', name: 'רוני שמש', role: 'platoonCommander',
+    phone: '0502222111', idLast4: '2222', password: 'Test@1234',
     platoonId: 'g1', commandedPlatoonId: 'g1', companyId: 'co1',
-    operationalRoles: ['מ״מ'], teamClass: 'מפקדה',
+    soldierProfileId: 's2',
+    operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה א',
     createdAt: '2024-04-21T09:00:00',
   },
   {
@@ -102,16 +131,27 @@ export const mockUsers: MockUser[] = [
     phone: '0509876543', idLast4: '1111', password: 'Test@1234',
     platoonId: 'g1', companyId: 'co1', squadId: 'su-g1-a',
     soldierProfileId: 's1',
-    operationalRoles: ['קלע', 'חובש'], teamClass: 'כיתה 1',
+    operationalRoles: ['קלע', 'חובש'], teamClass: 'כיתה א',
     createdAt: '2024-05-08T09:00:00',
   },
   {
-    // Claimed PS slot in co1
-    id: 'u5', name: 'אלון בן-שמעון', role: 'platoonSergeant',
-    phone: '0508889999', idLast4: '1357', password: 'Test@1234',
+    // Claimed PS slot — סמל of מחלקה 1 (roster soldier s9)
+    id: 'u5', name: 'ניסים דהן', role: 'platoonSergeant',
+    phone: '0509999888', idLast4: '9999', password: 'Test@1234',
     platoonId: 'g1', commandedPlatoonId: 'g1', companyId: 'co1',
-    operationalRoles: ['סמל'], teamClass: 'מפקדה',
+    soldierProfileId: 's9',
+    operationalRoles: ['סמל', 'חובש'], teamClass: 'כיתה א',
     createdAt: '2024-04-21T09:30:00',
+  },
+  {
+    // רס"פ — מפלג commander (roster soldier s23). The functional role
+    // tag lives on the Soldier record; the user just claims the slot.
+    id: 'u6', name: 'אבי כהן', role: 'soldier',
+    phone: '0502323232', idLast4: '2323', password: 'Test@1234',
+    platoonId: 'g-meflag', companyId: 'co1', squadId: 'su-meflag-1',
+    soldierProfileId: 's23',
+    operationalRoles: ['רס״פ'], teamClass: 'מפלג',
+    createdAt: '2024-04-22T08:00:00',
   },
 ];
 
@@ -330,55 +370,101 @@ export const mockSchedulePeriods: SchedulePeriod[] = [
   },
 ];
 
-// ─── Groups / מחלקות ──────────────────────────────────────────────────────────
+// ─── Platoons (מחלקות + חפ"ק + מפלג) ────────────────────────────────────────
+//
+// Real company structure:
+//   חפ"ק           — small command attachment around the מ"פ / סמ"פ
+//   מחלקה 1/2/3   — combat platoons, each with a מ"מ + סמל + כיתות
+//   מפלג           — logistics platoon, commanded by the רס"פ
 
 export const mockPlatoons: Platoon[] = [
   {
-    id: 'g1', name: 'מחלקה א׳', unitName: 'גדוד 51', code: 'UNIT-4821',
-    memberIds: ['u2', 'u3', 'u5'],
-    platoonCommander: 'דוד לוי', platoonSergeant: 'אלון בן-שמעון',
-    scheduleManagers: ['u1', 'u2', 'u5'],
-    availableRoles: ['קלע', 'חובש', 'נגביסט', 'מאגיסט', 'קשר מ״מ', 'רחפן', 'מ״מ', 'סמל'],
-    size: 10,
-    enemyConfusion: false,
-    confusionMinutes: 0,
-    companyId: 'co1',
-    platoonCommanderUserId: 'u2',
-    platoonSergeantUserId: 'u5',
-    squadIds: ['su-g1-a', 'su-g1-b', 'su-g1-c', 'su-g1-hq'],
-    kind: 'combat',
-    followsCompanyLeaveRotation: true,
-  },
-  {
-    id: 'g2', name: 'כיתת סיור', unitName: 'גדוד 51', code: 'UNIT-9934',
+    id: 'g-chapack', name: 'חפ״ק', unitName: 'גדוד 9203', code: 'UNIT-CHAP',
     memberIds: [],
-    availableRoles: ['קלע', 'חובש', 'מ״מ'],
-    size: 8,
+    availableRoles: ['קשר מ״מ', 'מש״ק קשר'],
+    size: 2,
     companyId: 'co1',
-    squadIds: ['su-g2-spr', 'su-g2-msh', 'su-g2-tek'],
+    squadIds: ['sq-chap-1'],
     kind: 'forward-command',
     followsCompanyLeaveRotation: false,
-    minSoldiersOnBase: 4,
+    minSoldiersOnBase: 1,
+  },
+  {
+    id: 'g1', name: 'מחלקה 1', unitName: 'גדוד 9203', code: 'UNIT-M1',
+    memberIds: ['u2', 'u3'],
+    platoonCommander: 'רוני שמש', platoonSergeant: 'ניסים דהן',
+    availableRoles: ['קלע', 'חובש', 'נגביסט', 'מאגיסט', 'קשר מ״מ', 'רחפן', 'מ״מ', 'סמל', 'מ״כ'],
+    size: 10,
+    companyId: 'co1',
+    platoonCommanderUserId: 'u2',
+    platoonSergeantUserId: undefined,
+    squadIds: ['su-g1-a', 'su-g1-b', 'su-g1-c'],
+    kind: 'combat',
+    followsCompanyLeaveRotation: true,
+    minSoldiersOnBase: 5,
+  },
+  {
+    id: 'g2', name: 'מחלקה 2', unitName: 'גדוד 9203', code: 'UNIT-M2',
+    memberIds: [],
+    availableRoles: ['קלע', 'חובש', 'נגביסט', 'מאגיסט', 'מ״מ', 'סמל', 'מ״כ'],
+    size: 5,
+    companyId: 'co1',
+    squadIds: ['su-g2-a', 'su-g2-b', 'su-g2-c'],
+    kind: 'combat',
+    followsCompanyLeaveRotation: true,
+    minSoldiersOnBase: 3,
+  },
+  {
+    id: 'g3', name: 'מחלקה 3', unitName: 'גדוד 9203', code: 'UNIT-M3',
+    memberIds: [],
+    availableRoles: ['קלע', 'חובש', 'נגביסט', 'מאגיסט', 'מ״מ', 'סמל', 'מ״כ'],
+    size: 4,
+    companyId: 'co1',
+    squadIds: ['su-g3-a', 'su-g3-b'],
+    kind: 'combat',
+    followsCompanyLeaveRotation: true,
+    minSoldiersOnBase: 2,
+  },
+  {
+    id: 'g-meflag', name: 'מפלג', unitName: 'גדוד 9203', code: 'UNIT-MEF',
+    memberIds: [],
+    availableRoles: ['רס״פ', 'שליש', 'מש״ק קשר'],
+    size: 3,
+    companyId: 'co1',
+    squadIds: ['su-meflag-1', 'su-meflag-2'],
+    kind: 'logistics',
+    followsCompanyLeaveRotation: false,
+    minSoldiersOnBase: 1,
   },
 ];
 
-// ─── SubUnits / תת-קבוצות ────────────────────────────────────────────────────
+// ─── Squads / כיתות ──────────────────────────────────────────────────────────
 //
-// Sub-unit names are defined per-platoon by the company commander, so two
-// platoons in the same company can have different sub-unit structures
-// (regular platoon: כיתות; special platoon: בעלי תפקיד).
+// Squad names follow real operational convention: combat platoons use
+// כיתה א / ב / ג; non-combat platoons (חפ"ק, מפלג) use functional names
+// that fit their work (e.g. צוות חפ"ק / לוגיסטיקה / אספקה).
 
 export const mockSquads: Squad[] = [
-  // מחלקה א׳ (g1) — standard squad layout
-  { id: 'su-g1-a',   platoonId: 'g1', name: 'כיתה 1',  soldierIds: ['s1', 's2', 's9'] },
-  { id: 'su-g1-b',   platoonId: 'g1', name: 'כיתה 2',  soldierIds: ['s3', 's4', 's6'] },
-  { id: 'su-g1-c',   platoonId: 'g1', name: 'כיתה 3',  soldierIds: ['s7', 's8', 's10'] },
-  { id: 'su-g1-hq',  platoonId: 'g1', name: 'מפקדה',   soldierIds: ['s5'] },
+  // חפ"ק
+  { id: 'sq-chap-1',   platoonId: 'g-chapack', name: 'צוות חפ״ק',   soldierIds: ['s5', 's12', 's13'] },
 
-  // כיתת סיור (g2) — special platoon, distinct sub-unit structure
-  { id: 'su-g2-spr', platoonId: 'g2', name: 'ספרפס',         soldierIds: [] },
-  { id: 'su-g2-msh', platoonId: 'g2', name: 'משקשק',         soldierIds: [] },
-  { id: 'su-g2-tek', platoonId: 'g2', name: 'חוליה טכנית',  soldierIds: [] },
+  // מחלקה 1
+  { id: 'su-g1-a',     platoonId: 'g1',        name: 'כיתה א',      soldierIds: ['s1', 's2', 's9'] },
+  { id: 'su-g1-b',     platoonId: 'g1',        name: 'כיתה ב',      soldierIds: ['s3', 's4', 's6'] },
+  { id: 'su-g1-c',     platoonId: 'g1',        name: 'כיתה ג',      soldierIds: ['s7', 's8', 's10'] },
+
+  // מחלקה 2
+  { id: 'su-g2-a',     platoonId: 'g2',        name: 'כיתה א',      soldierIds: ['s14', 's15'] },
+  { id: 'su-g2-b',     platoonId: 'g2',        name: 'כיתה ב',      soldierIds: ['s16', 's17'] },
+  { id: 'su-g2-c',     platoonId: 'g2',        name: 'כיתה ג',      soldierIds: ['s18'] },
+
+  // מחלקה 3
+  { id: 'su-g3-a',     platoonId: 'g3',        name: 'כיתה א',      soldierIds: ['s19', 's20'] },
+  { id: 'su-g3-b',     platoonId: 'g3',        name: 'כיתה ב',      soldierIds: ['s21', 's22'] },
+
+  // מפלג — functional squads, flexible naming
+  { id: 'su-meflag-1', platoonId: 'g-meflag',  name: 'לוגיסטיקה',   soldierIds: ['s23', 's24'] },
+  { id: 'su-meflag-2', platoonId: 'g-meflag',  name: 'אספקה',       soldierIds: ['s25'] },
 ];
 
 // ─── Companies / פלוגות ──────────────────────────────────────────────────────
@@ -387,10 +473,10 @@ export const mockCompanies: Company[] = [
   {
     id: 'co1',
     name: 'פלוגה ב',
-    unitName: 'גדוד 51',
+    unitName: 'גדוד 9203',
     commanderUserId: 'u1',
     deputyCommanderUserId: undefined,
-    platoonIds: ['g1', 'g2'],
+    platoonIds: ['g-chapack', 'g1', 'g2', 'g3', 'g-meflag'],
     inviteCode: 'CO-5108',
     createdAt: '2024-04-20T08:00:00',
     settings: {
@@ -449,7 +535,7 @@ export const mockCompanyMissions: CompanyMission[] = [
     id: 'cm1',
     companyId: 'co1',
     name: 'שמירת היקף בסיס',
-    description: 'שמירה היקפית רציפה. סבב יומי בין מחלקה א׳ למחלקת סיור.',
+    description: 'שמירה היקפית רציפה. סבב יומי בין מחלקה 1 למחלקה 2.',
     durationHours: 24,
     assignedPlatoonIds: ['g1', 'g2'],
     rotation: 'platoon-rotates-daily',

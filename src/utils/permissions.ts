@@ -59,8 +59,10 @@ export const roleLabel = (role: UserRole): string => ({
   platoonCommander:       'מ״מ',
   platoonSergeant:        'סמל',
   soldier:                'חייל',
-  owner:                  'בעלים',
-  manager:                'מנהל',
+  // Legacy aliases — show operational labels even if the legacy UserRole
+  // leaks through into a display path. No "בעלים" / "מנהל" wording.
+  owner:                  'מ״פ',
+  manager:                'מ״מ',
 }[role]);
 
 // ─── Permission tokens (new parallel model) ──────────────────────────────────
