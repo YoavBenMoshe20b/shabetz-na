@@ -241,6 +241,16 @@ function CompanyCommanderDashboard() {
               </div>
               <span className="text-mil-ghost">←</span>
             </button>
+            <button
+              onClick={() => navigate('/delegations')}
+              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
+            >
+              <div className="flex-1">
+                <Body className="font-semibold">פיקוד זמני</Body>
+                <Hint className="block mt-0.5">הענקת סמכויות לתקופה מוגדרת</Hint>
+              </div>
+              <span className="text-mil-ghost">←</span>
+            </button>
           </div>
         </Section>
 
@@ -465,6 +475,32 @@ function PlatoonCommanderDashboard() {
         >
           פתח שבצ״ק השבוע ←
         </Button>
+
+        {/* ── PC operational destinations ────────────────────────────── */}
+        <Section label="ניהול מחלקה">
+          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+            <button
+              onClick={() => navigate('/platoon/gaps')}
+              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
+            >
+              <div className="flex-1">
+                <Body className="font-semibold">ליקויי ציוד</Body>
+                <Hint className="block mt-0.5">דיווחי חיילים והעברה לרס״פ</Hint>
+              </div>
+              <span className="text-mil-ghost">←</span>
+            </button>
+            <button
+              onClick={() => navigate('/delegations')}
+              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
+            >
+              <div className="flex-1">
+                <Body className="font-semibold">פיקוד זמני</Body>
+                <Hint className="block mt-0.5">הענק סמכויות לתקופה</Hint>
+              </div>
+              <span className="text-mil-ghost">←</span>
+            </button>
+          </div>
+        </Section>
 
       </PageMain>
     </div>

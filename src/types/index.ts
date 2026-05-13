@@ -1461,6 +1461,110 @@ export interface CoverageReport {
   unstaffedHours:    number;
 }
 
+// ─── Temporary command delegation ───────────────────────────────────────────
+//
+// Distinct from the PermissionToken / Delegation entity (which grants
+// specific permissions). CommandDelegation grants TEMPORARY ACTING COMMAND
+// — start/end-bounded, revocable, audited. Real operational situation:
+// PC + PS both unavailable for several hours → another soldier takes
+// over scheduling / leave-approval / operational control for the window.
+//
+// The grantor (CC for company-tier, PC for platoon-tier) defines the
+// scope, authorities[], and the time window. The system shows a banner
+// during the active window and writes audit entries for grant + revoke.
+
+export type CommandAuthority =
+  | 'scheduling'           // create/edit assignments + screen schedule
+  | 'leave-approval'       // approve/reject LeaveRequests within scope
+  | 'operational-control'  // make operational decisions (close base, mark events)
+  | 'all';                 // everything the original commander could do
+
+export interface CommandDelegation {
+  id: string;
+  companyId: string;
+
+  /** Whose authority is being temporarily delegated. */
+  fromUserId:   string;
+  fromUserName: string;
+  /** Who is acting in their place. */
+  toUserId:     string;
+  toUserName:   string;
+
+  /** Scope of acting command. */
+  scope:       'company' | 'platoon';
+  scopeRefId?: string;          // platoonId when scope='platoon'; companyId otherwise
+
+  /** Which authorities transfer. Empty array = none (placeholder grant). */
+  authorities: CommandAuthority[];
+
+  /** Time window. */
+  startIso: string;
+  endIso:   string;
+
+  /** Revocation. */
+  revoked:           boolean;
+  revokedAt?:        string;
+  revokedByUserId?:  string;
+  revokeReason?:     string;
+
+  reason?:   string;        // why the delegation was needed (e.g. "מ"מ בקורס, סמל בחופש")
+  createdAt: string;
+}
+
+// ─── Equipment gap reports (soldier → PS → רס״פ flow) ─────────────────────────
+//
+// Every soldier can report missing/damaged equipment. Reports flow:
+//   1. Soldier submits → status 'reported'
+//   2. PS / PC reviews → status 'reviewed-by-platoon'
+//   3. PC forwards into platoon gap list → status 'forwarded-to-rasap'
+//   4. רס״פ resolves → status 'resolved' (or 'dismissed' along the way)
+//
+// The status pipeline is append-only via state machine transitions.
+
+export type EquipmentGapKind =
+  | 'missing'           // signed-out gear missing or never received
+  | 'damaged'           // gear damaged, needs replacement / repair
+  | 'logistics-issue';  // any other logistics concern
+
+export type EquipmentGapStatus =
+  | 'reported'              // soldier submitted, nobody has triaged yet
+  | 'reviewed-by-platoon'   // PS/PC saw it, sitting in platoon gap list
+  | 'forwarded-to-rasap'    // sent up to logistics
+  | 'resolved'              // closed, item replaced/repaired/explained
+  | 'dismissed';            // closed without action
+
+export interface EquipmentGap {
+  id: string;
+  companyId: string;
+
+  // Reporter
+  reportedByUserId:    string;
+  reportedBySoldierId: string;
+  reportedByName:      string;
+  reportedByPlatoonId?: string;
+
+  kind:         EquipmentGapKind;
+  /** Free-text item identification — could be just a name or include
+   *  a serial. When the gap is about a specific signed item, link to
+   *  the SignedEquipment record. */
+  itemName:     string;
+  signedEquipmentId?: string;
+
+  description?: string;
+
+  // Pipeline
+  status: EquipmentGapStatus;
+
+  reviewedByUserId?: string;
+  reviewedAt?:       string;
+  forwardedAt?:      string;
+  resolvedByUserId?: string;
+  resolvedAt?:       string;
+  resolvedNotes?:    string;
+
+  createdAt: string;
+}
+
 export interface MockUser {
   id: string;                         // stable across membership transfers
   name: string;

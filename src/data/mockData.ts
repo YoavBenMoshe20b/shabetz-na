@@ -8,6 +8,7 @@ import type {
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment,
+  CommandDelegation, EquipmentGap,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -952,5 +953,28 @@ export const mockSignedEquipment: SignedEquipment[] = [
     signedByUserId: 'u-rasap',     signedByName: 'רס״פ אבי כהן',
     source:         'גדוד 51',     signedAt: '2024-11-20T07:00:00',
     status:         'active',
+  },
+];
+
+// ─── Temporary command delegations ──────────────────────────────────────────
+// Empty default — UI flows in this phase create them.
+export const mockCommandDelegations: CommandDelegation[] = [];
+
+// ─── Equipment gap reports ──────────────────────────────────────────────────
+// One seed report so the PS review surface has demo content.
+export const mockEquipmentGaps: EquipmentGap[] = [
+  {
+    id:                  'eg-1',
+    companyId:           'co1',
+    reportedByUserId:    'u3',
+    reportedBySoldierId: 's1',
+    reportedByName:      'משה ישראלי',
+    reportedByPlatoonId: 'g1',
+    kind:                'damaged',
+    itemName:            'מאיר 1',
+    signedEquipmentId:   'se-2',
+    description:         'עינית פנימית סדוקה — נדרשת החלפה',
+    status:              'reported',
+    createdAt:           todayAt('07:30', -1),
   },
 ];

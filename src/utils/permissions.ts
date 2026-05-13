@@ -231,3 +231,68 @@ export function canSoldierSeeSchedule(user: MockUser): boolean {
 export function canManuallyOverride(user: MockUser, platoon: Platoon): boolean {
   return canManagePlatoon(user, platoon);
 }
+
+// ─── Soldier-detail visibility scopes ────────────────────────────────────────
+//
+// When a viewer opens another soldier's detail page, what they can see
+// depends on their relationship to that soldier:
+//
+//   self        — viewing your own record (full view + edit own fields)
+//   platoon-cmd — PC/PS of the soldier's platoon (full operational view)
+//   company-cmd — CC/Deputy (full operational view across company)
+//   rasap       — logistics functional role (equipment + sizes only)
+//   public      — fallback (basic name/squad only — restrictive)
+//
+// Sensitive operational details (status history, mission load, leave
+// history) are visible only to self / platoon-cmd / company-cmd.
+
+export type SoldierDetailScope = 'self' | 'platoon-cmd' | 'company-cmd' | 'rasap' | 'public';
+
+export function getSoldierDetailScope(
+  viewer: MockUser,
+  target: Soldier,
+  platoons: Platoon[],
+): SoldierDetailScope {
+  // Self
+  if (viewer.soldierProfileId === target.id) return 'self';
+
+  // Company-tier — sees soldiers across their entire company
+  if (isCompanyLeadership(viewer.role) && viewer.companyId === target.companyId) {
+    return 'company-cmd';
+  }
+
+  // Platoon-tier — sees their commanded platoon's members
+  if (viewer.commandedPlatoonId) {
+    const cmdPlatoon = platoons.find((p) => p.id === viewer.commandedPlatoonId);
+    if (cmdPlatoon) {
+      const cmdSquadIds = cmdPlatoon.squadIds ?? [];
+      if (target.squadId && cmdSquadIds.includes(target.squadId)) return 'platoon-cmd';
+      if (cmdPlatoon.memberIds.includes(target.userId ?? '')) return 'platoon-cmd';
+    }
+  }
+
+  // רס״פ — logistics-only view
+  if (viewer.operationalRoles?.includes('רס״פ' as never) ||
+      (viewer as MockUser & { functionalRoles?: string[] }).functionalRoles?.includes('rasap')) {
+    return 'rasap';
+  }
+
+  return 'public';
+}
+
+/** Which sections of the soldier detail page each scope can view. */
+export function canSeeSoldierSection(
+  scope: SoldierDetailScope,
+  section: 'identity' | 'operational-status' | 'roles' | 'qualifications'
+         | 'sizes'    | 'equipment'          | 'history' | 'edit-controls',
+): boolean {
+  if (section === 'identity') return true;                                // everyone sees name + squad
+  if (section === 'operational-status') return scope !== 'rasap' && scope !== 'public';
+  if (section === 'roles')         return scope !== 'public';
+  if (section === 'qualifications') return scope !== 'public';
+  if (section === 'sizes')         return scope !== 'public';
+  if (section === 'equipment')     return scope !== 'public';
+  if (section === 'history')       return scope === 'self' || scope === 'platoon-cmd' || scope === 'company-cmd';
+  if (section === 'edit-controls') return scope === 'platoon-cmd' || scope === 'company-cmd';
+  return false;
+}

@@ -1,155 +1,267 @@
-import { useState } from 'react';
-import { useApp, useMyPlatoons } from '../context/AppContext';
+// Soldiers — role-aware roster + hierarchy.
+//
+// Role variants:
+//   COMPANY-TIER (CC/Deputy)        → CompanyHierarchyView
+//                                     battalion → company → platoons → squads → soldiers
+//   PLATOON-TIER (PC/PS)            → PlatoonRosterView, scoped to commanded platoon
+//                                     squad-grouped sections + click → /soldier/:id
+//   SOLDIER                         → PlatoonRosterView, scoped to own platoon, read-only
+//
+// Every list row clicks through to SoldierDetailPage (which gates content
+// further based on the viewer's scope helper from utils/permissions).
+
+import { useMemo, useState } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { useApp, useMyCompany, useMyPlatoons } from '../context/AppContext';
+import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
-import { isPlatoonLeadership } from '../utils/permissions';
+import type { Soldier, Squad, SoldierStatus } from '../types';
+import {
+  Section, PageMain, PageTitle, Body, Muted, Hint,
+} from '../components/ui';
 
 export default function SoldiersPage() {
-  const { soldiers, squads, currentRole, updateSoldierAvailability } = useApp();
-  const myPlatoons = useMyPlatoons();
-  const visibleSquads = squads.filter((s) =>
-    myPlatoons.length === 0 ? true : myPlatoons.some((p) => p.id === s.platoonId)
-  );
-
-  const [squadFilter, setSquadFilter] = useState<'all' | string>('all');  // 'all' or a Squad id
-  const [availFilter, setAvailFilter] = useState<'all' | 'available' | 'unavailable'>('all');
-
-  const filtered = soldiers.filter((s) => {
-    const squadOk = squadFilter === 'all' || s.squadId === squadFilter;
-    const availOk   = availFilter === 'all' || (availFilter === 'available' ? s.availability : !s.availability);
-    return squadOk && availOk;
-  });
-
-  const squadDisplayName = (s: { squadId?: string; teamClass: string }) =>
-    squads.find((su) => su.id === s.squadId)?.name ?? s.teamClass;
-
-  const isManager = isPlatoonLeadership(currentRole);
+  const { currentUser, currentRole } = useApp();
+  if (!currentUser) return <Navigate to="/login" replace />;
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="חיילים" />
-
-      <main className="px-4 py-4 pb-28 max-w-xl mx-auto">
-
-        {/* Filters */}
-        <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-          {(['all', 'available', 'unavailable'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setAvailFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-colors ${
-                availFilter === f
-                  ? 'bg-mil-olive border-mil-olive text-white'
-                  : 'bg-mil-card border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
-              }`}
-            >
-              {{ all: 'כולם', available: 'זמינים', unavailable: 'לא זמינים' }[f]}
-            </button>
-          ))}
-          <div className="w-px bg-mil-border mx-1 flex-shrink-0" />
-          <button
-            onClick={() => setSquadFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-colors ${
-              squadFilter === 'all'
-                ? 'bg-mil-olive-bg border-mil-olive/50 text-mil-olive'
-                : 'bg-mil-card border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
-            }`}
-          >
-            הכל
-          </button>
-          {visibleSquads.map((su) => (
-            <button
-              key={su.id}
-              onClick={() => setSquadFilter(su.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border transition-colors ${
-                squadFilter === su.id
-                  ? 'bg-mil-olive-bg border-mil-olive/50 text-mil-olive'
-                  : 'bg-mil-card border-mil-border text-mil-muted hover:text-mil-text hover:border-mil-olive/50'
-              }`}
-            >
-              {su.name}
-            </button>
-          ))}
-        </div>
-
-        <p className="text-xs text-mil-muted mb-3">{filtered.length} חיילים</p>
-
-        <div className="space-y-2">
-          {filtered.map((s) => (
-            <div key={s.id} className="bg-mil-card border border-mil-border rounded-xl p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <p className="font-bold text-mil-text">{s.name}</p>
-                  <p className="text-xs text-mil-muted">{squadDisplayName(s)}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  {isManager ? (
-                    <button
-                      onClick={() => updateSoldierAvailability(s.id, !s.availability)}
-                      className={`text-xs px-2 py-0.5 rounded border transition-colors ${
-                        s.availability
-                          ? 'bg-mil-success-bg border-mil-success/40 text-mil-success'
-                          : 'bg-mil-alert-bg border-mil-alert/40 text-mil-alert'
-                      }`}
-                    >
-                      {s.availability ? 'זמין' : 'לא זמין'}
-                    </button>
-                  ) : (
-                    <span className={`text-xs px-2 py-0.5 rounded border ${
-                      s.availability
-                        ? 'bg-mil-success-bg border-mil-success/40 text-mil-success'
-                        : 'bg-mil-alert-bg border-mil-alert/40 text-mil-alert'
-                    }`}>
-                      {s.availability ? 'זמין' : 'לא זמין'}
-                    </span>
-                  )}
-                  {s.availabilityNotes.length > 0 && (
-                    <span className="text-xs text-mil-warn">⚠ הערה</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Operational roles */}
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {s.operationalRoles.map((r) => (
-                  <span key={r} className="text-xs bg-mil-bg text-mil-muted border border-mil-border px-2 py-0.5 rounded">
-                    {r}
-                  </span>
-                ))}
-              </div>
-
-              {/* Load bar */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-mil-ghost">עומס:</span>
-                <div className="flex-1 bg-mil-bg border border-mil-border rounded-full h-1.5">
-                  <div
-                    className={`h-1.5 rounded-full ${
-                      s.currentLoad >= 3 ? 'bg-mil-alert' : s.currentLoad >= 2 ? 'bg-mil-warn' : 'bg-mil-success'
-                    }`}
-                    style={{ width: `${Math.min((s.currentLoad / 5) * 100, 100)}%` }}
-                  />
-                </div>
-                <span className="text-xs text-mil-muted w-4 text-center">{s.currentLoad}</span>
-              </div>
-
-              {/* Availability notes */}
-              {s.availabilityNotes.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-mil-border space-y-1">
-                  {s.availabilityNotes.map((n, i) => (
-                    <p key={i} className="text-xs text-mil-warn flex items-start gap-1">
-                      <span className="mt-px">⊘</span>
-                      <span>{n.description}{n.startDate && ` (${n.startDate}${n.endDate ? `–${n.endDate}` : ''})`}</span>
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-
-          {filtered.length === 0 && (
-            <p className="text-center text-mil-ghost py-10">אין חיילים להצגה</p>
-          )}
-        </div>
-      </main>
+      <PageMain>
+        {isCompanyLeadership(currentRole) ? (
+          <CompanyHierarchyView />
+        ) : (
+          <PlatoonRosterView />
+        )}
+      </PageMain>
     </div>
   );
 }
+
+// ─── Company hierarchy view (CC / Deputy) ────────────────────────────────
+
+function CompanyHierarchyView() {
+  const navigate = useNavigate();
+  const { soldiers, squads } = useApp();
+  const myCompany = useMyCompany();
+  const myPlatoons = useMyPlatoons();
+  const [openPlatoons, setOpenPlatoons] = useState<Set<string>>(() => new Set(myPlatoons.map((p) => p.id)));
+
+  const togglePlatoon = (id: string) => setOpenPlatoons((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const platoonSquads = (platoonId: string): Squad[] =>
+    squads.filter((s) => s.platoonId === platoonId);
+
+  const platoonSoldiers = (platoonId: string): Soldier[] => {
+    const sqIds = platoonSquads(platoonId).map((s) => s.id);
+    return soldiers.filter((s) => s.squadId && sqIds.includes(s.squadId));
+  };
+
+  const unassigned = soldiers.filter((s) =>
+    !s.squadId || !squads.find((sq) => sq.id === s.squadId)
+  );
+
+  return (
+    <>
+      {/* Hierarchy hero: battalion → company */}
+      <header>
+        <Hint className="tracking-widest uppercase">{myCompany?.unitName ?? 'גדוד'}</Hint>
+        <PageTitle className="mt-1">{myCompany?.name ?? 'פלוגה'}</PageTitle>
+        <Muted className="mt-1.5 tabular-nums">
+          {myPlatoons.length} מחלקות · {soldiers.length} חיילים
+        </Muted>
+      </header>
+
+      {myPlatoons.map((platoon) => {
+        const psoldiers = platoonSoldiers(platoon.id);
+        const inBase = psoldiers.filter((s) => s.currentStatus === 'in-base').length;
+        const isOpen = openPlatoons.has(platoon.id);
+        return (
+          <section key={platoon.id}>
+            <button
+              onClick={() => togglePlatoon(platoon.id)}
+              className="w-full flex items-baseline gap-3 text-right py-2"
+            >
+              <Body className="font-semibold">{platoon.name}</Body>
+              {platoon.kind === 'forward-command' && <Hint className="text-mil-muted">מיוחדת</Hint>}
+              <Hint className="mr-auto tabular-nums">
+                <span className="font-bold text-mil-text">{inBase}</span>/{psoldiers.length} בבסיס
+              </Hint>
+              <span className="text-mil-ghost text-tiny">{isOpen ? '▲' : '▼'}</span>
+            </button>
+            {isOpen && (
+              <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+                {platoonSquads(platoon.id).length === 0 ? (
+                  <div className="px-5 py-4">
+                    <Muted className="text-tiny">אין כיתות מוגדרות</Muted>
+                  </div>
+                ) : (
+                  platoonSquads(platoon.id).map((squad, idx) => {
+                    const ss = soldiers.filter((s) => s.squadId === squad.id);
+                    return (
+                      <SquadBlock
+                        key={squad.id}
+                        squad={squad}
+                        soldiers={ss}
+                        isFirst={idx === 0}
+                        onSoldierClick={(id) => navigate(`/soldier/${id}`)}
+                      />
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </section>
+        );
+      })}
+
+      {unassigned.length > 0 && (
+        <Section label="ללא שיוך כיתה">
+          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+            {unassigned.map((s) => (
+              <SoldierRow key={s.id} soldier={s} onClick={() => navigate(`/soldier/${s.id}`)} />
+            ))}
+          </div>
+        </Section>
+      )}
+    </>
+  );
+}
+
+// ─── Platoon roster view (PC / PS / Soldier) ─────────────────────────────
+
+function PlatoonRosterView() {
+  const navigate = useNavigate();
+  const { currentUser, currentRole, soldiers, squads, platoons } = useApp();
+
+  const myPlatoon = useMemo(() => {
+    if (isPlatoonLeadership(currentRole) && currentUser?.commandedPlatoonId) {
+      return platoons.find((p) => p.id === currentUser.commandedPlatoonId);
+    }
+    return platoons.find((p) => p.id === currentUser?.platoonId);
+  }, [platoons, currentUser, currentRole]);
+
+  const mySquads = useMemo(() =>
+    myPlatoon ? squads.filter((s) => s.platoonId === myPlatoon.id) : [],
+    [squads, myPlatoon],
+  );
+
+  const platoonSoldiers = useMemo(() => {
+    const sqIds = new Set(mySquads.map((s) => s.id));
+    return soldiers.filter((s) => s.squadId && sqIds.has(s.squadId));
+  }, [soldiers, mySquads]);
+
+  const inBase   = platoonSoldiers.filter((s) => s.currentStatus === 'in-base').length;
+  const atHome   = platoonSoldiers.filter((s) => s.currentStatus === 'home').length;
+  const inactive = platoonSoldiers.filter((s) => s.currentStatus === 'inactive-temp').length;
+
+  if (!myPlatoon) {
+    return (
+      <header>
+        <PageTitle>אין מחלקה</PageTitle>
+        <Muted className="mt-1.5">המשתמש לא משוייך למחלקה</Muted>
+      </header>
+    );
+  }
+
+  return (
+    <>
+      <header>
+        {myPlatoon.unitName && <Hint className="tracking-widest uppercase">{myPlatoon.unitName}</Hint>}
+        <PageTitle className="mt-1">{myPlatoon.name}</PageTitle>
+        <Muted className="mt-1.5 tabular-nums">
+          {inBase} בבסיס · {atHome} בבית{inactive > 0 ? ` · ${inactive} לא פעיל` : ''}
+        </Muted>
+      </header>
+
+      <Section label="כיתות">
+        {mySquads.length === 0 ? (
+          <Muted className="text-tiny">אין כיתות מוגדרות</Muted>
+        ) : (
+          <div className="bg-mil-card border border-mil-border rounded-2xl overflow-hidden">
+            {mySquads.map((squad, idx) => {
+              const ss = soldiers.filter((s) => s.squadId === squad.id);
+              return (
+                <SquadBlock
+                  key={squad.id}
+                  squad={squad}
+                  soldiers={ss}
+                  isFirst={idx === 0}
+                  onSoldierClick={(id) => navigate(`/soldier/${id}`)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </Section>
+    </>
+  );
+}
+
+// ─── Squad block — header + soldier rows ─────────────────────────────────
+
+function SquadBlock({
+  squad, soldiers, isFirst, onSoldierClick,
+}: {
+  squad: Squad;
+  soldiers: Soldier[];
+  isFirst: boolean;
+  onSoldierClick: (id: string) => void;
+}) {
+  return (
+    <div className={isFirst ? '' : 'border-t border-mil-border'}>
+      <div className="px-5 py-2.5 bg-mil-card-warm/40 flex items-baseline gap-2">
+        <Body className="font-semibold">{squad.name}</Body>
+        <Hint className="mr-auto tabular-nums">{soldiers.length}</Hint>
+      </div>
+      {soldiers.length === 0 ? (
+        <div className="px-5 py-3">
+          <Muted className="text-tiny">כיתה ריקה</Muted>
+        </div>
+      ) : (
+        <div className="divide-y divide-mil-border">
+          {soldiers.map((s) => (
+            <SoldierRow key={s.id} soldier={s} onClick={() => onSoldierClick(s.id)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SoldierRow({ soldier, onClick }: { soldier: Soldier; onClick: () => void }) {
+  const dot =
+    soldier.currentStatus === 'in-base'        ? 'bg-mil-olive' :
+    soldier.currentStatus === 'home'           ? 'bg-mil-sand'  :
+    soldier.currentStatus === 'inactive-temp'  ? 'bg-mil-ghost' :
+    'bg-mil-ghost';
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-right px-5 py-3 flex items-center gap-3 hover:bg-mil-card-warm/40 transition-colors"
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${dot} flex-shrink-0`} aria-hidden />
+      <div className="flex-1 min-w-0">
+        <Body className="font-semibold truncate">{soldier.name}</Body>
+        {soldier.operationalRoles.length > 0 && (
+          <Hint className="block mt-0.5 truncate text-mil-muted">
+            {soldier.operationalRoles.join(' · ')}
+          </Hint>
+        )}
+      </div>
+      <Hint className="text-mil-ghost text-tiny">{STATUS_LABEL[soldier.currentStatus]}</Hint>
+      <span className="text-mil-ghost">←</span>
+    </button>
+  );
+}
+
+const STATUS_LABEL: Record<SoldierStatus, string> = {
+  'in-base':       'בבסיס',
+  'home':          'בבית',
+  'inactive-temp': 'לא פעיל',
+};

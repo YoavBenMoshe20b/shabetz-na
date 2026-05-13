@@ -44,6 +44,9 @@ import MissionWizardPage  from './pages/MissionWizardPage';
 import CoveragePage       from './pages/CoveragePage';
 import PlatoonWeekPage    from './pages/PlatoonWeekPage';
 import EquipmentPage      from './pages/EquipmentPage';
+import SoldierDetailPage  from './pages/SoldierDetailPage';
+import PlatoonGapsPage    from './pages/PlatoonGapsPage';
+import DelegationsPage    from './pages/DelegationsPage';
 
 // Full-screen flows hide the bottom nav AND the emergency banner so
 // new-user wizards aren't competing with operational signals.
@@ -95,7 +98,8 @@ function AppRoutes() {
           !currentUser ? auth : !hasPlatoon ? <Navigate to="/start" replace /> : <CalendarPage />
         } />
         <Route path="/schedule" element={currentUser ? <SchedulePage /> : auth} />
-        <Route path="/soldiers" element={currentUser ? <SoldiersPage /> : auth} />
+        <Route path="/soldiers"    element={currentUser ? <SoldiersPage />       : auth} />
+        <Route path="/soldier/:id" element={currentUser ? <SoldierDetailPage /> : auth} />
         <Route path="/profile"   element={currentUser ? <ProfilePage />   : auth} />
         <Route path="/equipment" element={currentUser ? <EquipmentPage /> : auth} />
 
@@ -103,8 +107,14 @@ function AppRoutes() {
         <Route path="/leaves" element={
           <ProtectedRoute minRole="platoonCommander"><LeavesPage /></ProtectedRoute>
         } />
-        <Route path="/platoon" element={
+        <Route path="/platoon"      element={
           <ProtectedRoute minRole="platoonCommander"><PlatoonWeekPage /></ProtectedRoute>
+        } />
+        <Route path="/platoon/gaps" element={
+          <ProtectedRoute minRole="platoonCommander"><PlatoonGapsPage /></ProtectedRoute>
+        } />
+        <Route path="/delegations" element={
+          <ProtectedRoute minRole="platoonCommander"><DelegationsPage /></ProtectedRoute>
         } />
 
         {/* ── Company commander only ───────────────── */}

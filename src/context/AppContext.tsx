@@ -10,6 +10,8 @@ import type {
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment,
+  CommandDelegation, EquipmentGap, EquipmentGapKind, EquipmentGapStatus,
+  CommandAuthority, OperationalRole,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
@@ -21,6 +23,7 @@ import {
   mockLeaveRotationPolicy, mockLeaveBlocks,
   mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
   mockSignedEquipment,
+  mockCommandDelegations, mockEquipmentGaps,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -176,6 +179,41 @@ interface AppContextType {
     shoeSize?:     string;
     dateOfBirth?:  string;
   }) => void;
+
+  // ── PC/PS soldier assignment updates ────────────────────────────────
+  /** Reassign a soldier to a different squad within the same platoon. */
+  updateSoldierSquad: (soldierId: string, squadId: string | null) => void;
+  /** Set a soldier's operational roles (multi-select). */
+  updateSoldierOperationalRoles: (soldierId: string, roles: OperationalRole[]) => void;
+
+  // ── Temporary command delegation ────────────────────────────────────
+  commandDelegations:   CommandDelegation[];
+  /** Active delegations covering "now" — derived for callers. */
+  activeCommandDelegations: () => CommandDelegation[];
+  createCommandDelegation: (data: {
+    toUserId:    string;
+    scope:       'company' | 'platoon';
+    scopeRefId?: string;
+    authorities: CommandAuthority[];
+    startIso:    string;
+    endIso:      string;
+    reason?:     string;
+  }) => CommandDelegation;
+  revokeCommandDelegation: (id: string, reason?: string) => void;
+
+  // ── Equipment gap reports ──────────────────────────────────────────
+  equipmentGaps:         EquipmentGap[];
+  reportEquipmentGap: (data: {
+    soldierId:           string;
+    kind:                EquipmentGapKind;
+    itemName:            string;
+    signedEquipmentId?:  string;
+    description?:        string;
+  }) => EquipmentGap;
+  reviewEquipmentGap:   (id: string) => void;
+  forwardEquipmentGap:  (id: string) => void;
+  resolveEquipmentGap:  (id: string, notes?: string) => void;
+  dismissEquipmentGap:  (id: string, notes?: string) => void;
 
   // ── Roster-first auth ────────────────────────────────────────────────
   // Sign in for already-claimed identities
@@ -406,6 +444,155 @@ export function AppProvider({ children }: { children: ReactNode }) {
       : s
     ));
   };
+
+  // PC/PS reassignment + role-management actions.
+  const updateSoldierSquad = (soldierId: string, squadId: string | null) => {
+    setAllSoldiers((prev) => prev.map((s) => s.id === soldierId
+      ? { ...s, squadId: squadId ?? undefined }
+      : s
+    ));
+  };
+
+  const updateSoldierOperationalRoles = (soldierId: string, roles: OperationalRole[]) => {
+    setAllSoldiers((prev) => prev.map((s) => s.id === soldierId
+      ? { ...s, operationalRoles: roles }
+      : s
+    ));
+  };
+
+  // ── Temporary command delegation ────────────────────────────────────
+  const [commandDelegations, setCommandDelegations] = useState<CommandDelegation[]>(mockCommandDelegations);
+
+  const activeCommandDelegations = (): CommandDelegation[] => {
+    const now = Date.now();
+    return commandDelegations.filter((d) => {
+      if (d.revoked) return false;
+      const s = Date.parse(d.startIso);
+      const e = Date.parse(d.endIso);
+      return !isNaN(s) && !isNaN(e) && s <= now && now <= e;
+    });
+  };
+
+  const createCommandDelegation = (data: {
+    toUserId: string;
+    scope: 'company' | 'platoon';
+    scopeRefId?: string;
+    authorities: CommandAuthority[];
+    startIso: string;
+    endIso: string;
+    reason?: string;
+  }): CommandDelegation => {
+    if (!currentUser) {
+      throw new Error('createCommandDelegation requires a current user');
+    }
+    const target = users.find((u) => u.id === data.toUserId);
+    const cd: CommandDelegation = {
+      id:           `cd-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      companyId:    currentUser.companyId ?? '',
+      fromUserId:   currentUser.id,
+      fromUserName: currentUser.name,
+      toUserId:     data.toUserId,
+      toUserName:   target?.name ?? '—',
+      scope:        data.scope,
+      scopeRefId:   data.scopeRefId,
+      authorities:  data.authorities,
+      startIso:     data.startIso,
+      endIso:       data.endIso,
+      revoked:      false,
+      reason:       data.reason,
+      createdAt:    new Date().toISOString(),
+    };
+    setCommandDelegations((prev) => [cd, ...prev]);
+    addAuditLog({
+      actorName: currentUser.name,
+      actorRole: currentUser.role,
+      action:    'הענקת פיקוד זמני',
+      target:    `${cd.toUserName} · ${cd.authorities.join(', ')}`,
+    });
+    return cd;
+  };
+
+  const revokeCommandDelegation = (id: string, reason?: string) => {
+    setCommandDelegations((prev) => prev.map((d) => d.id === id
+      ? {
+          ...d,
+          revoked:          true,
+          revokedAt:        new Date().toISOString(),
+          revokedByUserId:  currentUser?.id,
+          revokeReason:     reason,
+        }
+      : d
+    ));
+    const target = commandDelegations.find((d) => d.id === id);
+    if (target && currentUser) {
+      addAuditLog({
+        actorName: currentUser.name,
+        actorRole: currentUser.role,
+        action:    'ביטול פיקוד זמני',
+        target:    `${target.toUserName}${reason ? ` · ${reason}` : ''}`,
+      });
+    }
+  };
+
+  // ── Equipment gap reports ──────────────────────────────────────────
+  const [equipmentGaps, setEquipmentGaps] = useState<EquipmentGap[]>(mockEquipmentGaps);
+
+  const reportEquipmentGap = (data: {
+    soldierId: string;
+    kind: EquipmentGapKind;
+    itemName: string;
+    signedEquipmentId?: string;
+    description?: string;
+  }): EquipmentGap => {
+    const soldier = allSoldiers.find((s) => s.id === data.soldierId);
+    const platoon = soldier?.squadId
+      ? platoons.find((p) => squads.find((sq) => sq.id === soldier.squadId)?.platoonId === p.id)
+      : undefined;
+    const gap: EquipmentGap = {
+      id:                  `eg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      companyId:           soldier?.companyId ?? currentUser?.companyId ?? '',
+      reportedByUserId:    currentUser?.id ?? '',
+      reportedBySoldierId: data.soldierId,
+      reportedByName:      soldier?.name ?? '—',
+      reportedByPlatoonId: platoon?.id,
+      kind:                data.kind,
+      itemName:            data.itemName,
+      signedEquipmentId:   data.signedEquipmentId,
+      description:         data.description,
+      status:              'reported',
+      createdAt:           new Date().toISOString(),
+    };
+    setEquipmentGaps((prev) => [gap, ...prev]);
+    return gap;
+  };
+
+  const setGapStatus = (id: string, patch: Partial<EquipmentGap>) =>
+    setEquipmentGaps((prev) => prev.map((g) => g.id === id ? { ...g, ...patch } : g));
+
+  const reviewEquipmentGap = (id: string) => setGapStatus(id, {
+    status: 'reviewed-by-platoon',
+    reviewedByUserId: currentUser?.id,
+    reviewedAt: new Date().toISOString(),
+  });
+
+  const forwardEquipmentGap = (id: string) => setGapStatus(id, {
+    status: 'forwarded-to-rasap',
+    forwardedAt: new Date().toISOString(),
+  });
+
+  const resolveEquipmentGap = (id: string, notes?: string) => setGapStatus(id, {
+    status: 'resolved' as EquipmentGapStatus,
+    resolvedByUserId: currentUser?.id,
+    resolvedAt: new Date().toISOString(),
+    resolvedNotes: notes,
+  });
+
+  const dismissEquipmentGap = (id: string, notes?: string) => setGapStatus(id, {
+    status: 'dismissed' as EquipmentGapStatus,
+    resolvedByUserId: currentUser?.id,
+    resolvedAt: new Date().toISOString(),
+    resolvedNotes: notes,
+  });
 
   // ── Calendar events (slice 1: state + write actions, no UI uses them yet) ──
   // Slice 1 ships read-only. The actions are wired so slice 2 (week view +
@@ -798,6 +985,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       leaveRotationPolicy, leaveBlocks,
       coverageEvents, dutyExclusions, leaveRotationPlans,
       signedEquipment, updateSoldierProfile,
+      updateSoldierSquad, updateSoldierOperationalRoles,
+      commandDelegations, activeCommandDelegations,
+      createCommandDelegation, revokeCommandDelegation,
+      equipmentGaps,
+      reportEquipmentGap, reviewEquipmentGap, forwardEquipmentGap,
+      resolveEquipmentGap, dismissEquipmentGap,
       signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
       logout, switchRole, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
