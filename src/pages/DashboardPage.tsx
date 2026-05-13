@@ -210,17 +210,31 @@ function CompanyCommanderDashboard() {
           </CollapsibleSection>
         )}
 
-        {/* ── 5. Quiet navigation affordance — the one CC settings entry ── */}
-        <button
-          onClick={() => navigate('/missions')}
-          className="w-full flex items-center gap-3 px-4 py-3.5 bg-mil-card border border-mil-border rounded-2xl hover:border-mil-olive transition-colors text-right"
-        >
-          <div className="flex-1">
-            <Body className="font-semibold">ניהול משימות</Body>
-            <Hint className="block mt-0.5">הגדרת משימות פעילות וטיוטות</Hint>
+        {/* ── 5. CC operational destinations ── */}
+        <Section label="ניהול">
+          <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
+            <button
+              onClick={() => navigate('/missions')}
+              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
+            >
+              <div className="flex-1">
+                <Body className="font-semibold">ניהול משימות</Body>
+                <Hint className="block mt-0.5">הגדרת משימות פעילות וטיוטות</Hint>
+              </div>
+              <span className="text-mil-ghost">←</span>
+            </button>
+            <button
+              onClick={() => navigate('/coverage')}
+              className="w-full flex items-center gap-3 px-5 py-4 hover:bg-mil-card-warm/40 transition-colors text-right"
+            >
+              <div className="flex-1">
+                <Body className="font-semibold">יציאות וכיסוי</Body>
+                <Hint className="block mt-0.5">מי בבית, מי בבסיס, אירועי כיסוי</Hint>
+              </div>
+              <span className="text-mil-ghost">←</span>
+            </button>
           </div>
-          <span className="text-mil-ghost">←</span>
-        </button>
+        </Section>
 
       </PageMain>
     </div>

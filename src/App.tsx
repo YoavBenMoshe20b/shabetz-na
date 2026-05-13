@@ -41,6 +41,7 @@ import ProfilePage        from './pages/ProfilePage';
 import CalendarPage       from './pages/CalendarPage';
 import MissionsPage       from './pages/MissionsPage';
 import MissionWizardPage  from './pages/MissionWizardPage';
+import CoveragePage       from './pages/CoveragePage';
 
 // Full-screen flows hide the bottom nav AND the emergency banner so
 // new-user wizards aren't competing with operational signals.
@@ -106,6 +107,9 @@ function AppRoutes() {
         } />
         <Route path="/missions/new" element={
           <ProtectedRoute minRole="companyCommander"><MissionWizardPage /></ProtectedRoute>
+        } />
+        <Route path="/coverage"     element={
+          <ProtectedRoute minRole="companyCommander"><CoveragePage /></ProtectedRoute>
         } />
 
         {/* ── Legacy redirects (so old links don't 404) ── */}
