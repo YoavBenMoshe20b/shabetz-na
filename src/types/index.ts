@@ -878,6 +878,61 @@ export interface MissionFatigueProfile {
   fatigueWeight: number;
 }
 
+// ── Mission cycle profile (24/7 continuous duty pattern) ──────────────────
+//
+// For a continuous mission (e.g. שמירה) the algorithm needs to know the
+// guard/rest rhythm to compute SUSTAINED manpower. Example:
+//   guardMinutes=60, restMinutes=120 → 1h-guard / 2h-rest cycle
+//   To staff continuously with K soldiers on station, you need
+//   manpowerPerShift × (guard+rest)/guard total people in rotation.
+//
+// This drives:
+//   • sustained manpower computation
+//   • soldier operational-state derivation (post-shift standby vs sleep)
+//   • overlap rules — a soldier in cycle "rest" is in standby for first
+//     half of restMinutes, then transitions to true sleep/recovery
+export interface MissionCycleProfile {
+  guardMinutes: number;
+  restMinutes:  number;
+  /** Of the rest portion, how many minutes count as standby/readiness
+   *  rather than true rest. Used for overlap eligibility. */
+  standbyMinutes?: number;
+}
+
+// ── Mission overlap policy ────────────────────────────────────────────────
+//
+// "Can a soldier do something else while assigned to this mission, or
+//  while resting from it?" — the spec's core operational nuance.
+//
+//   activeOverlap — while actively on this mission's guard window:
+//     which OTHER mission intensities may the same soldier ALSO carry?
+//     (typically empty for ambush/active-patrol; non-empty for
+//      readiness/admin where the soldier can stack a passive role.)
+//
+//   restOverlap — while in the rest portion of this mission's cycle:
+//     which OTHER mission intensities may the soldier be pulled into?
+//     (typically passive/admin OK; never another active-patrol.)
+//
+// Both reference the OTHER mission's intensity tag.
+export interface MissionOverlapPolicy {
+  activeOverlap: MissionIntensity[];
+  restOverlap:   MissionIntensity[];
+}
+
+// ── Mission logistics alert ──────────────────────────────────────────────
+//
+// When a mission requires equipment the company may not have on hand,
+// the CC can flag a logistics signal that reaches רס״פ / מפלג.
+// Surfaces alongside the mission requirement + on the מפלג dashboard
+// (future) as a known need.
+export interface MissionLogisticsAlert {
+  itemName:  string;
+  urgency:   'low' | 'medium' | 'high';
+  note?:     string;
+  raisedAt:  string;
+  raisedBy:  string;
+}
+
 export interface QualificationRequirement {
   qualificationId: string;
   count: number;
@@ -908,6 +963,10 @@ export interface Mission {
   createdByUserId: string;
   ownerRole: 'company' | 'platoon';
 
+  /** When set, this mission belongs to a specific operational order (צו).
+   *  Otherwise it's an "evergreen" mission tied only to the company. */
+  orderId?: string;
+
   // Scope — platoons sharing responsibility for this mission
   assignedPlatoonIds: string[];
 
@@ -918,9 +977,25 @@ export interface Mission {
   rotation:  MissionRotation;
   fatigue:   MissionFatigueProfile;
 
+  /** For 24/7 continuous missions: the guard/rest cycle pattern. The
+   *  engine uses this to compute sustained-manpower + soldier post-
+   *  shift operational state (standby vs sleeping vs recovery). */
+  cycleProfile?: MissionCycleProfile;
+
+  /** What can overlap with this mission, in either direction. The
+   *  scheduler reads activeOverlap to allow stacking other roles
+   *  while a soldier is actively on this mission; restOverlap to
+   *  decide what other missions a soldier may be pulled into during
+   *  rest from this one. */
+  overlapPolicy?: MissionOverlapPolicy;
+
   // Open-vocabulary requirements
   qualifications: QualificationRequirement[];
   equipment:      EquipmentRequirement[];
+
+  /** Free-text logistics signals raised for רס״פ / מפלג. Multiple
+   *  items can be flagged (drone + ladder + extra radio). */
+  logisticsAlerts?: MissionLogisticsAlert[];
 
   // Constraints
   conflictsWith:  string[];                                       // mission ids
@@ -937,6 +1012,56 @@ export interface Mission {
   endDate?:   string;
   createdAt:  string;
 }
+
+// ─── Operational order (צו) ──────────────────────────────────────────────────
+//
+// A "צו" is the operational duty period — typically the current reserve
+// duty window, or a planned upcoming one. All missions belong to a צו (or
+// are evergreen with no צו). The CC organizes work by צו: open/close
+// missions inside, assign rotations, manage the period.
+
+export type OperationalOrderStatus = 'planning' | 'published' | 'archived';
+
+export interface OperationalOrder {
+  id: string;
+  companyId: string;
+  /** Display name — e.g. "צו 12–18 במאי". */
+  name: string;
+  /** ISO date range — inclusive. */
+  startDate: string;
+  endDate: string;
+  /** Free-form intent / commander's framing. */
+  description?: string;
+  status: OperationalOrderStatus;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+// ─── Soldier operational state (engine-derived) ──────────────────────────────
+//
+// Beyond the binary in-base/home/inactive on the Soldier record, the engine
+// must reason about WHERE in the duty cycle each soldier is at a given time.
+// This drives availability, overlap eligibility, sleep protection, and
+// fairness scoring.
+//
+//   active-mission     currently on a guard/patrol/ambush window
+//   standby            post-mission "כוננות" — first part of rest; can be
+//                      pulled into passive overlaps but not active duty
+//   recovery           transitional cool-down after demanding mission
+//   sleeping           protected sleep window; engine should not assign
+//                      anything unless the protection is overridden
+//   passive-available  in-base, not currently on duty, fully assignable
+//   partial-available  on duty for a limited subset (e.g. only readiness)
+//   unavailable        home / inactive-temp / DutyExclusion
+
+export type SoldierOperationalState =
+  | 'active-mission'
+  | 'standby'
+  | 'recovery'
+  | 'sleeping'
+  | 'passive-available'
+  | 'partial-available'
+  | 'unavailable';
 
 // ─── Engine: schedule outputs (produced by phases 4 + 7) ────────────────────
 //

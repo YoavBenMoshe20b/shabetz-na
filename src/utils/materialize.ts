@@ -42,6 +42,12 @@ export interface MaterializedSlot extends AssignmentSlot {
   missionName: string;
   /** Mission intensity, for tone selection downstream. */
   missionIntensity: Mission['fatigue']['intensity'];
+  /** Sustained manpower estimate when the mission has a cycleProfile.
+   *  Computed as base manpower × ceil((guard + rest) / guard) —
+   *  approximation of how many soldiers in rotation are needed to
+   *  staff this position continuously. Undefined for non-continuous
+   *  missions and for continuous missions without a cycleProfile. */
+  sustainedManpower?: number;
 }
 
 interface MaterializeInput {
@@ -101,6 +107,18 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
           commanderRequired && !commander               ? 'partially-staffed' :
           'fully-staffed';
 
+        // Sustained manpower — only meaningful for continuous missions
+        // with a cycleProfile. Approximation: ceil((guard+rest)/guard)
+        // shifts in rotation × per-shift manpower.
+        let sustainedManpower: number | undefined;
+        if (mission.cycleProfile && mission.timeModel.kind === '24-7-continuous') {
+          const { guardMinutes, restMinutes } = mission.cycleProfile;
+          if (guardMinutes > 0) {
+            const shiftsPerCycle = Math.ceil((guardMinutes + restMinutes) / guardMinutes);
+            sustainedManpower = required * shiftsPerCycle;
+          }
+        }
+
         slots.push({
           id:                `mat-${mission.id}-${isoDate(day)}-${wIdx}`,
           companyId:         mission.companyId,
@@ -123,6 +141,7 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
           commanderSoldierId: commander?.id,
           missionName:        mission.name,
           missionIntensity:   mission.fatigue.intensity,
+          sustainedManpower,
         });
       });
     }

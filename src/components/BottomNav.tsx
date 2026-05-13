@@ -1,8 +1,8 @@
 // Final operational bottom nav.
 //
 //   SOLDIER         (3 tabs)   בית · לוח · פרופיל
-//   PLATOON LEADER  (4 tabs)   בית · לוח · סידור · חיילים
-//   COMPANY LEADER  (4 tabs)   בית · לוח · סידור · חיילים
+//   PLATOON LEADER  (4 tabs)   בית · לוח · שבצ״ק · חיילים
+//   COMPANY LEADER  (4 tabs)   בית · לוח · שבצ״ק · חיילים
 //
 // Per spec — leave-approvals are surfaced as a timeline card on the
 // commander Home (with a CTA into /leaves), not as their own tab.
@@ -33,7 +33,7 @@ const SOLDIER_ITEMS: NavItem[] = [
 const COMMANDER_ITEMS: NavItem[] = [
   { to: '/home',     label: 'בית',    icon: '◈' },
   { to: '/calendar', label: 'לוח',    icon: '▤' },
-  { to: '/schedule', label: 'סידור',  icon: '▦' },
+  { to: '/schedule', label: 'שבצ״ק',  icon: '▦' },
   { to: '/soldiers', label: 'חיילים', icon: '◉' },
 ];
 

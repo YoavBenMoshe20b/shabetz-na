@@ -13,6 +13,7 @@ import type {
   CommandDelegation, EquipmentGap, EquipmentGapKind, EquipmentGapStatus,
   CommandAuthority, OperationalRole,
   MissionNote,
+  OperationalOrder, OperationalOrderStatus,
 } from '../types';
 import { canApproveLeaveFor } from '../utils/permissions';
 import {
@@ -26,6 +27,7 @@ import {
   mockSignedEquipment,
   mockCommandDelegations, mockEquipmentGaps,
   mockMissionNotes,
+  mockOperationalOrders,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -156,6 +158,11 @@ interface AppContextType {
    *  inside the action itself yet — gated by route in slice E2). */
   addMission:             (data: Omit<Mission, 'id' | 'createdAt'>) => Mission;
   setMissionStatus:       (id: string, status: Mission['status']) => void;
+
+  // ── Operational orders (צווים) ──────────────────────────────────────
+  orders:                 OperationalOrder[];
+  addOrder:               (data: Omit<OperationalOrder, 'id' | 'createdAt'>) => OperationalOrder;
+  setOrderStatus:         (id: string, status: OperationalOrderStatus) => void;
   qualifications:         Qualification[];
   equipmentItems:         EquipmentItem[];
   soldierQualifications:  SoldierQualification[];
@@ -436,6 +443,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setMissionStatus = (id: string, status: Mission['status']) => {
     setMissions((prev) => prev.map((m) => m.id === id ? { ...m, status } : m));
+  };
+
+  // ── Operational orders ─────────────────────────────────────────────
+  const [orders, setOrders] = useState<OperationalOrder[]>(mockOperationalOrders);
+
+  const addOrder = (data: Omit<OperationalOrder, 'id' | 'createdAt'>): OperationalOrder => {
+    const o: OperationalOrder = {
+      ...data,
+      id:        `order-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: new Date().toISOString(),
+    };
+    setOrders((prev) => [...prev, o]);
+    return o;
+  };
+
+  const setOrderStatus = (id: string, status: OperationalOrderStatus) => {
+    setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status } : o));
   };
 
   // Mission notes — separate state so they can be authored independently
@@ -1065,6 +1089,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
       missions, addMission, setMissionStatus,
+      orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,
       leaveRotationPolicy, leaveBlocks,

@@ -280,6 +280,32 @@ export default function MissionDetailPage() {
           </Section>
         )}
 
+        {/* Sustained-manpower hint (only for 24/7 missions with cycleProfile) */}
+        {(() => {
+          const withSustained = weekSlots.find((s) => s.sustainedManpower);
+          if (!withSustained) return null;
+          return (
+            <Section label="סד״כ מינימלי לתחזוקת המשימה 24/7">
+              <div className="bg-mil-card border border-mil-border rounded-2xl px-5 py-4">
+                <div className="flex items-baseline gap-2.5 flex-wrap">
+                  <span className="text-3xl font-extrabold tabular-nums text-mil-text">
+                    {withSustained.sustainedManpower}
+                  </span>
+                  <span className="text-sm font-semibold text-mil-text">חיילים ברוטציה</span>
+                  {mission.cycleProfile && (
+                    <Hint className="mr-auto text-mil-muted">
+                      {mission.cycleProfile.guardMinutes}/{mission.cycleProfile.restMinutes} דק׳ קצב שמירה/מנוחה
+                    </Hint>
+                  )}
+                </div>
+                <Muted className="mt-2 text-tiny">
+                  כדי לשמור על {withSustained.requiredCount} חיילים במקום ברצף, נדרשת רוטציה של {withSustained.sustainedManpower} חיילים.
+                </Muted>
+              </div>
+            </Section>
+          );
+        })()}
+
         {/* This week's slots */}
         {weekSlots.length > 0 && (
           <Section label="משמרות השבוע">

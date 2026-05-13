@@ -10,6 +10,7 @@ import type {
   SignedEquipment,
   CommandDelegation, EquipmentGap,
   MissionNote,
+  OperationalOrder,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -854,6 +855,20 @@ export const mockMissions: Mission[] = [
       minRestAfterHours: 6,
       fatigueWeight:     3,
     },
+    // 24/7 continuous standing guard — 2h on station, 4h cycle off.
+    // First 2h of the off-window is standby (כוננות), then 2h sleep.
+    cycleProfile: {
+      guardMinutes: 120,
+      restMinutes:  240,
+      standbyMinutes: 120,
+    },
+    overlapPolicy: {
+      // While actively standing guard — no other duty allowed.
+      activeOverlap: [],
+      // During rest from guard — can be pulled into passive readiness
+      // or admin; never another active patrol or ambush.
+      restOverlap:   ['readiness', 'admin'],
+    },
     qualifications: [],
     equipment: [
       { equipmentItemId: 'eq-radio-cmd', count: 1, perSoldier: false },
@@ -864,6 +879,7 @@ export const mockMissions: Mission[] = [
     squadPolicy:    { mode: 'mix' },
     requiresDailyConfirmation: false,
     status:    'active',
+    orderId:   'order-current',
     createdAt: SEED_CREATED,
   },
   {
@@ -905,11 +921,26 @@ export const mockMissions: Mission[] = [
       minRestAfterHours: 12,
       fatigueWeight:     9,
     },
+    overlapPolicy: {
+      // Ambush mission — nothing else while active. Rest window is
+      // strict recovery; only admin tasks tolerated.
+      activeOverlap: [],
+      restOverlap:   ['admin'],
+    },
     qualifications: [
       { qualificationId: 'q-tactical-medic', count: 1 },
     ],
     equipment: [
       { equipmentItemId: 'eq-radio-cmd', count: 1, perSoldier: false },
+    ],
+    logisticsAlerts: [
+      {
+        itemName: 'רחפן מאוויק',
+        urgency:  'medium',
+        note:     'נדרש למחלקה 2 לסיור לילה — חסר בציוד הפלוגה',
+        raisedAt: SEED_CREATED,
+        raisedBy: 'u-cc',
+      },
     ],
     conflictsWith:  [],
     canOverlapWith: [],
@@ -917,7 +948,29 @@ export const mockMissions: Mission[] = [
     squadPolicy:    { mode: 'no-mix' },
     requiresDailyConfirmation: true,
     status:    'active',
+    orderId:   'order-current',
     createdAt: SEED_CREATED,
+  },
+];
+
+// ─── Operational orders (צווים) ─────────────────────────────────────────────
+// The current duty period the company is in. One published order at a time
+// is typical; planning/draft orders can be staged ahead.
+
+const orderStart = (() => { const d = new Date(); d.setDate(d.getDate() - 2); return d.toISOString().slice(0, 10); })();
+const orderEnd   = (() => { const d = new Date(); d.setDate(d.getDate() + 12); return d.toISOString().slice(0, 10); })();
+
+export const mockOperationalOrders: OperationalOrder[] = [
+  {
+    id:               'order-current',
+    companyId:        'co1',
+    name:             'צו מילואים נוכחי',
+    startDate:        orderStart,
+    endDate:          orderEnd,
+    description:      'מילואים שוטף — שמירה היקפית + סיור לילי. גזרה מערבית.',
+    status:           'published',
+    createdByUserId:  'u1',
+    createdAt:        SEED_CREATED,
   },
 ];
 

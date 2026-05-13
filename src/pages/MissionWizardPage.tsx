@@ -9,7 +9,7 @@
 // lose progress. Cleared on publish.
 
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useApp, useMyCompany, useMyPlatoons } from '../context/AppContext';
 import { isCompanyLeadership } from '../utils/permissions';
 import { MISSION_TEMPLATES, type MissionTemplate } from '../utils/missionTemplates';
@@ -22,6 +22,7 @@ import type {
   MissionTimeModel, MissionManpowerSpec, MissionCommandSpec,
   MissionRotation, MissionFatigueProfile, MissionIntensity, CommandRank,
   RankPolicy, RotationPeriod, QualificationRequirement, EquipmentRequirement,
+  MissionCycleProfile, MissionOverlapPolicy, MissionLogisticsAlert,
 } from '../types';
 
 // ─── Wizard draft ────────────────────────────────────────────────────────────
@@ -31,13 +32,21 @@ interface WizardDraft {
   name:               string;
   description:        string;
   assignedPlatoonIds: string[];
+  /** When the wizard is reached from a specific order ('+ הוסף משימה'
+   *  inside שבצ"ק), the mission is attached to that order on publish. */
+  orderId?:           string;
   timeModel?:         MissionTimeModel;
   manpower?:          MissionManpowerSpec;
   command?:           MissionCommandSpec;
   rotation?:          MissionRotation;
   fatigue?:           MissionFatigueProfile;
+  cycleProfile?:      MissionCycleProfile;
+  overlapPolicy?:     MissionOverlapPolicy;
   qualifications:     QualificationRequirement[];
   equipment:          EquipmentRequirement[];
+  /** Logistics signals raised for רס״פ on publish. Indexed by item
+   *  name so toggling on an equipment row creates one. */
+  logisticsAlerts:    MissionLogisticsAlert[];
   /** Optional company-level operational notes — published as a single
    *  MissionNote with scope='company' alongside the mission. */
   companyNotes?:      string;
@@ -49,6 +58,7 @@ const EMPTY_DRAFT: WizardDraft = {
   assignedPlatoonIds: [],
   qualifications:     [],
   equipment:          [],
+  logisticsAlerts:    [],
 };
 
 const SESSION_KEY = 'mission-wizard-draft';
@@ -59,6 +69,8 @@ type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export default function MissionWizardPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const orderIdFromQuery = searchParams.get('orderId') ?? undefined;
   const {
     currentRole, currentUser, addMission, addMissionNote,
     qualifications, equipmentItems, platoons,
@@ -73,9 +85,13 @@ export default function MissionWizardPage() {
   const [draft, setDraft] = useState<WizardDraft>(() => {
     try {
       const raw = sessionStorage.getItem(SESSION_KEY);
-      if (raw) return JSON.parse(raw) as WizardDraft;
+      if (raw) {
+        const parsed = JSON.parse(raw) as WizardDraft;
+        if (orderIdFromQuery) parsed.orderId = orderIdFromQuery;
+        return parsed;
+      }
     } catch { /* fall through */ }
-    return EMPTY_DRAFT;
+    return { ...EMPTY_DRAFT, orderId: orderIdFromQuery };
   });
 
   useEffect(() => {
@@ -109,14 +125,18 @@ export default function MissionWizardPage() {
       description:        draft.description || undefined,
       createdByUserId:    currentUser.id,
       ownerRole:          'company',
+      orderId:            draft.orderId,
       assignedPlatoonIds: draft.assignedPlatoonIds,
       timeModel:          draft.timeModel,
       manpower:           draft.manpower,
       command:            draft.command,
       rotation:           draft.rotation,
       fatigue:            draft.fatigue,
+      cycleProfile:       draft.cycleProfile,
+      overlapPolicy:      draft.overlapPolicy,
       qualifications:     draft.qualifications,
       equipment:          draft.equipment,
+      logisticsAlerts:    draft.logisticsAlerts.length > 0 ? draft.logisticsAlerts : undefined,
       conflictsWith:      [],
       canOverlapWith:     [],
       pairings:           [],
@@ -449,6 +469,52 @@ function Step3Timing({ draft, patch }: { draft: WizardDraft; patch: (p: Partial<
             </div>
           </div>
         )}
+
+        {/* Cycle profile — only for 24/7 continuous. Drives sustained
+            manpower + soldier post-shift state. */}
+        {draft.timeModel?.kind === '24-7-continuous' && (
+          <div className="mt-3 bg-mil-card border border-mil-border rounded-xl px-4 py-3 space-y-3">
+            <div>
+              <Body className="font-semibold">קצב שמירה ומנוחה</Body>
+              <Muted className="block text-tiny mt-0.5">
+                המנוע משתמש בקצב כדי לחשב את כוח האדם המינימלי הנדרש לכיסוי 24/7
+              </Muted>
+            </div>
+            <RangeRow
+              label="שמירה (דק׳)"
+              value={draft.cycleProfile?.guardMinutes ?? 120}
+              onChange={(v) => patch({ cycleProfile: {
+                guardMinutes: v,
+                restMinutes:  draft.cycleProfile?.restMinutes ?? 240,
+                standbyMinutes: draft.cycleProfile?.standbyMinutes,
+              } })}
+              min={30} max={480}
+            />
+            <RangeRow
+              label="מנוחה (דק׳)"
+              value={draft.cycleProfile?.restMinutes ?? 240}
+              onChange={(v) => patch({ cycleProfile: {
+                guardMinutes: draft.cycleProfile?.guardMinutes ?? 120,
+                restMinutes:  v,
+                standbyMinutes: draft.cycleProfile?.standbyMinutes,
+              } })}
+              min={30} max={720}
+            />
+            <RangeRow
+              label="מתוכה כוננות"
+              value={draft.cycleProfile?.standbyMinutes ?? 0}
+              onChange={(v) => patch({ cycleProfile: {
+                guardMinutes: draft.cycleProfile?.guardMinutes ?? 120,
+                restMinutes:  draft.cycleProfile?.restMinutes  ?? 240,
+                standbyMinutes: v,
+              } })}
+              min={0} max={720}
+            />
+            <Hint className="text-mil-muted block">
+              בכוננות החייל עוד לא ישן — ניתן לשבץ אותו למשימות פאסיביות נוספות.
+            </Hint>
+          </div>
+        )}
       </div>
 
       {/* Manpower */}
@@ -689,7 +755,7 @@ function Step5Rotation({
   equipmentItems: ReturnType<typeof useApp>['equipmentItems'];
   myPlatoons: ReturnType<typeof useMyPlatoons>;
 }) {
-  const { addEquipmentItem } = useApp();
+  const { addEquipmentItem, currentUser } = useApp();
   const [showAddEquip, setShowAddEquip] = useState(false);
   const [newEquipName, setNewEquipName] = useState('');
   const [newEquipCat,  setNewEquipCat]  = useState('');
@@ -891,8 +957,56 @@ function Step5Rotation({
                 </Hint>
               </div>
             )}
+
+            {/* Logistics-alert toggle — surfaces this requirement to רס״פ */}
+            {draft.equipment.length > 0 && (
+              <div className="mt-4 p-3 rounded-xl bg-mil-card-warm border border-mil-border">
+                <label className="flex items-baseline gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.logisticsAlerts.length > 0}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      if (checked) {
+                        const items = draft.equipment.map((eq) => equipmentItems.find((x) => x.id === eq.equipmentItemId)?.name).filter(Boolean) as string[];
+                        patch({ logisticsAlerts: items.map((name) => ({
+                          itemName: name,
+                          urgency:  'medium' as const,
+                          raisedAt: new Date().toISOString(),
+                          raisedBy: currentUser?.id ?? 'system',
+                        })) });
+                      } else {
+                        patch({ logisticsAlerts: [] });
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <Body className="font-semibold">שלח התראה למפלג על צורך בציוד</Body>
+                    <Hint className="block text-tiny mt-0.5 text-mil-muted">
+                      רס״פ יראה את הציוד הנדרש לכל פריט שנבחר למשימה זו.
+                    </Hint>
+                  </div>
+                </label>
+              </div>
+            )}
           </div>
         </div>
+      </Accordion>
+
+      {/* Overlap policy — what other missions may stack on this one, in
+          both directions (active and rest). Drives the scheduler's
+          ability to pull a soldier into passive readiness during rest
+          from guard, etc. */}
+      <Accordion
+        label="סמיכות משימות"
+        defaultOpen={!!draft.overlapPolicy}
+        hint="מה החייל יכול לעשות בו-זמנית עם המשימה הזו או במהלך מנוחה ממנה"
+      >
+        <OverlapPolicyEditor
+          value={draft.overlapPolicy}
+          onChange={(v) => patch({ overlapPolicy: v })}
+        />
       </Accordion>
 
       <Accordion label="הערות מבצעיות מ״פ" defaultOpen={!!draft.companyNotes} hint="הוראות שיתפסו על כל המחלקות שיריצו את המשימה">
@@ -907,6 +1021,77 @@ function Step5Rotation({
           ההערות נשמרות בנפרד מההגדרה המבנית. ניתן לערוך אותן בכל זמן מעמוד המשימה.
         </Hint>
       </Accordion>
+    </div>
+  );
+}
+
+// ─── Overlap policy editor ────────────────────────────────────────────────
+
+const OVERLAP_OPTIONS: Array<{ kind: MissionIntensity; label: string }> = [
+  { kind: 'passive',         label: 'פאסיבי' },
+  { kind: 'standing-guard',  label: 'שמירה' },
+  { kind: 'active-patrol',   label: 'סיור פעיל' },
+  { kind: 'ambush',          label: 'מארב' },
+  { kind: 'readiness',       label: 'כוננות' },
+  { kind: 'admin',           label: 'אדמין' },
+];
+
+function OverlapPolicyEditor({
+  value, onChange,
+}: {
+  value?: MissionOverlapPolicy;
+  onChange: (v: MissionOverlapPolicy) => void;
+}) {
+  const active = new Set(value?.activeOverlap ?? []);
+  const rest   = new Set(value?.restOverlap   ?? []);
+  const toggle = (set: 'active' | 'rest', kind: MissionIntensity) => {
+    const next = {
+      activeOverlap: [...active],
+      restOverlap:   [...rest],
+    };
+    const target = set === 'active' ? next.activeOverlap : next.restOverlap;
+    const idx = target.indexOf(kind);
+    if (idx >= 0) target.splice(idx, 1); else target.push(kind);
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Body className="font-semibold mb-1">בזמן פעילות המשימה</Body>
+        <Muted className="block text-tiny mb-2">
+          איזה משימות נוספות החייל יכול לבצע במקביל. ברוב משימות הלחימה — אף אחת.
+        </Muted>
+        <div className="flex flex-wrap gap-1.5">
+          {OVERLAP_OPTIONS.map((opt) => (
+            <button
+              key={`a-${opt.kind}`}
+              onClick={() => toggle('active', opt.kind)}
+              className={chipCls(active.has(opt.kind))}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="pt-3 border-t border-mil-border">
+        <Body className="font-semibold mb-1">בזמן מנוחה מהמשימה</Body>
+        <Muted className="block text-tiny mb-2">
+          איזה משימות החייל עוד יכול לבצע בזמן המנוחה. סיור פעיל בדרך כלל לא; כוננות פאסיבית אפשרית.
+        </Muted>
+        <div className="flex flex-wrap gap-1.5">
+          {OVERLAP_OPTIONS.map((opt) => (
+            <button
+              key={`r-${opt.kind}`}
+              onClick={() => toggle('rest', opt.kind)}
+              className={chipCls(rest.has(opt.kind))}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
