@@ -307,6 +307,10 @@ export function canApproveLeaveFor(
   // Path A — full role-chain resolution when we have the users array.
   if (users) {
     const routing = approvalRoutingFor(request, soldiers, users, platoons, squads);
+    // רס״פ is the מפלג commander — within HIS commanded platoon he
+    // approves leave like a PC. Outside it, never.
+    const rasapCommandsThisPlatoon =
+      isRasap(user) && !!user.commandedPlatoonId && user.commandedPlatoonId === routing.platoonId;
     switch (routing.scope) {
       case 'self':
         return false; // CC requests are self-approved at creation; no review needed.
@@ -315,9 +319,11 @@ export function canApproveLeaveFor(
       case 'cc-or-deputy':
         return isCompanyLeadership(user.role);
       case 'platoon-pc-only':
-        return user.role === 'platoonCommander' && user.commandedPlatoonId === routing.platoonId;
+        return (user.role === 'platoonCommander' && user.commandedPlatoonId === routing.platoonId)
+            || rasapCommandsThisPlatoon;
       case 'platoon-pc-or-ps':
-        return isPlatoonLeadership(user.role) && user.commandedPlatoonId === routing.platoonId;
+        return (isPlatoonLeadership(user.role) && user.commandedPlatoonId === routing.platoonId)
+            || rasapCommandsThisPlatoon;
     }
   }
 

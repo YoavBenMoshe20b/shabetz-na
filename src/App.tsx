@@ -180,17 +180,29 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
         {/* ── Round 5: התראות ─── */}
+        {/* Alerts page opens to platoon-leadership tier AND Rasap (he
+            owns logistics-driven alerts and the escalation banner now
+            routes everyone here, including soldiers receiving an
+            active escalation — page scopes content by viewer role). */}
         <Route path="/alerts"         element={
-          <ProtectedRoute minRole="platoonCommander"><AlertsPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}>
+            <AlertsPage />
+          </ProtectedRoute>
         } />
         {/* ── Round 6: לוגיסטיקה ורס״פ ─── */}
-        {/* Rasap pages open to platoonCommander+ via the route gate. Per-
-            page logic gates writes to canManageEquipment (CC + Rasap role). */}
+        {/* Rasap pages open to platoonCommander+ AND to soldiers carrying
+            the רס״פ functional role (their BASE role stays 'soldier' but
+            they're the logistics platoon commander). Per-page logic gates
+            writes to canManageEquipment (CC + Rasap role). */}
         <Route path="/rasap"                 element={
-          <ProtectedRoute minRole="platoonCommander"><RasapPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}>
+            <RasapPage />
+          </ProtectedRoute>
         } />
         <Route path="/equipment/inventory"   element={
-          <ProtectedRoute minRole="platoonCommander"><EquipmentInventoryPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}>
+            <EquipmentInventoryPage />
+          </ProtectedRoute>
         } />
         <Route path="/rasap/rotations"       element={
           <ProtectedRoute minRole="companyCommander" allowWhen={isRasap}>

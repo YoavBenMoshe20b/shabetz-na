@@ -11,7 +11,7 @@
 import { useMemo } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { isPlatoonLeadership } from '../utils/permissions';
+import { isPlatoonLeadership, isRasap } from '../utils/permissions';
 import Header from '../components/Header';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import type { Soldier, MissionNote } from '../types';
@@ -63,8 +63,11 @@ export default function PlatoonWeekPage() {
   const totalSlots = myPlatoonSlots.length;
   const understaffed = myPlatoonSlots.filter((s) => s.status === 'partially-staffed' || s.status === 'open').length;
 
-  // Route gate AFTER hooks.
-  if (!isPlatoonLeadership(currentRole)) return <Navigate to="/home" replace />;
+  // Route gate AFTER hooks. רס״פ also qualifies — page scopes to his
+  // commandedPlatoonId (the logistics platoon) automatically.
+  if (!isPlatoonLeadership(currentRole) && !(currentUser && isRasap(currentUser))) {
+    return <Navigate to="/home" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">

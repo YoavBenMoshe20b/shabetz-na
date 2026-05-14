@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useApp, useMyPlatoons, useApprovableLeaveRequests } from '../context/AppContext';
 import Header from '../components/Header';
 import { Toast } from '../components/ui';
-import { isPlatoonLeadership } from '../utils/permissions';
+import { isPlatoonLeadership, isRasap } from '../utils/permissions';
 import type { LeaveScope } from '../types';
 
 const scopeLabel: Record<LeaveScope, string> = {
@@ -39,7 +39,9 @@ export default function LeavesPage() {
   );
   const squadNameOf = (id?: string) => squads.find((s) => s.id === id)?.name ?? '—';
 
-  const isManager = isPlatoonLeadership(currentRole);
+  // רס״פ is מפקד המפלג — he sees and approves leaves for the logistics
+  // platoon just like a PC sees his combat platoon's queue.
+  const isManager = isPlatoonLeadership(currentRole) || (!!currentUser && isRasap(currentUser));
   const [tab, setTab] = useState<'leaves' | 'requests'>('leaves');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({

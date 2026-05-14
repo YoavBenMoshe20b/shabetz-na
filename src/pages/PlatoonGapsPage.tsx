@@ -14,7 +14,7 @@
 import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { isPlatoonLeadership } from '../utils/permissions';
+import { isPlatoonLeadership, isRasap } from '../utils/permissions';
 import Header from '../components/Header';
 import type { EquipmentGap, EquipmentGapKind, EquipmentGapStatus } from '../types';
 import {
@@ -51,9 +51,10 @@ export default function PlatoonGapsPage() {
 
   const [filter, setFilter] = useState<'open' | 'all'>('open');
 
-  // Route gates AFTER hooks.
+  // Route gates AFTER hooks. רס״פ also qualifies — he runs the
+  // logistics platoon and is the destination of forwarded gaps.
   if (!currentUser) return <Navigate to="/login" replace />;
-  if (!isPlatoonLeadership(currentRole)) return <Navigate to="/home" replace />;
+  if (!isPlatoonLeadership(currentRole) && !isRasap(currentUser)) return <Navigate to="/home" replace />;
   const visibleGaps = filter === 'open'
     ? myGaps.filter((g) => g.status !== 'resolved' && g.status !== 'dismissed')
     : myGaps;

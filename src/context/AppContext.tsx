@@ -21,7 +21,7 @@ import type {
   LogisticsRotation, LogisticsRotationStatus,
 } from '../types';
 import { newId } from '../utils/id';
-import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle } from '../utils/permissions';
+import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle, isRasap } from '../utils/permissions';
 import { USE_SUPABASE } from '../api/_supabase';
 import * as missionsApi      from '../api/missions';
 import * as announcementsApi from '../api/announcements';
@@ -1798,6 +1798,11 @@ export function useMyPlatoons(): Platoon[] {
     }
     // Legacy fallback: any platoon the user is a member of
     return platoons.filter((g) => g.memberIds.includes(currentUser.id));
+  }
+  // רס״פ — his base role is 'soldier' but he commands the logistics
+  // platoon. Treat him like a PC for "platoons under my command".
+  if (isRasap(currentUser) && currentUser.commandedPlatoonId) {
+    return platoons.filter((g) => g.id === currentUser.commandedPlatoonId);
   }
   return [];
 }
