@@ -26,8 +26,7 @@ export default function PlatoonWeekPage() {
     soldiers, leaves, platoons, squads, missions, dutyExclusions, missionNotes,
   } = useApp();
 
-  if (!isPlatoonLeadership(currentRole)) return <Navigate to="/home" replace />;
-
+  // Hooks first; route gate after.
   const myPlatoon = useMemo(() =>
     platoons.find((p) => p.id === currentUser?.commandedPlatoonId)
     ?? platoons.find((p) => p.memberIds.includes(currentUser?.id ?? '')),
@@ -63,6 +62,9 @@ export default function PlatoonWeekPage() {
   // Quick total for the hero
   const totalSlots = myPlatoonSlots.length;
   const understaffed = myPlatoonSlots.filter((s) => s.status === 'partially-staffed' || s.status === 'open').length;
+
+  // Route gate AFTER hooks.
+  if (!isPlatoonLeadership(currentRole)) return <Navigate to="/home" replace />;
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">

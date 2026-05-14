@@ -36,8 +36,7 @@ export default function CoveragePage() {
   } = useApp();
   const myCompany = useMyCompany();
 
-  if (!isCompanyLeadership(currentRole)) return <Navigate to="/home" replace />;
-
+  // Hooks first; route gate after.
   const today = useMemo(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0); return d;
   }, []);
@@ -78,6 +77,9 @@ export default function CoveragePage() {
   const todayPicture = week[0];
 
   const [tab, setTab] = useState<'week' | 'today'>('week');
+
+  // Route gate AFTER all hooks have run.
+  if (!isCompanyLeadership(currentRole)) return <Navigate to="/home" replace />;
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">

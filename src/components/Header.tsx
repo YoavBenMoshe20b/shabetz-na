@@ -12,15 +12,28 @@ import { useApp } from '../context/AppContext';
 import RoleBadge from './RoleBadge';
 import { roleLabel } from '../utils/permissions';
 import type { UserRole } from '../types';
+import CommandMenu from './CommandMenu';
 
 export default function Header({ title }: { title: string }) {
   const navigate = useNavigate();
   const { currentUser, currentRole, switchRole, logout, isOnline } = useApp();
   const [showDev, setShowDev] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="bg-mil-bg/85 backdrop-blur-glass border-b border-mil-border px-5 py-3.5 flex items-center justify-between sticky top-0 z-30">
       <div className="flex items-baseline gap-2.5 min-w-0">
+        {currentUser && (
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="w-8 h-8 -mr-1 flex items-center justify-center rounded-lg text-mil-muted hover:text-mil-text hover:bg-mil-bg-alt transition-colors flex-shrink-0"
+            aria-label="פתח תפריט"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+        )}
         <span className="text-mil-text font-bold text-base tracking-tightish">שבץ־נא</span>
         <span className="w-1 h-1 rounded-full bg-mil-ghost/70" aria-hidden />
         <span className="text-mil-muted text-tiny font-medium truncate">{title}</span>
@@ -86,6 +99,16 @@ export default function Header({ title }: { title: string }) {
           </div>
         )}
       </div>
+
+      {currentUser && (
+        <CommandMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          user={currentUser}
+          currentRole={currentRole}
+          onLogout={() => { logout(); navigate('/login'); }}
+        />
+      )}
     </header>
   );
 }

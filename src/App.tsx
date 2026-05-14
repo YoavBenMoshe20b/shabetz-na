@@ -26,7 +26,9 @@
 
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { AppProvider, useApp, useOperationalEmergency } from './context/AppContext';
+import { useApp, useOperationalEmergency } from './context/AppContext';
+import { AppProviders } from './providers/AppProviders';
+import { isShalish, isRasap } from './utils/permissions';
 import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import DelegationBanner from './components/DelegationBanner';
@@ -65,6 +67,7 @@ const AlertsPage         = lazy(() => import('./pages/AlertsPage'));
 // Round 6 — Rasap / logistics module
 const RasapPage              = lazy(() => import('./pages/RasapPage'));
 const EquipmentInventoryPage = lazy(() => import('./pages/EquipmentInventoryPage'));
+const LogisticsRotationsPage = lazy(() => import('./pages/LogisticsRotationsPage'));
 
 // Calm Suspense fallback — single subtle skeleton so the transition
 // feels intentional rather than a flash of blank.
@@ -139,14 +142,17 @@ function AppRoutes() {
         <Route path="/equipment" element={currentUser ? <EquipmentPage /> : auth} />
 
         {/* ── Manager only ─────────────────────────── */}
+        {/* רס״פ gets access to /leaves and /platoon for his מפלג scope:
+            the pages themselves filter to his commandedPlatoonId so he
+            sees only logistics-platoon requests / week. */}
         <Route path="/leaves" element={
-          <ProtectedRoute minRole="platoonCommander"><LeavesPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}><LeavesPage /></ProtectedRoute>
         } />
         <Route path="/platoon"      element={
-          <ProtectedRoute minRole="platoonCommander"><PlatoonWeekPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}><PlatoonWeekPage /></ProtectedRoute>
         } />
         <Route path="/platoon/gaps" element={
-          <ProtectedRoute minRole="platoonCommander"><PlatoonGapsPage /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}><PlatoonGapsPage /></ProtectedRoute>
         } />
         <Route path="/delegations" element={
           <ProtectedRoute minRole="platoonCommander"><DelegationsPage /></ProtectedRoute>
@@ -166,9 +172,12 @@ function AppRoutes() {
 
         {/* ── Round 4: דוח 1 + הודעות + יציאות פלוגתיות ─── */}
         {/* Report1: opens to platoon-leadership tier too; the page itself
-            resolves scope (company-wide vs platoon) by role + token. */}
+            resolves scope (company-wide vs platoon) by role + token.
+            שליש + רס״פ get read access via allowWhen (functional-role grants). */}
         <Route path="/report1"        element={
-          <ProtectedRoute minRole="platoonCommander"><Report1Page /></ProtectedRoute>
+          <ProtectedRoute minRole="platoonCommander" allowWhen={(u) => isShalish(u) || isRasap(u)}>
+            <Report1Page />
+          </ProtectedRoute>
         } />
         {/* ── Round 5: התראות ─── */}
         <Route path="/alerts"         element={
@@ -182,6 +191,11 @@ function AppRoutes() {
         } />
         <Route path="/equipment/inventory"   element={
           <ProtectedRoute minRole="platoonCommander"><EquipmentInventoryPage /></ProtectedRoute>
+        } />
+        <Route path="/rasap/rotations"       element={
+          <ProtectedRoute minRole="companyCommander" allowWhen={isRasap}>
+            <LogisticsRotationsPage />
+          </ProtectedRoute>
         } />
         {/* Announcements: read open to everyone; create gated inside the page. */}
         <Route path="/announcements"  element={currentUser ? <AnnouncementsPage /> : auth} />
@@ -215,11 +229,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppProvider>
+      <AppProviders>
         <div className="min-h-screen bg-mil-bg font-sans" dir="rtl">
           <AppRoutes />
         </div>
-      </AppProvider>
+      </AppProviders>
     </BrowserRouter>
   );
 }

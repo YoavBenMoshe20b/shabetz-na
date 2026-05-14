@@ -277,40 +277,101 @@ export default function LoginPage() {
           </button>
         )}
 
-        {/* Dev panel — claimed users + the one unclaimed slot for testing */}
-        <Card variant="muted">
-          <div className="px-4 py-3 space-y-2">
-            <Hint>משתמשי דמו · סיסמה {'Test@1234'}</Hint>
-            {mockUsers.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => { setMode('signIn'); setSiPhone(u.phone); setSiPass(u.password); setError(''); }}
-                className="w-full flex items-center justify-between text-tiny bg-mil-card hover:bg-mil-card-hover rounded-lg px-3 py-2 transition-colors border border-mil-border"
-              >
-                <span className="text-mil-text">{u.name}</span>
-                <span className="font-mono text-mil-ghost dir-ltr">{u.phone}</span>
-                <span className="text-mil-olive-dim">
-                  {{ companyCommander: 'מ״פ', deputyCompanyCommander: 'סמ״פ', platoonCommander: 'מ״מ', platoonSergeant: 'סמל', soldier: 'חייל', owner: 'מ״פ', manager: 'מ״מ' }[u.role]}
-                </span>
-              </button>
-            ))}
-            <Hint className="pt-2 border-t border-mil-border">רישומים פתוחים לתביעה</Hint>
-            {mockSoldiers.filter((s) => s.status === 'active' && !s.userId).map((s) => (
-              <button
-                key={s.id}
-                onClick={() => { setMode('claim'); setCPhone(s.phone); setCId4(s.idLast4); setError(''); setCReveal(null); }}
-                className="w-full flex items-center justify-between text-tiny bg-mil-card hover:bg-mil-card-hover rounded-lg px-3 py-2 transition-colors border border-dashed border-mil-olive/40"
-              >
-                <span className="text-mil-text">{s.name}</span>
-                <span className="font-mono text-mil-ghost dir-ltr">{s.phone} · {s.idLast4}</span>
-                <span className="text-mil-warn">לא תבע</span>
-              </button>
-            ))}
-          </div>
-        </Card>
+        {/* Dev panel — collapsed by default so it doesn't dominate the
+            real auth surface. Click the row to expand. */}
+        <DevPanel
+          onPickUser={(phone, password) => { setMode('signIn'); setSiPhone(phone); setSiPass(password); setError(''); }}
+          onPickClaim={(phone, idLast4) => { setMode('claim'); setCPhone(phone); setCId4(idLast4); setError(''); setCReveal(null); }}
+        />
 
       </PageMain>
     </div>
+  );
+}
+
+// ─── Dev panel ─────────────────────────────────────────────────────────
+// A focused, collapsible row. Keeps the page light by default and lets
+// the developer expand when they need to switch demo users.
+
+function DevPanel({
+  onPickUser,
+  onPickClaim,
+}: {
+  onPickUser:  (phone: string, password: string) => void;
+  onPickClaim: (phone: string, idLast4: string)  => void;
+}) {
+  // Open by default so testers see every demo role (including רס״פ and
+  // שליש) without needing to discover the expand affordance. The
+  // collapsible chrome stays for when the list grows.
+  const [open, setOpen] = useState(true);
+  const unclaimed = useMemo(
+    () => mockSoldiers.filter((s) => s.status === 'active' && !s.userId),
+    [],
+  );
+  const roleLabel: Record<string, string> = {
+    companyCommander: 'מ״פ', deputyCompanyCommander: 'סמ״פ',
+    platoonCommander: 'מ״מ', platoonSergeant: 'סמל',
+    soldier: 'חייל', owner: 'מ״פ', manager: 'מ״מ',
+  };
+  // Functional roles (רס״פ / שליש) live on `operationalRoles` while the
+  // base `role` stays 'soldier'. Surface them in the dev-user picker so
+  // testers can find them at a glance instead of seeing six "חייל" rows.
+  const labelFor = (u: typeof mockUsers[number]) => {
+    if (u.operationalRoles.includes('רס״פ'))  return 'רס״פ';
+    if (u.operationalRoles.includes('שליש'))  return 'שליש';
+    return roleLabel[u.role] ?? u.role;
+  };
+  const toneFor  = (u: typeof mockUsers[number]) => {
+    if (u.operationalRoles.includes('רס״פ')) return 'text-mil-sand';
+    if (u.operationalRoles.includes('שליש')) return 'text-mil-info';
+    return 'text-mil-olive-dim';
+  };
+
+  return (
+    <Card variant="muted">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 text-right"
+        aria-expanded={open}
+      >
+        <Hint>משתמשי דמו · סיסמה Test@1234</Hint>
+        <span className={`text-mil-ghost transition-transform ${open ? 'rotate-90' : ''}`}>‹</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-3 space-y-1.5">
+          {mockUsers.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onPickUser(u.phone, u.password)}
+              className="w-full flex items-center justify-between gap-2 text-tiny bg-mil-card hover:bg-mil-card-hover rounded-lg px-3 py-2 transition-colors border border-mil-border"
+            >
+              <span className="text-mil-text truncate">{u.name}</span>
+              <span className="font-mono text-mil-ghost dir-ltr text-[11px]">{u.phone}</span>
+              <span className={`font-semibold flex-shrink-0 ${toneFor(u)}`}>{labelFor(u)}</span>
+            </button>
+          ))}
+          {unclaimed.length > 0 && (
+            <>
+              <Hint className="pt-2 border-t border-mil-border mt-2">פתוחים לתביעה</Hint>
+              {unclaimed.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => onPickClaim(s.phone, s.idLast4)}
+                  className="w-full flex items-center justify-between gap-2 text-tiny bg-mil-card hover:bg-mil-card-hover rounded-lg px-3 py-2 transition-colors border border-dashed border-mil-olive/40"
+                >
+                  <span className="text-mil-text truncate">{s.name}</span>
+                  <span className="font-mono text-mil-ghost dir-ltr text-[11px]">{s.phone} · {s.idLast4}</span>
+                  <span className="text-mil-warn flex-shrink-0">לא תבע</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 

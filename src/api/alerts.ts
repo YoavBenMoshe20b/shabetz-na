@@ -10,8 +10,85 @@
 import type {
   Alert, AlertSeverity, AlertKind,
   Mission, Platoon, Soldier, Squad, EscalationEvent, OverrideAlert, Leave,
+  OverrideAlertStatus,
 } from '../types';
-import { read, simulate } from './_adapter';
+import { read, simulate, USE_SUPABASE, supabase } from './_adapter';
+
+type OverrideRisk = NonNullable<OverrideAlert['riskLevel']>;
+
+// ─── Override alerts table reads / writes ──────────────────────────────
+//
+// The Alert union surfaced in the UI is a projection over multiple
+// sources (missions, escalations, gaps, platoon floor, override_alerts).
+// `listOverrideAlerts` exposes the raw override_alerts table for the
+// engine and admin surfaces.
+
+export async function listOverrideAlerts(companyId: string): Promise<OverrideAlert[]> {
+  if (USE_SUPABASE) {
+    const { data, error } = await supabase()
+      .from('override_alerts')
+      .select('*')
+      .eq('company_id', companyId);
+    if (error) throw error;
+    return (data ?? []).map(mapOverrideAlert);
+  }
+  return simulate(read.overrideAlerts().filter((a) => a.companyId === companyId));
+}
+
+export async function acknowledgeOverride(id: string, byUserId: string): Promise<void> {
+  if (!USE_SUPABASE) return simulate(undefined);
+  const { error } = await supabase()
+    .from('override_alerts')
+    .update({
+      status: 'acknowledged' satisfies OverrideAlertStatus,
+      acknowledged_by_user_id: byUserId,
+      acknowledged_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function resolveOverride(id: string, byUserId: string): Promise<void> {
+  if (!USE_SUPABASE) return simulate(undefined);
+  const { error } = await supabase()
+    .from('override_alerts')
+    .update({
+      status: 'resolved' satisfies OverrideAlertStatus,
+      resolved_by_user_id: byUserId,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+interface OverrideRow {
+  id: string; company_id: string; platoon_id: string | null;
+  kind: string; description: string; suggested_action: string | null;
+  risk_level: OverrideRisk; status: OverrideAlertStatus;
+  acknowledged_by_user_id: string | null; acknowledged_at: string | null;
+  resolved_by_user_id: string | null; resolved_at: string | null;
+  created_at: string;
+}
+
+function mapOverrideAlert(r: OverrideRow): OverrideAlert {
+  return {
+    id: r.id,
+    companyId: r.company_id,
+    platoonId: r.platoon_id ?? '',
+    kind: r.kind as OverrideAlert['kind'],
+    description: r.description,
+    actorUserId: '',                       // not persisted yet — engine fills client-side
+    actorName: '',
+    suggestedAction: r.suggested_action ?? undefined,
+    riskLevel: r.risk_level,
+    status: r.status,
+    acknowledgedByUserId: r.acknowledged_by_user_id ?? undefined,
+    acknowledgedAt: r.acknowledged_at ?? undefined,
+    resolvedByUserId: r.resolved_by_user_id ?? undefined,
+    resolvedAt: r.resolved_at ?? undefined,
+    timestamp: r.created_at,
+  } as OverrideAlert;
+}
 
 interface ProjectionInputs {
   companyId: string;

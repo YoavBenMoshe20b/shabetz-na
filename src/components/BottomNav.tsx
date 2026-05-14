@@ -5,8 +5,8 @@
 // quiet. Icons are simple geometric glyphs in a refined size.
 //
 //   SOLDIER         (3 tabs)   בית · לוח · פרופיל
-//   PLATOON LEADER  (4 tabs)   בית · לוח · שבצ״ק · חיילים
-//   COMPANY LEADER  (4 tabs)   בית · לוח · שבצ״ק · חיילים
+//   COMMANDER       (5 tabs)   בית · לוח · שבצ״ק · דוח 1 · חיילים
+//   RASAP           (5 tabs)   בית · לוח · רס״פ · מלאי · פרופיל
 
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';

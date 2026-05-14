@@ -7,25 +7,26 @@
 import { useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { resolveMySoldier } from '../utils/resolveSoldier';
 import Header from '../components/Header';
 import type {
   SignedEquipment, SignedEquipmentCategory, SignedEquipmentStatus,
   EquipmentGapKind,
 } from '../types';
 import {
-  Eyebrow, Section, PageMain, Body, Muted, Hint, Button, Sheet,
+  Eyebrow, Section, PageMain, Body, Muted, Hint, Button, Sheet, Toast,
 } from '../components/ui';
 
 export default function EquipmentPage() {
   const { currentUser, soldiers, signedEquipment, equipmentGaps, reportEquipmentGap } = useApp();
-  if (!currentUser) return <Navigate to="/login" replace />;
 
+  // ── Hooks first — must run unconditionally on every render. ─────
   const [reportOpen,  setReportOpen]  = useState(false);
   const [reportFor,   setReportFor]   = useState<SignedEquipment | null>(null);
   const [reportSaved, setReportSaved] = useState(false);
 
   const myProfile = useMemo(
-    () => soldiers.find((s) => s.id === currentUser.soldierProfileId || s.userId === currentUser.id),
+    () => resolveMySoldier(soldiers, currentUser),
     [soldiers, currentUser],
   );
 
@@ -71,6 +72,9 @@ export default function EquipmentPage() {
     setTimeout(() => setReportSaved(false), 3000);
   };
 
+  // Early return AFTER all hooks have run.
+  if (!currentUser) return <Navigate to="/login" replace />;
+
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="ציוד אישי" />
@@ -85,12 +89,7 @@ export default function EquipmentPage() {
           </div>
         </section>
 
-        {reportSaved && (
-          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
-            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
-            <Body className="text-mil-success font-semibold">הדיווח נשלח לסמל המחלקה</Body>
-          </div>
-        )}
+        {reportSaved && <Toast tone="success">הדיווח נשלח לסמל המחלקה</Toast>}
 
         {/* Gaps reported by this soldier */}
         {myGaps.length > 0 && (
@@ -137,14 +136,15 @@ export default function EquipmentPage() {
           </>
         )}
 
-        {/* Generic report (not tied to a specific item) */}
+        {/* Generic report — secondary so it reads as an available action,
+            not a primary one (the primary path is per-item from the list). */}
         <Button
-          variant="ghost"
+          variant="secondary"
           size="lg"
           fullWidth
           onClick={() => { setReportFor(null); setReportOpen(true); }}
         >
-          + דווח על ליקוי ציוד
+          דווח על ליקוי ציוד
         </Button>
 
       </PageMain>

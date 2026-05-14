@@ -270,19 +270,15 @@ function leaveToEntries(lv: Leave, soldiers: Soldier[]): CalendarEntry[] {
   // personal entry per soldier so the visibility filter can scope per-
   // viewer correctly. (Aggregating across a whole squad/machlaka would
   // leak the leave to viewers who shouldn't see members of other squads.)
-  let soldierIds: string[] = [];
-  if (lv.scope === 'individual') {
-    soldierIds = lv.soldierIds;
-  } else if (lv.scope === 'squad') {
-    soldierIds = soldiers
-      .filter((s) => s.squadId === lv.squadId)
-      .map((s) => s.id);
-  } else {
-    // machlaka — apply to all soldiers in the platoon. For demo purposes
-    // we apply to all known soldiers; production code will scope by
-    // platoonId when the Leave model carries it.
-    soldierIds = soldiers.map((s) => s.id);
-  }
+  const soldierIds: string[] =
+    lv.scope === 'individual'
+      ? lv.soldierIds
+      : lv.scope === 'squad'
+        ? soldiers.filter((s) => s.squadId === lv.squadId).map((s) => s.id)
+        // machlaka — apply to all soldiers in the platoon. For demo purposes
+        // we apply to all known soldiers; production code will scope by
+        // platoonId when the Leave model carries it.
+        : soldiers.map((s) => s.id);
 
   return soldierIds.map((sid) => {
     const s = soldiers.find((x) => x.id === sid);

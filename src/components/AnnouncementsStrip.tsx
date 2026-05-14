@@ -10,7 +10,10 @@
 
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../providers/AuthProvider';
+import { useOrg } from '../providers/OrgProvider';
+import { useRoster } from '../providers/RosterProvider';
+import { useAlerts } from '../providers/AlertsProvider';
 import { visibleAnnouncementsFor } from '../utils/announcementProjection';
 import { describeAudience } from '../utils/audience';
 import { Section, Body, Muted } from './ui';
@@ -37,13 +40,18 @@ interface AnnouncementsStripProps {
 
 export default function AnnouncementsStrip({ isCommander, limit = 4 }: AnnouncementsStripProps) {
   const navigate = useNavigate();
-  const { currentUser, announcements, soldiers, platoons, squads } = useApp();
+  // Phase-2 architecture: pull each concern from its focused provider.
+  // Announcements are already company-scoped by AlertsProvider — no
+  // local filter needed.
+  const { currentUser } = useAuth();
+  const { platoons, squads } = useOrg();
+  const { soldiers } = useRoster();
+  const { announcements } = useAlerts();
 
   const visible = useMemo(() => {
     if (!currentUser?.companyId) return [];
-    const all = announcements.filter((a) => a.companyId === currentUser.companyId);
     return visibleAnnouncementsFor(
-      all,
+      announcements,
       { soldierProfileId: currentUser.soldierProfileId, isCommander },
       { soldiers, platoons, squads },
     );

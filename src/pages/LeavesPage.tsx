@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp, useMyPlatoons, useApprovableLeaveRequests } from '../context/AppContext';
 import Header from '../components/Header';
+import { Toast } from '../components/ui';
 import { isPlatoonLeadership } from '../utils/permissions';
 import type { LeaveScope } from '../types';
 
@@ -107,12 +108,7 @@ export default function LeavesPage() {
       <Header title="יציאות" />
 
       <main className="px-5 py-5 pb-32 max-w-xl mx-auto space-y-4">
-        {saved && (
-          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
-            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
-            <p className="text-sm font-semibold text-mil-success">היציאה נשמרה</p>
-          </div>
-        )}
+        {saved && <Toast tone="success">היציאה נשמרה</Toast>}
 
         {/* Tabs (manager only — soldiers see leaves list inline on profile) */}
         {isManager && (

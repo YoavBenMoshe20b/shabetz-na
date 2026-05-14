@@ -29,11 +29,10 @@ export default function SchedulePage() {
     addOrder, setOrderStatus, setMissionStatus,
   } = useApp();
 
-  if (!currentUser) return <Navigate to="/login" replace />;
   const isCC = isCompanyLeadership(currentRole);
   const isPC = isPlatoonLeadership(currentRole);
-  if (!isCC && !isPC) return <Navigate to="/home" replace />;
 
+  // Hooks first; route gates after.
   const myCompany = useMyCompany();
   const myOrders = useMemo(
     () => orders
@@ -60,6 +59,10 @@ export default function SchedulePage() {
     missions: orderMissions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
   }), [orderMissions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+
+  // Route gates AFTER all hooks.
+  if (!currentUser) return <Navigate to="/login" replace />;
+  if (!isCC && !isPC) return <Navigate to="/home" replace />;
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
@@ -122,8 +125,8 @@ export default function SchedulePage() {
             )}
           >
             {orderMissions.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-sm font-bold text-mil-olive-dim">אין משימות בצו זה</p>
+              <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card py-10 text-center">
+                <p className="text-sm font-semibold text-mil-text">אין משימות בצו זה</p>
                 <p className="text-tiny text-mil-muted mt-1">הוסף משימות לצו כדי להתחיל בשיבוץ</p>
               </div>
             ) : (

@@ -12,6 +12,7 @@ import type {
   MissionNote,
   OperationalOrder,
   Announcement, EscalationEvent, PlatoonLeaveCycle,
+  LogisticsRotation,
 } from '../types';
 
 const noEquip: EquipmentRequirements = {
@@ -85,7 +86,7 @@ export const mockSoldiers: Soldier[] = [
   // equipment, food, cleaning task assignment, etc. — does not "do all
   // cleaning" itself.
   { id: 's23', name: 'אבי כהן',     phone: '0502323232', idLast4: '2323', companyId: 'co1', status: 'active', userId: 'u6', operationalRoles: ['רס״פ'],                 teamClass: 'מפלג',   squadId: 'su-meflag-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1, functionalRoles: ['rasap'] },
-  { id: 's24', name: 'רון אביב',    phone: '0502424242', idLast4: '2424', companyId: 'co1', status: 'active', operationalRoles: ['שליש'],                 teamClass: 'מפלג',   squadId: 'su-meflag-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1 },
+  { id: 's24', name: 'רון אביב',    phone: '0502424242', idLast4: '2424', companyId: 'co1', status: 'active', userId: 'u8', operationalRoles: ['שליש'],                 teamClass: 'מפלג',   squadId: 'su-meflag-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 1, functionalRoles: ['shalish'] },
   { id: 's25', name: 'ניר טל',      phone: '0502525252', idLast4: '2525', companyId: 'co1', status: 'active', operationalRoles: [],                       teamClass: 'מפלג',   squadId: 'su-meflag-2', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true, availabilityNotes: [], currentLoad: 0 },
 
   // ── HISTORICAL — invisible to operational selectors ──
@@ -146,11 +147,16 @@ export const mockUsers: MockUser[] = [
     createdAt: '2024-04-21T09:30:00',
   },
   {
-    // רס"פ — מפלג commander (roster soldier s23). The functional role
-    // tag lives on the Soldier record; the user just claims the slot.
+    // רס״פ — מפקד המפלג. Base role is still 'soldier' so route guards for
+    // company-tier surfaces still reject him, but he carries
+    // `commandedPlatoonId: 'g-meflag'` so platoon-level helpers
+    // (canManagePlatoon, scope-aware approvals) recognise him as the
+    // logistics platoon commander. The functional-role tag 'רס״פ' in
+    // operationalRoles unlocks logistics-wide writes via canManageEquipment.
     id: 'u6', name: 'אבי כהן', role: 'soldier',
     phone: '0502323232', idLast4: '2323', password: 'Test@1234',
-    platoonId: 'g-meflag', companyId: 'co1', squadId: 'su-meflag-1',
+    platoonId: 'g-meflag', commandedPlatoonId: 'g-meflag',
+    companyId: 'co1', squadId: 'su-meflag-1',
     soldierProfileId: 's23',
     operationalRoles: ['רס״פ'], teamClass: 'מפלג',
     createdAt: '2024-04-22T08:00:00',
@@ -163,6 +169,19 @@ export const mockUsers: MockUser[] = [
     companyId: 'co1',
     operationalRoles: ['סמ״פ'], teamClass: 'חפ״ק',
     createdAt: '2024-04-20T08:30:00',
+  },
+  {
+    // שליש — administrative officer (functional role on a base soldier).
+    // Bound to roster soldier s24 (רון אביב). The Shalish gets Report-1
+    // read access + standard soldier capabilities (profile, leave request,
+    // damage report). Crucially NOT a commander role — base UserRole stays
+    // 'soldier' so route guards keep CC-only screens out of reach.
+    id: 'u8', name: 'רון אביב', role: 'soldier',
+    phone: '0502424242', idLast4: '2424', password: 'Test@1234',
+    platoonId: 'g-meflag', companyId: 'co1', squadId: 'su-meflag-1',
+    soldierProfileId: 's24',
+    operationalRoles: ['שליש'], teamClass: 'מפלג',
+    createdAt: '2024-04-22T09:00:00',
   },
 ];
 
@@ -1305,5 +1324,79 @@ export const mockPlatoonLeaveCycles: PlatoonLeaveCycle[] = [
     createdByUserId:  'u-cc',
     createdAt:        SEED_CREATED,
     publishedAt:      SEED_CREATED,
+  },
+];
+
+// ─── Logistics rotations (סבבים לוגיסטיים) ────────────────────────────────
+// Seed enough rows so the Rasap dashboard surface looks operational
+// on first paint.
+export const mockLogisticsRotations: LogisticsRotation[] = [
+  {
+    id: 'lr-1',
+    companyId: 'co1',
+    kind: 'kitchen',
+    title: 'תורנות מטבח — בוקר',
+    description: 'הכנת ארוחת בוקר 06:30, הגשה 07:00',
+    assignedSoldierIds: ['s24', 's25'],
+    startIso: `${dayOffsetIso(0)}T06:00:00`,
+    endIso:   `${dayOffsetIso(0)}T09:00:00`,
+    status: 'in-progress',
+    createdByUserId: 'u6',
+    createdByName:   'אבי כהן',
+    createdAt:       SEED_CREATED,
+  },
+  {
+    id: 'lr-2',
+    companyId: 'co1',
+    kind: 'cleaning',
+    title: 'ניקיון שירותים פלוגתיים',
+    description: 'שירותים ציבוריים + מקלחות',
+    assignedSoldierIds: [],
+    squadId: 'su-meflag-2',
+    startIso: `${dayOffsetIso(0)}T14:00:00`,
+    status: 'planned',
+    createdByUserId: 'u6',
+    createdByName:   'אבי כהן',
+    createdAt:       SEED_CREATED,
+  },
+  {
+    id: 'lr-3',
+    companyId: 'co1',
+    kind: 'container',
+    title: 'פריקת מכולה — ציוד חורף',
+    description: 'מכולה במגרש 4, הגעה ב־09:30',
+    assignedSoldierIds: ['s5', 's6', 's7'],
+    startIso: `${dayOffsetIso(1)}T09:30:00`,
+    endIso:   `${dayOffsetIso(1)}T12:00:00`,
+    status: 'planned',
+    createdByUserId: 'u6',
+    createdByName:   'אבי כהן',
+    createdAt:       SEED_CREATED,
+  },
+  {
+    id: 'lr-4',
+    companyId: 'co1',
+    kind: 'water',
+    title: 'מילוי מיכלי מים — בסיס',
+    assignedSoldierIds: ['s24'],
+    startIso: `${dayOffsetIso(-1)}T18:00:00`,
+    endIso:   `${dayOffsetIso(-1)}T19:30:00`,
+    status: 'done',
+    createdByUserId: 'u6',
+    createdByName:   'אבי כהן',
+    createdAt:       SEED_CREATED,
+  },
+  {
+    id: 'lr-5',
+    companyId: 'co1',
+    kind: 'weapons',
+    title: 'ניקוי נשקים פלוגתי',
+    description: 'מוכן לשבת — כל החיילים בבסיס',
+    assignedSoldierIds: [],
+    startIso: `${dayOffsetIso(2)}T16:00:00`,
+    status: 'planned',
+    createdByUserId: 'u6',
+    createdByName:   'אבי כהן',
+    createdAt:       SEED_CREATED,
   },
 ];

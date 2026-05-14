@@ -8,10 +8,11 @@
 import { useState, useMemo } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { resolveMySoldier } from '../utils/resolveSoldier';
 import Header from '../components/Header';
 import { roleLabel } from '../utils/permissions';
 import {
-  Eyebrow, Section, PageMain, Body, Muted, Hint,
+  Eyebrow, Section, PageMain, Body, Muted, Hint, Toast,
 } from '../components/ui';
 import TourOfDutyCard from '../components/TourOfDutyCard';
 
@@ -22,15 +23,14 @@ export default function ProfilePage() {
     updateSoldierProfile,
   } = useApp();
 
-  if (!currentUser) return <Navigate to="/login" replace />;
-
+  // Hooks first; route gate after.
   const myProfile = useMemo(
-    () => soldiers.find((s) => s.id === currentUser.soldierProfileId || s.userId === currentUser.id),
+    () => resolveMySoldier(soldiers, currentUser),
     [soldiers, currentUser],
   );
 
   const myPlatoon = useMemo(
-    () => platoons.find((p) => p.id === currentUser.platoonId),
+    () => currentUser ? platoons.find((p) => p.id === currentUser.platoonId) : undefined,
     [platoons, currentUser],
   );
 
@@ -94,6 +94,9 @@ export default function ProfilePage() {
     return years;
   }, [edit.dateOfBirth, myProfile]);
 
+  // Route gate AFTER hooks.
+  if (!currentUser) return <Navigate to="/login" replace />;
+
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="פרופיל" />
@@ -117,12 +120,7 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        {saved && (
-          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
-            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
-            <Body className="text-mil-success font-semibold">השינויים נשמרו</Body>
-          </div>
-        )}
+        {saved && <Toast tone="success">השינויים נשמרו</Toast>}
 
         {/* Operational personal data */}
         <Section label="פרטים אישיים מבצעיים">

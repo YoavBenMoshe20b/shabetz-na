@@ -115,6 +115,43 @@ export default function PlatoonCommanderDashboard() {
     [equipmentGaps, myPlatoon],
   );
 
+  // ── Coverage picture (read-only for PC/PS) ────────────────────────
+  // What this section answers in a glance: which of MY soldiers are
+  // currently away (or about to be), what their ETA back is, and which
+  // squads are most depleted right now. This is the platoon-level
+  // mirror of CC's "company coverage" board, available in Phase 1.
+  const platoonSoldierIds = useMemo(
+    () => new Set(soldiers.filter((s) => s.squadId && squads.find((sq) => sq.id === s.squadId)?.platoonId === myPlatoon?.id).map((s) => s.id)),
+    [soldiers, squads, myPlatoon],
+  );
+
+  const activeLeaves = useMemo(() => {
+    const nowTs = now.getTime();
+    return leaves
+      .filter((l) => {
+        const start = Date.parse(`${l.startDate}T${l.startTime || '00:00'}:00`);
+        const end   = Date.parse(`${l.endDate}T${l.endTime   || '23:59'}:00`);
+        if (!(start <= nowTs && nowTs <= end)) return false;
+        // any soldier in scope belongs to my platoon
+        if (l.scope === 'individual') return l.soldierIds.some((id) => platoonSoldierIds.has(id));
+        if (l.scope === 'squad') {
+          return !!l.squadId && squads.find((sq) => sq.id === l.squadId)?.platoonId === myPlatoon?.id;
+        }
+        return false; // 'machlaka' shown only when it's MY machlaka — handled by individuals filter
+      })
+      .slice(0, 5);
+  }, [leaves, now, platoonSoldierIds, squads, myPlatoon]);
+
+  const squadBreakdown = useMemo(() => {
+    if (!myPlatoon) return [];
+    const mySquads = squads.filter((sq) => sq.platoonId === myPlatoon.id);
+    return mySquads.map((sq) => {
+      const members = soldiers.filter((s) => s.squadId === sq.id);
+      const home    = members.filter((s) => s.currentStatus === 'home').length;
+      return { id: sq.id, name: sq.name, total: members.length, atHome: home, inBase: members.length - home };
+    });
+  }, [squads, myPlatoon, soldiers]);
+
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title={myPlatoon?.name ?? 'מחלקה'} />
@@ -209,6 +246,58 @@ export default function PlatoonCommanderDashboard() {
         <Button variant="primary" size="lg" fullWidth onClick={() => navigate('/platoon')}>
           פתח שבצ״ק השבוע ←
         </Button>
+
+        <Section label="כיסוי המחלקה">
+          <Card>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <Hint>חלוקה לכיתות</Hint>
+                <div className="mt-2 space-y-2">
+                  {squadBreakdown.length === 0 ? (
+                    <Muted>אין כיתות במחלקה</Muted>
+                  ) : squadBreakdown.map((sq) => (
+                    <div key={sq.id} className="flex items-baseline gap-2 text-sm">
+                      <Body className="font-semibold">{sq.name}</Body>
+                      <span className="tabular-nums text-mil-text">{sq.inBase}</span>
+                      <Muted>/ {sq.total}</Muted>
+                      {sq.atHome > 0 && (
+                        <span className="text-tiny text-mil-muted mr-auto">
+                          {sq.atHome} בבית
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-mil-border">
+                <Hint>חופשות פעילות עכשיו</Hint>
+                {activeLeaves.length === 0 ? (
+                  <Muted className="mt-1">אף אחד מהמחלקה לא בחופשה כרגע</Muted>
+                ) : (
+                  <div className="mt-2 space-y-1.5">
+                    {activeLeaves.map((l) => {
+                      const names = l.soldierIds
+                        .map((id) => soldiers.find((s) => s.id === id)?.name?.split(' ')[0])
+                        .filter(Boolean)
+                        .join(' · ');
+                      return (
+                        <div key={l.id} className="flex items-baseline gap-2 text-sm">
+                          <Body>
+                            {l.scope === 'squad'
+                              ? squads.find((sq) => sq.id === l.squadId)?.name ?? 'כיתה'
+                              : (names || `${l.soldierIds.length} חיילים`)}
+                          </Body>
+                          <Muted className="mr-auto tabular-nums">חזרה {l.endDate} {l.endTime}</Muted>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        </Section>
 
         <Section label="ניהול מחלקה">
           <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">

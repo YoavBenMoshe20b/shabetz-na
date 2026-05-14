@@ -184,6 +184,13 @@ export function canManagePlatoon(user: MockUser, platoon: Platoon): boolean {
     // Legacy 'manager' / 'owner' fallback: if they're a member, they can manage
     return platoon.memberIds.includes(user.id);
   }
+  // רס״פ — מפקד המפלג. Functional role on top of a base 'soldier' identity.
+  // Manages the logistics platoon (whichever one carries his commandedPlatoonId)
+  // for roster + schedule + leave queue purposes. Does NOT cascade to sibling
+  // platoons even within the same company.
+  if (isRasap(user) && user.commandedPlatoonId && user.commandedPlatoonId === platoon.id) {
+    return true;
+  }
   return false;
 }
 
@@ -533,7 +540,14 @@ export function canSeeSoldierSection(
 // the same delegation system already used elsewhere covers them for free.
 
 export function canCreateAnnouncement(user: MockUser, delegations: Delegation[] = []): boolean {
-  return hasPermission(user, 'announcement.create', { platoonId: user.commandedPlatoonId }, delegations);
+  if (hasPermission(user, 'announcement.create', { platoonId: user.commandedPlatoonId }, delegations)) {
+    return true;
+  }
+  // רס״פ — מפקד המפלג. Logistics broadcasts (ארוחה מוכנה / פעולה מבצעית)
+  // are part of the role's day-to-day; gate at the audience level (RLS
+  // / audience_within_authority on the server) rather than blocking
+  // here.
+  return isRasap(user);
 }
 
 export function canEditLeaveCycle(user: MockUser, delegations: Delegation[] = []): boolean {
@@ -546,7 +560,15 @@ export function canDeclareEscalation(user: MockUser, delegations: Delegation[] =
 
 /** דוח 1 — same scope as the company-wide state report. */
 export function canViewReport1(user: MockUser, delegations: Delegation[] = []): boolean {
-  return hasPermission(user, 'report.viewCompanyState', undefined, delegations);
+  // Base role check first, then functional-role grants.
+  // • Shalish: read-only access (admin staff role).
+  // • Rasap: read-only access for logistics decision-making — he needs
+  //   to see who's on base / on leave to plan inventory and rotations.
+  // Both grants are READ-only. None of these confer company-tier WRITE
+  // capabilities (announcement create, escalation declare, leave cycle
+  // edit) — those still require base CC/Deputy roles.
+  if (hasPermission(user, 'report.viewCompanyState', undefined, delegations)) return true;
+  return isShalish(user) || isRasap(user);
 }
 
 // ─── Rasap / logistics module (round 6) ────────────────────────────────
@@ -564,6 +586,19 @@ export function isRasap(user: MockUser): boolean {
   if (user.operationalRoles.includes('רס״פ')) return true;
   const fn = (user as MockUser & { functionalRoles?: string[] }).functionalRoles;
   return !!fn && fn.includes('rasap');
+}
+
+/**
+ * שליש — administrative officer attached to HQ/חפ״ק. A functional role
+ * on top of a base soldier identity. Grants Report-1 read access and
+ * preserves the soldier's personal toolbox (profile, leave request,
+ * damage report). Does NOT grant any command-tier writes — those still
+ * require base CC/PC roles.
+ */
+export function isShalish(user: MockUser): boolean {
+  if (user.operationalRoles.includes('שליש')) return true;
+  const fn = (user as MockUser & { functionalRoles?: string[] }).functionalRoles;
+  return !!fn && fn.includes('shalish');
 }
 
 export function canManageEquipment(user: MockUser, delegations: Delegation[] = []): boolean {

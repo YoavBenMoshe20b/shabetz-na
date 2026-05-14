@@ -19,6 +19,7 @@
 // disappears and every call goes over the wire.
 
 import * as mock from '../data/mockData';
+export { USE_SUPABASE, supabase } from './_supabase';
 import type {
   Soldier, Mission, Announcement, EscalationEvent, Leave, LeaveRequest,
   OverrideAlert, PlatoonLeaveCycle, Platoon, Squad, Company,

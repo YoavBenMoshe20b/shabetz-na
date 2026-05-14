@@ -13,6 +13,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { resolveMySoldier } from '../../utils/resolveSoldier';
 import { activeSegmentForSoldier } from '../../utils/leaveCycleProjection';
 import { materializeWeek } from '../../utils/materialize';
 import Header from '../../components/Header';
@@ -20,7 +21,7 @@ import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import { TourOfDutyMini } from '../../components/TourOfDutyCard';
 import {
   Card, Button, Section, PageMain, PageTitle, CardTitle,
-  Body, Muted, Hint, Sheet,
+  Body, Muted, Hint, Sheet, Toast,
 } from '../../components/ui';
 import { hhmm, formatRelative } from './_shared/timeFormat';
 import type { Soldier, SoldierStatus, Leave } from '../../types';
@@ -35,7 +36,7 @@ export default function SoldierDashboard() {
   } = useApp();
   const myPlatoon = platoons.find((p) => p.id === currentUser?.platoonId);
 
-  const myProfile = soldiers.find((s) => s.id === currentUser?.soldierProfileId || s.userId === currentUser?.id);
+  const myProfile = resolveMySoldier(soldiers, currentUser);
   const mySquadName = squads.find((s) => s.id === myProfile?.squadId)?.name ?? myProfile?.teamClass ?? '';
 
   const [showWeek,    setShowWeek]    = useState(false);
@@ -128,18 +129,8 @@ export default function SoldierDashboard() {
       <Header title="המחלקה שלי" />
       <PageMain>
 
-        {leaveSaved && (
-          <div className="bg-mil-success-bg border border-mil-success-border rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
-            <span className="w-1.5 h-1.5 rounded-full bg-mil-success flex-shrink-0" aria-hidden />
-            <Body className="text-mil-success font-semibold">בקשת היציאה הוגשה למ״מ</Body>
-          </div>
-        )}
-        {statusToastMsg && (
-          <div className="bg-mil-olive-bg border border-mil-olive/20 rounded-xl-soft px-4 py-3 flex items-center gap-2.5 animate-fade-in">
-            <span className="w-1.5 h-1.5 rounded-full bg-mil-olive flex-shrink-0" aria-hidden />
-            <Body className="text-mil-olive font-semibold">{statusToastMsg}</Body>
-          </div>
-        )}
+        {leaveSaved && <Toast tone="success">בקשת היציאה הוגשה למ״מ</Toast>}
+        {statusToastMsg && <Toast tone="olive">{statusToastMsg}</Toast>}
 
         <div>
           <PageTitle>שלום, {currentUser?.name?.split(' ')[0]}</PageTitle>
@@ -382,10 +373,16 @@ function CollapsibleCard({
       <button
         onClick={onToggle}
         className="w-full px-4 py-3.5 bg-mil-card-warm hover:bg-mil-card-hover transition-colors flex items-center gap-2 text-right"
+        aria-expanded={open}
       >
         <CardTitle>{title}</CardTitle>
         {count != null && <Hint>({count})</Hint>}
-        <span className="mr-auto text-mil-ghost">{open ? '▲' : '▼'}</span>
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+          className={`mr-auto text-mil-ghost transition-transform duration-200 ease-out-soft ${open ? 'rotate-180' : ''}`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
       {open && <div className="border-t border-mil-border">{children}</div>}
     </Card>

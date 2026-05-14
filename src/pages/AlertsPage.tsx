@@ -81,9 +81,11 @@ export default function AlertsPage() {
           <Eyebrow>{myCompany?.name ?? '—'}</Eyebrow>
           <h1 className="text-hero font-extrabold text-mil-text tracking-tightish mt-1.5">התראות</h1>
           <Body className="mt-1.5 text-mil-muted text-sm">
-            {list.length === 0
-              ? 'הכל רגוע — אין התראות פעילות.'
-              : `${list.length} התראות פעילות.`}
+            {loading
+              ? 'טוען התראות…'
+              : list.length === 0
+                ? 'הכל רגוע — אין התראות פעילות.'
+                : `${list.length} התראות פעילות.`}
           </Body>
         </section>
 

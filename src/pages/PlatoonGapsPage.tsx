@@ -27,14 +27,12 @@ export default function PlatoonGapsPage() {
     reviewEquipmentGap, forwardEquipmentGap, resolveEquipmentGap, dismissEquipmentGap,
   } = useApp();
 
-  if (!currentUser) return <Navigate to="/login" replace />;
-  if (!isPlatoonLeadership(currentRole)) return <Navigate to="/home" replace />;
-
-  const myPlatoon = useMemo(
-    () => platoons.find((p) => p.id === currentUser.commandedPlatoonId)
-       ?? platoons.find((p) => p.memberIds.includes(currentUser.id)),
-    [platoons, currentUser],
-  );
+  // Hooks first; route gates after.
+  const myPlatoon = useMemo(() => {
+    if (!currentUser) return undefined;
+    return platoons.find((p) => p.id === currentUser.commandedPlatoonId)
+        ?? platoons.find((p) => p.memberIds.includes(currentUser.id));
+  }, [platoons, currentUser]);
 
   // Filter to this platoon's gaps. Reporter's platoon link is on the gap
   // (reportedByPlatoonId), but we double-check via soldier.squadId →
@@ -52,6 +50,10 @@ export default function PlatoonGapsPage() {
   }, [equipmentGaps, myPlatoon, squads, soldiers]);
 
   const [filter, setFilter] = useState<'open' | 'all'>('open');
+
+  // Route gates AFTER hooks.
+  if (!currentUser) return <Navigate to="/login" replace />;
+  if (!isPlatoonLeadership(currentRole)) return <Navigate to="/home" replace />;
   const visibleGaps = filter === 'open'
     ? myGaps.filter((g) => g.status !== 'resolved' && g.status !== 'dismissed')
     : myGaps;

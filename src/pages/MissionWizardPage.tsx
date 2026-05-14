@@ -79,15 +79,6 @@ export default function MissionWizardPage() {
   const myCompany = useMyCompany();
   const myPlatoons = useMyPlatoons();
 
-  if (!currentUser || !myCompany) return <Navigate to="/home" replace />;
-  if (!canCreateMission(currentUser, delegations)) return <Navigate to="/home" replace />;
-
-  const scope = getMissionCreateScope(currentUser, delegations);
-  const isCompanyTier = isCompanyLeadership(currentRole);
-  const platoonsPickable = scope.companyWide
-    ? myPlatoons
-    : myPlatoons.filter((p) => scope.allowedPlatoonIds.includes(p.id));
-
   // Edit mode — when missionId is in the URL, the wizard prefills from
   // an existing mission and writes back via updateMission on save.
   const editingMission = editMissionId
@@ -149,6 +140,16 @@ export default function MissionWizardPage() {
   };
 
   const stepValid = isStepValid(draft, step);
+
+  // Route gates AFTER all hooks have run.
+  if (!currentUser || !myCompany) return <Navigate to="/home" replace />;
+  if (!canCreateMission(currentUser, delegations)) return <Navigate to="/home" replace />;
+
+  const scope = getMissionCreateScope(currentUser, delegations);
+  const isCompanyTier = isCompanyLeadership(currentRole);
+  const platoonsPickable = scope.companyWide
+    ? myPlatoons
+    : myPlatoons.filter((p) => scope.allowedPlatoonIds.includes(p.id));
 
   // Round 5 — new publish semantics:
   //   The wizard now saves the mission DEFINITION only. Staffing happens

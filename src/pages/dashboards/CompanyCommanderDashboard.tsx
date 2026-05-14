@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   useApp, useAlertsForCompany, useMyCompany, useMyPlatoons,
 } from '../../context/AppContext';
-import { canDeclareEscalation, canEditLeaveCycle, canViewReport1 } from '../../utils/permissions';
+import { canDeclareEscalation, canViewReport1 } from '../../utils/permissions';
 import { buildPlatoonTimeline } from '../../utils/timeline';
 import { materializeWeek } from '../../utils/materialize';
 import Header from '../../components/Header';
@@ -185,7 +185,6 @@ export default function CompanyCommanderDashboard() {
 
   const canEsc = !!currentUser && canDeclareEscalation(currentUser, delegations);
   const canRpt = !!currentUser && canViewReport1(currentUser, delegations);
-  const canCyc = !!currentUser && canEditLeaveCycle(currentUser, delegations);
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
@@ -321,26 +320,20 @@ export default function CompanyCommanderDashboard() {
 
         <AnnouncementsStrip isCommander={true} />
 
-        <Section label="ניהול">
+        {/* Quick-access tiles for CC's top-3 secondary surfaces. The full
+            navigation (announcements, leave-cycle, missions, coverage,
+            rasap, delegations) now lives in the Command Menu (☰) so the
+            home stays focused on operational state, not chrome. */}
+        <Section label="קיצורי דרך">
           <div className="grid grid-cols-1 gap-2.5">
             {canRpt && (
               <NavTile label="דוח 1" hint="תמונת מצב חיה של הפלוגה"
                 onClick={() => navigate('/report1')} icon="report1" />
             )}
-            <NavTile label="הודעות פלוגתיות" hint="לו״ז, הודעות מבצעיות, הודעות שוטפות"
-              onClick={() => navigate('/announcements')} icon="announcements" />
-            {canCyc && (
-              <NavTile label="יציאות פלוגתיות" hint="סבב יציאות פלוגתי + הגנת סד״כ"
-                onClick={() => navigate('/leave-cycle')} icon="leaveCycle" />
-            )}
             <NavTile label="ניהול משימות" hint="הגדרת משימות פעילות וטיוטות"
               onClick={() => navigate('/missions')} icon="missions" />
             <NavTile label="יציאות וכיסוי" hint="מי בבית, מי בבסיס, אירועי כיסוי"
               onClick={() => navigate('/coverage')} icon="coverage" />
-            <NavTile label="לוגיסטיקה ורס״פ" hint="מלאי ציוד, חתימות, ליקויים"
-              onClick={() => navigate('/rasap')} icon="rasap" />
-            <NavTile label="פיקוד זמני" hint="הענקת סמכויות לתקופה מוגדרת"
-              onClick={() => navigate('/delegations')} icon="delegate" />
           </div>
         </Section>
 

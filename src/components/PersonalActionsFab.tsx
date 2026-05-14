@@ -20,6 +20,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { resolveMySoldier } from '../utils/resolveSoldier';
 import { Sheet, Body, Hint } from './ui';
 import LeaveRequestForm from './LeaveRequestForm';
 import StatusUpdateInline from './StatusUpdateInline';
@@ -35,7 +36,7 @@ export default function PersonalActionsFab() {
 
   if (!currentUser) return null;
 
-  const myProfile = soldiers.find((s) => s.id === currentUser.soldierProfileId || s.userId === currentUser.id);
+  const myProfile = resolveMySoldier(soldiers, currentUser);
   const mySignedItems = myProfile ? signedEquipment.filter((s) => s.soldierId === myProfile.id && s.status === 'active') : [];
   // Only the pure CC self-approves. Deputy CC must still submit a request
   // (which routes to CC). Owner is treated like CC.

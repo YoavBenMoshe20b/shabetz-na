@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- legacy monolith: hooks co-locate with provider; will be deleted in Phase 4 */
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type {
   MockUser, UserRole, Soldier, SchedulePeriod, AuditLog, Platoon,
@@ -17,9 +18,17 @@ import type {
   OperationalOrder, OperationalOrderStatus,
   Announcement, AnnouncementStatus,
   EscalationEvent, PlatoonLeaveCycle, PlatoonLeaveCycleSegment,
+  LogisticsRotation, LogisticsRotationStatus,
 } from '../types';
 import { newId } from '../utils/id';
 import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle } from '../utils/permissions';
+import { USE_SUPABASE } from '../api/_supabase';
+import * as missionsApi      from '../api/missions';
+import * as announcementsApi from '../api/announcements';
+import * as equipmentApi     from '../api/equipment';
+import * as leavesApi        from '../api/leaves';
+import * as alertsApi        from '../api/alerts';
+import * as soldiersApi      from '../api/soldiers';
 import {
   mockUsers, mockSoldiers, mockSchedulePeriods, mockAuditLogs, mockPlatoons, mockLeaves, mockLeaveRequests,
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
@@ -33,6 +42,7 @@ import {
   mockMissionNotes,
   mockOperationalOrders,
   mockAnnouncements, mockEscalationEvents, mockPlatoonLeaveCycles,
+  mockLogisticsRotations,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -371,9 +381,30 @@ interface AppContextType {
   updateLeaveCycleSegment:   (cycleId: string, segmentId: string, patch: Partial<Omit<PlatoonLeaveCycleSegment, 'id'>>) => void;
   removeLeaveCycleSegment:   (cycleId: string, segmentId: string) => void;
   publishLeaveCycle:         (id: string) => void;
+
+  // Logistics rotations (round 8) — Rasap-owned recurring/one-off chores
+  logisticsRotations:        LogisticsRotation[];
+  addLogisticsRotation:      (data: Omit<LogisticsRotation, 'id' | 'createdAt' | 'createdByUserId' | 'createdByName' | 'status'> & { status?: LogisticsRotationStatus }) => LogisticsRotation | null;
+  setLogisticsRotationStatus:(id: string, status: LogisticsRotationStatus) => void;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
+
+// ─── Persistence side-effect helper ───────────────────────────────────────
+//
+// Every mutation in this provider first updates LOCAL state for instant UI
+// feedback, then calls `persist(() => api.x(...))` to fire the Supabase
+// write in the background. When USE_SUPABASE=false the lambda never runs;
+// when true, any error is logged but does not roll back the optimistic
+// update — the next refresh will reconcile via React Query. This keeps
+// every action's signature synchronous from the caller's perspective,
+// matching the existing demo behavior.
+function persist(fire: () => Promise<unknown>): void {
+  if (!USE_SUPABASE) return;
+  void fire().catch((err) => {
+    console.error('[persist] write failed:', err);
+  });
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentUser,  setCurrentUser]  = useState<MockUser | null>(null);
@@ -429,6 +460,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reason:           data.reason,
       isManualOverride: data.isManualOverride ?? false,
     }]);
+    persist(() => soldiersApi.updateStatus({
+      soldierId:        data.soldierId,
+      next:             data.next,
+      expectedUntil:    data.expectedUntil,
+      reason:           data.reason,
+      setByName:        currentUser?.name,
+      setByRole:        currentRole,
+      isManualOverride: data.isManualOverride ?? false,
+    }));
   };
 
   /** Soldier updates their OWN status. */
@@ -522,17 +562,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return alert;
   };
 
-  const acknowledgeAlert = (id: string, byUserId: string) =>
+  const acknowledgeAlert = (id: string, byUserId: string) => {
     setOverrideAlerts((prev) => prev.map((a) => a.id === id
       ? { ...a, status: 'acknowledged', acknowledgedByUserId: byUserId, acknowledgedAt: new Date().toISOString() }
       : a
     ));
+    persist(() => alertsApi.acknowledgeOverride(id, byUserId));
+  };
 
-  const resolveAlert = (id: string, byUserId: string) =>
+  const resolveAlert = (id: string, byUserId: string) => {
     setOverrideAlerts((prev) => prev.map((a) => a.id === id
       ? { ...a, status: 'resolved', resolvedByUserId: byUserId, resolvedAt: new Date().toISOString() }
       : a
     ));
+    persist(() => alertsApi.resolveOverride(id, byUserId));
+  };
 
   // ── Engine foundation (slice E1 — state only, no UI consumer yet) ─────
   // The engine pipeline (slice E3+) will read from these directly. Mission
@@ -547,11 +591,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     setMissions((prev) => [...prev, m]);
+    persist(() => missionsApi.create(data));
     return m;
   };
 
   const setMissionStatus = (id: string, status: Mission['status']) => {
     setMissions((prev) => prev.map((m) => m.id === id ? { ...m, status } : m));
+    persist(() => missionsApi.setStatus(id, status));
   };
 
   const updateMission = (
@@ -559,6 +605,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patch: Partial<Omit<Mission, 'id' | 'companyId' | 'createdAt'>>,
   ) => {
     setMissions((prev) => prev.map((m) => m.id === id ? { ...m, ...patch } : m));
+    persist(() => missionsApi.update(id, patch));
   };
 
   // ── Operational orders ─────────────────────────────────────────────
@@ -712,6 +759,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       locationAfter:  se.currentLocation,
       toSoldierId: data.soldierId,
     });
+    persist(() => equipmentApi.signOut({
+      companyId:        se.companyId,
+      soldierId:        data.soldierId,
+      itemName:         data.itemName,
+      category:         data.category,
+      equipmentItemId:  data.equipmentItemId,
+      serialNumber:     data.serialNumber,
+      source:           se.source,
+      notes:            data.notes,
+      initialCondition: se.condition,
+      signedByUserId:   currentUser.id,
+      signedByName:     currentUser.name,
+    }));
     return se;
   };
 
@@ -750,6 +810,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         locationAfter:  data.partial ? 'מחסן רס״פ — תיקון' : 'מחסן רס״פ',
         fromSoldierId: se.soldierId,
       });
+      if (currentUser) {
+        persist(() => equipmentApi.returnItem({
+          companyId:         se.companyId,
+          signedEquipmentId: se.id,
+          partial:           data.partial,
+          damageDescription: data.damageDescription,
+          finalCondition:    data.finalCondition,
+          actorUserId:       currentUser.id,
+          actorName:         currentUser.name,
+        }));
+      }
     }
   };
 
@@ -778,6 +849,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         conditionAfter: data.newCondition ?? 'damaged',
         locationAfter:  se.currentLocation,
       });
+      if (currentUser) {
+        persist(() => equipmentApi.markDamage({
+          companyId:         se.companyId,
+          signedEquipmentId: se.id,
+          description:       data.description,
+          newCondition:      data.newCondition,
+          actorUserId:       currentUser.id,
+          actorName:         currentUser.name,
+        }));
+      }
     }
   };
 
@@ -920,36 +1001,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt:           new Date().toISOString(),
     };
     setEquipmentGaps((prev) => [gap, ...prev]);
+    persist(() => equipmentApi.reportGap({
+      companyId:           gap.companyId,
+      soldierId:           data.soldierId,
+      kind:                data.kind,
+      itemName:            data.itemName,
+      signedEquipmentId:   data.signedEquipmentId,
+      description:         data.description,
+      reportedByUserId:    gap.reportedByUserId,
+      reportedByPlatoonId: gap.reportedByPlatoonId,
+    }));
     return gap;
   };
 
   const setGapStatus = (id: string, patch: Partial<EquipmentGap>) =>
     setEquipmentGaps((prev) => prev.map((g) => g.id === id ? { ...g, ...patch } : g));
 
-  const reviewEquipmentGap = (id: string) => setGapStatus(id, {
-    status: 'reviewed-by-platoon',
-    reviewedByUserId: currentUser?.id,
-    reviewedAt: new Date().toISOString(),
-  });
+  const reviewEquipmentGap = (id: string) => {
+    setGapStatus(id, {
+      status: 'reviewed-by-platoon',
+      reviewedByUserId: currentUser?.id,
+      reviewedAt: new Date().toISOString(),
+    });
+    persist(() => equipmentApi.setGapStatus({
+      gapId: id, status: 'reviewed-by-platoon', reviewerId: currentUser?.id,
+    }));
+  };
 
-  const forwardEquipmentGap = (id: string) => setGapStatus(id, {
-    status: 'forwarded-to-rasap',
-    forwardedAt: new Date().toISOString(),
-  });
+  const forwardEquipmentGap = (id: string) => {
+    setGapStatus(id, {
+      status: 'forwarded-to-rasap',
+      forwardedAt: new Date().toISOString(),
+    });
+    persist(() => equipmentApi.setGapStatus({
+      gapId: id, status: 'forwarded-to-rasap', reviewerId: currentUser?.id,
+    }));
+  };
 
-  const resolveEquipmentGap = (id: string, notes?: string) => setGapStatus(id, {
-    status: 'resolved' as EquipmentGapStatus,
-    resolvedByUserId: currentUser?.id,
-    resolvedAt: new Date().toISOString(),
-    resolvedNotes: notes,
-  });
+  const resolveEquipmentGap = (id: string, notes?: string) => {
+    setGapStatus(id, {
+      status: 'resolved' as EquipmentGapStatus,
+      resolvedByUserId: currentUser?.id,
+      resolvedAt: new Date().toISOString(),
+      resolvedNotes: notes,
+    });
+    persist(() => equipmentApi.setGapStatus({
+      gapId: id, status: 'resolved', resolverId: currentUser?.id, notes,
+    }));
+  };
 
-  const dismissEquipmentGap = (id: string, notes?: string) => setGapStatus(id, {
-    status: 'dismissed' as EquipmentGapStatus,
-    resolvedByUserId: currentUser?.id,
-    resolvedAt: new Date().toISOString(),
-    resolvedNotes: notes,
-  });
+  const dismissEquipmentGap = (id: string, notes?: string) => {
+    setGapStatus(id, {
+      status: 'dismissed' as EquipmentGapStatus,
+      resolvedByUserId: currentUser?.id,
+      resolvedAt: new Date().toISOString(),
+      resolvedNotes: notes,
+    });
+    persist(() => equipmentApi.setGapStatus({
+      gapId: id, status: 'dismissed', resolverId: currentUser?.id, notes,
+    }));
+  };
 
   // ── Calendar events (slice 1: state + write actions, no UI uses them yet) ──
   // Slice 1 ships read-only. The actions are wired so slice 2 (week view +
@@ -1308,25 +1419,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const removeLeave = (id: string) =>
     setLeaves((prev) => prev.filter((l) => l.id !== id));
 
-  const addLeaveRequest = (req: Omit<LeaveRequest, 'id' | 'status' | 'submittedAt'>) =>
+  const addLeaveRequest = (req: Omit<LeaveRequest, 'id' | 'status' | 'submittedAt'>) => {
     setLeaveRequests((prev) => [...prev, {
       ...req,
       id: newId('lr'),
       status: 'pending',
       submittedAt: new Date().toISOString(),
     }]);
+    if (currentUser?.companyId) {
+      persist(() => leavesApi.submitLeaveRequest({
+        companyId:           currentUser.companyId!,
+        soldierId:           req.soldierId,
+        soldierName:         req.soldierName,
+        soldierTeamClass:    req.soldierTeamClass,
+        soldierSquadId:      req.soldierSquadId,
+        soldierSquadName:    req.soldierSquadName,
+        startDate: req.startDate, startTime: req.startTime,
+        endDate:   req.endDate,   endTime:   req.endTime,
+        reason:    req.reason,
+      }));
+    }
+  };
 
-  const approveLeaveRequest = (id: string, reviewerId: string, reviewerName: string) =>
+  // Authorization guard for leave-request decisions. The page also
+  // displays per-row buttons gated by useApprovableLeaveRequests, but
+  // we re-check at the write boundary so a stale UI cannot escalate.
+  const ensureCanApprove = (id: string, reviewer: MockUser): boolean => {
+    const req = leaveRequests.find((r) => r.id === id);
+    if (!req) return false;
+    return canApproveLeaveFor(reviewer, req, soldiers, platoons, users, squads);
+  };
+
+  const approveLeaveRequest = (id: string, reviewerId: string, reviewerName: string) => {
+    const reviewer = users.find((u) => u.id === reviewerId);
+    if (!reviewer || !ensureCanApprove(id, reviewer)) return;
     setLeaveRequests((prev) => prev.map((r) => r.id === id
       ? { ...r, status: 'approved', reviewedBy: reviewerId, reviewedByName: reviewerName, reviewedAt: new Date().toISOString() }
       : r
     ));
+    if (reviewer.companyId) {
+      persist(() => leavesApi.reviewLeaveRequest({
+        companyId: reviewer.companyId!,
+        requestId: id, decision: 'approved',
+        reviewerId, reviewerName,
+      }));
+    }
+  };
 
-  const rejectLeaveRequest = (id: string, reviewerId: string, reviewerName: string) =>
+  const rejectLeaveRequest = (id: string, reviewerId: string, reviewerName: string) => {
+    const reviewer = users.find((u) => u.id === reviewerId);
+    if (!reviewer || !ensureCanApprove(id, reviewer)) return;
     setLeaveRequests((prev) => prev.map((r) => r.id === id
       ? { ...r, status: 'rejected', reviewedBy: reviewerId, reviewedByName: reviewerName, reviewedAt: new Date().toISOString() }
       : r
     ));
+    if (reviewer.companyId) {
+      persist(() => leavesApi.reviewLeaveRequest({
+        companyId: reviewer.companyId!,
+        requestId: id, decision: 'rejected',
+        reviewerId, reviewerName,
+      }));
+    }
+  };
 
   // ── Round 4 state — Announcements / Escalations / Leave Cycles ───────
   //
@@ -1353,6 +1507,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     setAnnouncements((prev) => [ann, ...prev]);
     addAuditLog({ actorName: currentUser.name, actorRole: currentRole, action: 'הודעה פלוגתית חדשה', target: ann.title });
+    persist(() => announcementsApi.create({
+      companyId:        ann.companyId,
+      kind:             ann.kind,
+      title:            ann.title,
+      body:             ann.body,
+      audience:         ann.audience,
+      startDate:        ann.startDate,
+      startTime:        ann.startTime,
+      endDate:          ann.endDate,
+      endTime:          ann.endTime,
+      pinned:           ann.pinned,
+      showOnCalendar:   ann.showOnCalendar,
+      status:           ann.status,
+      createdByUserId:  ann.createdByUserId,
+      createdByName:    ann.createdByName,
+    }));
     return ann;
   };
 
@@ -1373,12 +1543,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? { ...a, status: 'closed' as const, closedAt: now, closedByUserId: currentUser.id }
       : a
     ));
+    if (currentUser.companyId) {
+      persist(() => announcementsApi.close(id, currentUser.companyId!));
+    }
   };
 
   const deleteAnnouncement = (id: string) => {
     if (!currentUser) return;
     if (!canCreateAnnouncement(currentUser, delegations)) return;
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    if (currentUser.companyId) {
+      persist(() => announcementsApi.remove(id, currentUser.companyId!));
+    }
   };
 
   // — Escalation events —
@@ -1419,8 +1595,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const activeEscalationsForViewer = (): EscalationEvent[] => {
     if (!currentUser) return [];
-    // Project audience match. Lazy — only run when consumer asks.
-    const lookups = { soldiers, platoons, squads };
     return escalationEvents.filter((e) => {
       if (e.status !== 'active') return false;
       // Commanders see all active escalations in their company. Soldiers
@@ -1445,9 +1619,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return false;
     });
-    // Silence unused for refs to lookups (used in real audience.ts util at consumer sites)
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    lookups;
   };
 
   // — Platoon leave cycle —
@@ -1516,6 +1687,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ));
   };
 
+  // ── Logistics rotations (round 8 — Rasap-owned chores) ────────────
+  const [logisticsRotations, setLogisticsRotations] = useState<LogisticsRotation[]>(mockLogisticsRotations);
+
+  const addLogisticsRotation: AppContextType['addLogisticsRotation'] = (data) => {
+    if (!currentUser) return null;
+    const rotation: LogisticsRotation = {
+      ...data,
+      id: newId('lr'),
+      status: data.status ?? 'planned',
+      createdByUserId: currentUser.id,
+      createdByName:   currentUser.name,
+      createdAt:       new Date().toISOString(),
+    };
+    setLogisticsRotations((prev) => [rotation, ...prev]);
+    return rotation;
+  };
+
+  const setLogisticsRotationStatus = (id: string, status: LogisticsRotationStatus) => {
+    setLogisticsRotations((prev) => prev.map((r) => r.id === id ? { ...r, status } : r));
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser, users, currentRole, soldiers, periods, auditLogs, platoons,
@@ -1554,6 +1746,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       escalationEvents, declareEscalation, closeEscalation, activeEscalationsForViewer,
       platoonLeaveCycles, addPlatoonLeaveCycle, updatePlatoonLeaveCycle,
       addLeaveCycleSegment, updateLeaveCycleSegment, removeLeaveCycleSegment, publishLeaveCycle,
+      logisticsRotations, addLogisticsRotation, setLogisticsRotationStatus,
     }}>
       {children}
     </AppContext.Provider>

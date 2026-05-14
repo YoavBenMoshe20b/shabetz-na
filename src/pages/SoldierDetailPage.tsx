@@ -45,12 +45,59 @@ export default function SoldierDetailPage() {
     updateSoldierSquad, updateSoldierOperationalRoles,
   } = useApp();
 
-  if (!currentUser) return <Navigate to="/login" replace />;
-
+  // ── Hooks first; route gates after. ──────────────────────────────
   const target = useMemo(
-    () => allSoldiers.find((s) => s.id === id),
+    () => allSoldiers.find((s) => s.id === id) ?? null,
     [allSoldiers, id],
   );
+
+  // Days at home / days on base (last 30 days, simple count)
+  const statsLast30d = useMemo(() => {
+    if (!target) return { daysHome: 0, daysBase: 0 };
+    const events = soldierStatusEvents
+      .filter((e) => e.soldierId === target.id)
+      .sort((a, b) => a.setAt.localeCompare(b.setAt));
+    const now = Date.now();
+    const horizon = now - 30 * 86400000;
+    let daysHome = 0;
+    let daysBase = 0;
+    for (let day = 0; day < 30; day++) {
+      const t = horizon + day * 86400000;
+      const evt = events.filter((e) => Date.parse(e.setAt) <= t).pop();
+      const state: SoldierStatus = evt?.value ?? target.currentStatus;
+      if (state === 'home')         daysHome++;
+      else if (state === 'in-base') daysBase++;
+    }
+    return { daysHome, daysBase };
+  }, [soldierStatusEvents, target]);
+
+  const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const weekSlots = useMemo(() => materializeWeek({
+    missions, platoons, squads, soldiers, leaves, dutyExclusions,
+    startDay: todayStart, days: 7,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+
+  const age = useMemo(() => {
+    if (!target?.dateOfBirth) return null;
+    const birth = new Date(target.dateOfBirth);
+    if (isNaN(birth.getTime())) return null;
+    const today = new Date();
+    let years = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) years--;
+    return years;
+  }, [target]);
+
+  const [editRolesOpen, setEditRolesOpen] = useState(false);
+  const [editSquadOpen, setEditSquadOpen] = useState(false);
+  const [rolesDraft, setRolesDraft] = useState<OperationalRole[]>(target?.operationalRoles ?? []);
+  const [squadDraft, setSquadDraft] = useState<string | null>(target?.squadId ?? null);
+  const [damageOpen, setDamageOpen] = useState(false);
+  const [damageFor, setDamageFor] = useState<SignedEquipment | null>(null);
+  const [statusOverrideOpen, setStatusOverrideOpen] = useState(false);
+
+  // ── Route gates AFTER all hooks have run. ────────────────────────
+  if (!currentUser) return <Navigate to="/login" replace />;
 
   if (!target) {
     return (
@@ -79,66 +126,14 @@ export default function SoldierDetailPage() {
 
   const myEquipment = signedEquipment.filter((e) => e.soldierId === target.id);
 
-  // History — derived from status events.
   const myStatusEvents = soldierStatusEvents
     .filter((e) => e.soldierId === target.id)
     .sort((a, b) => b.setAt.localeCompare(a.setAt));
 
-  // Days at home / days on base (last 30 days, simple count)
-  const statsLast30d = useMemo(() => {
-    const events = soldierStatusEvents
-      .filter((e) => e.soldierId === target.id)
-      .sort((a, b) => a.setAt.localeCompare(b.setAt));
-    const now = Date.now();
-    const horizon = now - 30 * 86400000;
-    let daysHome = 0;
-    let daysBase = 0;
-    // Walk timeline — for each day in window, infer the state from
-    // the latest event ≤ that day. If no event yet, fall back to current
-    // status (most demo data has stale status events).
-    for (let day = 0; day < 30; day++) {
-      const t = horizon + day * 86400000;
-      const evt = events.filter((e) => Date.parse(e.setAt) <= t).pop();
-      const state: SoldierStatus = evt?.value ?? target.currentStatus;
-      if (state === 'home')         daysHome++;
-      else if (state === 'in-base') daysBase++;
-    }
-    return { daysHome, daysBase };
-  }, [soldierStatusEvents, target]);
-
-  // Missions performed — derived from materialized slots (this week only;
-  // future slice expands history beyond the visible window).
-  const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
-  const weekSlots = useMemo(() => materializeWeek({
-    missions, platoons, squads, soldiers, leaves, dutyExclusions,
-    startDay: todayStart, days: 7,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
   const myMissionSlots = weekSlots.filter((slot) =>
     slot.assignedSoldierIds.includes(target.id) || slot.commanderSoldierId === target.id
   );
 
-  // Compute age
-  const age = useMemo(() => {
-    if (!target.dateOfBirth) return null;
-    const birth = new Date(target.dateOfBirth);
-    if (isNaN(birth.getTime())) return null;
-    const today = new Date();
-    let years = today.getFullYear() - birth.getFullYear();
-    const m = today.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) years--;
-    return years;
-  }, [target]);
-
-  // Edit controls state
-  const [editRolesOpen, setEditRolesOpen] = useState(false);
-  const [editSquadOpen, setEditSquadOpen] = useState(false);
-  const [rolesDraft, setRolesDraft] = useState<OperationalRole[]>(target.operationalRoles);
-  const [squadDraft, setSquadDraft] = useState<string | null>(target.squadId ?? null);
-  // Round 6 — damage reporting (commanders can report on this soldier's items)
-  const [damageOpen, setDamageOpen] = useState(false);
-  const [damageFor, setDamageFor] = useState<SignedEquipment | null>(null);
-  // Round 7 — manual status override (commander on soldier)
-  const [statusOverrideOpen, setStatusOverrideOpen] = useState(false);
   const saveRoles = () => { updateSoldierOperationalRoles(target.id, rolesDraft); setEditRolesOpen(false); };
   const saveSquad = () => { updateSoldierSquad(target.id, squadDraft); setEditSquadOpen(false); };
 

@@ -38,9 +38,55 @@ export default function MissionDetailPage() {
   } = useApp();
   const myCompany = useMyCompany();
 
-  if (!currentUser) return <Navigate to="/login" replace />;
+  // ── Hooks first; route gates after. ──────────────────────────────
+  const mission = useMemo(() => missions.find((m) => m.id === id) ?? null, [missions, id]);
 
-  const mission = useMemo(() => missions.find((m) => m.id === id), [missions, id]);
+  // The viewer's platoon (for platoon-scope note authoring + filtering)
+  const viewerPlatoon = useMemo(() => {
+    if (!currentUser) return undefined;
+    if (isPlatoonLeadership(currentRole) && currentUser.commandedPlatoonId) {
+      return platoons.find((p) => p.id === currentUser.commandedPlatoonId);
+    }
+    return platoons.find((p) => p.id === currentUser.platoonId);
+  }, [platoons, currentUser, currentRole]);
+
+  const isCC = isCompanyLeadership(currentRole);
+  const isPC = isPlatoonLeadership(currentRole);
+
+  // Notes the viewer is allowed to see (when there IS a mission).
+  const visibleNotes = useMemo(() => {
+    if (!mission) return [] as MissionNote[];
+    const all = missionNotes.filter((n) => n.missionId === mission.id);
+    return all.filter((n) => {
+      if (n.scope === 'company') return true;
+      if (isCC) return true;
+      return viewerPlatoon ? n.platoonId === viewerPlatoon.id : false;
+    });
+  }, [missionNotes, mission, isCC, viewerPlatoon]);
+
+  const summaryLines = useMemo(
+    () => mission
+      ? buildMissionSummary({ mission, platoons, qualifications, equipmentItems })
+      : [],
+    [mission, platoons, qualifications, equipmentItems],
+  );
+
+  const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const weekSlots = useMemo(() => mission ? materializeWeek({
+    missions: [mission],
+    platoons, squads, soldiers, leaves, dutyExclusions,
+    startDay: todayStart, days: 7,
+  }) : [], [mission, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+
+  const [draftScope, setDraftScope] = useState<'company' | 'platoon'>(
+    isCC ? 'company' : 'platoon'
+  );
+  const [draftText, setDraftText] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+
+  // ── Route gates AFTER all hooks have run. ────────────────────────
+  if (!currentUser) return <Navigate to="/login" replace />;
 
   if (!mission) {
     return (
@@ -55,59 +101,11 @@ export default function MissionDetailPage() {
     );
   }
 
-  // The viewer's platoon (for platoon-scope note authoring + filtering)
-  const viewerPlatoon = useMemo(() => {
-    if (isPlatoonLeadership(currentRole) && currentUser.commandedPlatoonId) {
-      return platoons.find((p) => p.id === currentUser.commandedPlatoonId);
-    }
-    return platoons.find((p) => p.id === currentUser.platoonId);
-  }, [platoons, currentUser, currentRole]);
-
-  const isCC = isCompanyLeadership(currentRole);
-  const isPC = isPlatoonLeadership(currentRole);
   const canEdit = canEditMission(currentUser, mission, delegations);
-
-  // Notes the viewer is allowed to see:
-  //   • All company-scope notes for this mission
-  //   • Platoon-scope notes whose platoonId === viewer's platoon (for CC: all)
-  const visibleNotes = useMemo(() => {
-    const all = missionNotes.filter((n) => n.missionId === mission.id);
-    return all.filter((n) => {
-      if (n.scope === 'company') return true;
-      if (isCC) return true;                            // CC sees all platoon notes too
-      return viewerPlatoon ? n.platoonId === viewerPlatoon.id : false;
-    });
-  }, [missionNotes, mission, isCC, viewerPlatoon]);
-
   const companyNotes = visibleNotes.filter((n) => n.scope === 'company');
   const platoonNotes = visibleNotes.filter((n) => n.scope === 'platoon');
-
-  // Operational prose summary
-  const summaryLines = useMemo(() => buildMissionSummary({
-    mission,
-    platoons,
-    qualifications,
-    equipmentItems,
-  }), [mission, platoons, qualifications, equipmentItems]);
-
-  // This week's materialized slots for this mission
-  const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
-  const weekSlots = useMemo(() => materializeWeek({
-    missions: [mission],
-    platoons, squads, soldiers, leaves, dutyExclusions,
-    startDay: todayStart, days: 7,
-  }), [mission, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
-
-  // For PC: pre-fill new platoon note in their own platoon
   const canAddPlatoonNote = isPC && !!viewerPlatoon;
   const canAddCompanyNote = isCC;
-
-  const [draftScope, setDraftScope] = useState<'company' | 'platoon'>(
-    canAddCompanyNote ? 'company' : 'platoon'
-  );
-  const [draftText, setDraftText] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState('');
 
   const submitNew = () => {
     const text = draftText.trim();

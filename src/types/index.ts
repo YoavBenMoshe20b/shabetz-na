@@ -2178,3 +2178,53 @@ export interface Alert {
   /** When set, scope visibility to a specific platoon (PC/PS view). */
   platoonId?: string;
 }
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  LOGISTICS ROTATIONS (סבבים לוגיסטיים) — round 8                         ║
+// ║                                                                          ║
+// ║  Owned by רס״פ. Recurring or one-off chores that need a soldier or       ║
+// ║  squad assignment per occurrence: kitchen duty, container loading,       ║
+// ║  water refill, weapon cleaning, etc. NOT operational missions —          ║
+// ║  separate authoring + queue from the engine.                             ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type LogisticsRotationKind =
+  | 'kitchen'        // ארוחות / מטבח
+  | 'cleaning'       // ניקיון שטחים ציבוריים
+  | 'container'      // פריקת/סידור מכולה
+  | 'water'          // מילוי מים
+  | 'weapons'        // ניקוי נשקים
+  | 'loading'        // העמסת ציוד
+  | 'custom';
+
+export type LogisticsRotationStatus = 'planned' | 'in-progress' | 'done' | 'cancelled';
+
+export interface LogisticsRotation {
+  id: string;
+  companyId: string;
+  kind: LogisticsRotationKind;
+  title: string;
+  description?: string;
+  /** Soldier ids assigned to this occurrence (1..N). */
+  assignedSoldierIds: string[];
+  /** Optional squad-level assignment for "whole-squad" chores. */
+  squadId?: string;
+  startIso: string;
+  endIso?:  string;
+  status: LogisticsRotationStatus;
+  createdByUserId: string;
+  createdByName:   string;
+  createdAt: string;
+  /** Free-text notes the רס״פ adds when reviewing. */
+  notes?: string;
+}
+
+export const LOGISTICS_ROTATION_LABEL: Record<LogisticsRotationKind, string> = {
+  kitchen:   'מטבח',
+  cleaning:  'ניקיון',
+  container: 'מכולה',
+  water:     'מים',
+  weapons:   'ניקוי נשקים',
+  loading:   'העמסת ציוד',
+  custom:    'משימה לוגיסטית',
+};

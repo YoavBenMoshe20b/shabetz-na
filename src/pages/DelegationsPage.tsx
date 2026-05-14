@@ -25,31 +25,34 @@ export default function DelegationsPage() {
     platoons,
   } = useApp();
 
-  if (!currentUser) return <Navigate to="/login" replace />;
-  if (!isPlatoonLeadership(currentRole) && !isCompanyLeadership(currentRole)) {
-    return <Navigate to="/home" replace />;
-  }
-
   const myCompany = useMyCompany();
   const isCompanyTier = isCompanyLeadership(currentRole);
 
-  // What can THIS user delegate?
-  const myCommandedPlatoonId = currentUser.commandedPlatoonId;
+  // What can THIS user delegate? (Computed even when null to keep hook
+  // order stable; guarded below.)
+  const myCommandedPlatoonId = currentUser?.commandedPlatoonId;
   const defaultScope: 'company' | 'platoon' = isCompanyTier ? 'company' : 'platoon';
 
   // Filter delegations to those THIS user granted (audit view)
   const myDelegations = useMemo(() => commandDelegations
-    .filter((d) => d.fromUserId === currentUser.id)
+    .filter((d) => d.fromUserId === currentUser?.id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [commandDelegations, currentUser],
   );
 
-  const nowMs = Date.now();
+  // Anchor to render-time once; downstream slices use this snapshot.
+  const nowMs = useMemo(() => Date.now(), []);
   const active   = myDelegations.filter((d) => !d.revoked && Date.parse(d.startIso) <= nowMs && nowMs <= Date.parse(d.endIso));
   const upcoming = myDelegations.filter((d) => !d.revoked && Date.parse(d.startIso) > nowMs);
   const past     = myDelegations.filter((d) => d.revoked || Date.parse(d.endIso) < nowMs);
 
   const [grantOpen, setGrantOpen] = useState(false);
+
+  // Route gates AFTER hooks.
+  if (!currentUser) return <Navigate to="/login" replace />;
+  if (!isPlatoonLeadership(currentRole) && !isCompanyLeadership(currentRole)) {
+    return <Navigate to="/home" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">

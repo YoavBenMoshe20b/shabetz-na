@@ -16,7 +16,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp, useMyCompany } from '../../context/AppContext';
+import { resolveMySoldier } from '../../utils/resolveSoldier';
 import { materializeWeek } from '../../utils/materialize';
+import { buildSizesHistogram, CATEGORY_LABEL, type SizeCategory } from '../../utils/sizesSummary';
+import type { AnnouncementKind } from '../../types';
 import Header from '../../components/Header';
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import AlertsButton from '../../components/AlertsButton';
@@ -24,14 +27,26 @@ import PersonalActionsFab from '../../components/PersonalActionsFab';
 import SignOutSheet from '../../components/SignOutSheet';
 import DamageReportSheet from '../../components/DamageReportSheet';
 import {
-  Section, PageMain, PageTitle, Body, Muted, Hint, Button, EmptyState,
+  Section, PageMain, PageTitle, Body, Muted, Hint, Button, EmptyState, Toast,
 } from '../../components/ui';
+
+// Pre-baked logistics broadcasts. Tap → one-shot AnnouncementCompose
+// targeting the whole company. Designed so the Rasap doesn't open the
+// composer for the 4–5 routine messages he sends every day.
+const QUICK_ANNOUNCEMENTS: Array<{ title: string; body?: string; kind: AnnouncementKind }> = [
+  { title: 'ארוחת בוקר מוכנה',  body: 'חדר אוכל',                   kind: 'operational' },
+  { title: 'ארוחת צהריים מוכנה', body: 'חדר אוכל · עד 13:30',         kind: 'operational' },
+  { title: 'ארוחת ערב מוכנה',   body: 'חדר אוכל · עד 19:30',          kind: 'operational' },
+  { title: 'הגיע ציוד חדש',     body: 'איסוף ב-רס״פ',                kind: 'message' },
+  { title: 'מילוי מימיות',      body: 'נא להגיע למאגר',              kind: 'operational' },
+  { title: 'הנפקת קסדות/אפודים', body: 'לפי מידה — דרך הסמלים',       kind: 'message' },
+];
 
 export default function RasapDashboard() {
   const navigate = useNavigate();
   const {
     currentUser, soldiers, platoons, leaves, missions, dutyExclusions, squads,
-    signedEquipment, equipmentGaps,
+    signedEquipment, equipmentGaps, addAnnouncement,
   } = useApp();
   const myCompany = useMyCompany();
 
@@ -40,8 +55,9 @@ export default function RasapDashboard() {
   const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [damageOpen,  setDamageOpen]  = useState(false);
+  const [quickToast,  setQuickToast]  = useState('');
 
-  const myProfile = soldiers.find((s) => s.id === currentUser?.soldierProfileId || s.userId === currentUser?.id);
+  const myProfile = resolveMySoldier(soldiers, currentUser);
 
   const materializedSlots = useMemo(() => materializeWeek({
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
@@ -86,6 +102,13 @@ export default function RasapDashboard() {
     [companyGaps],
   );
 
+  // Aggregate sizes across the company roster so the Rasap can plan
+  // logistic ordering at a glance. Per-soldier sizes are edited in /profile.
+  const sizes = useMemo(
+    () => buildSizesHistogram(soldiers.filter((s) => s.companyId === myCompany?.id)),
+    [soldiers, myCompany],
+  );
+
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
       <Header title="רס״פ" />
@@ -115,10 +138,16 @@ export default function RasapDashboard() {
             <Button variant="primary" size="md" onClick={() => setSignOutOpen(true)}>
               + החתמת ציוד
             </Button>
-            <Button variant="secondary" size="md" onClick={() => navigate('/rasap')}>
-              לוח רס״פ מלא ←
+            <Button variant="secondary" size="md" onClick={() => navigate('/rasap/rotations')}>
+              סבבים לוגיסטיים ←
             </Button>
           </div>
+          <button
+            onClick={() => navigate('/rasap')}
+            className="mt-2 block w-full text-center text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
+          >
+            לוח רס״פ מלא ←
+          </button>
         </section>
 
         {/* ── 3. Open damage queue ── */}
@@ -155,7 +184,88 @@ export default function RasapDashboard() {
           )}
         </Section>
 
-        {/* ── 4. Quick personal damage report ── */}
+        {/* ── 4. Sizes summary — order-planning aggregate ── */}
+        <Section
+          label="סיכומי מידות"
+          action={(
+            <button onClick={() => navigate('/soldiers')} className="text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim">
+              לפי חייל ←
+            </button>
+          )}
+        >
+          <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
+            {(['shirt', 'pants', 'shoe'] as SizeCategory[]).map((cat) => {
+              const buckets = sizes[cat].filter((b) => b.size !== '—').slice(0, 6);
+              const unfilled = sizes[cat].find((b) => b.size === '—')?.count ?? 0;
+              return (
+                <div key={cat} className="px-5 py-3.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Body className="font-semibold">{CATEGORY_LABEL[cat]}</Body>
+                    {unfilled > 0 && (
+                      <Hint className="text-mil-warn font-semibold">{unfilled} לא מילאו</Hint>
+                    )}
+                  </div>
+                  {buckets.length === 0 ? (
+                    <Muted className="mt-1.5 text-tiny">אין נתונים מהחיילים — שלח תזכורת למילוי פרופיל אישי</Muted>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {buckets.map((b) => (
+                        <span key={b.size} className="inline-flex items-baseline gap-1.5 bg-mil-bg-alt border border-mil-border rounded-md px-2 py-1 text-tiny">
+                          <span className="font-mono font-semibold text-mil-text">{b.size}</span>
+                          <span className="text-mil-muted tabular-nums">×{b.count}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <Hint className="block mt-1.5 px-1 text-mil-muted">
+            {sizes.reported} / {sizes.total} חיילים מילאו לפחות מידה אחת
+          </Hint>
+        </Section>
+
+        {/* ── 4½. Quick logistics announcements ── */}
+        <Section label="הודעות מהירות">
+          {quickToast && <Toast tone="success">{quickToast}</Toast>}
+          <div className="grid grid-cols-2 gap-2">
+            {QUICK_ANNOUNCEMENTS.map((qa) => (
+              <button
+                key={qa.title}
+                onClick={() => {
+                  if (!myCompany) return;
+                  addAnnouncement({
+                    companyId: myCompany.id,
+                    kind: qa.kind,
+                    title: qa.title,
+                    body: qa.body,
+                    audience: { kind: 'company' },
+                    showOnCalendar: false,
+                  });
+                  setQuickToast(`נשלחה הודעה: ${qa.title}`);
+                  setTimeout(() => setQuickToast(''), 2500);
+                }}
+                className="bg-mil-card border border-mil-border rounded-xl-soft shadow-card hover:shadow-card-hover hover:border-mil-border-strong transition-all duration-200 ease-out-soft px-4 py-3 text-right"
+              >
+                <Body className="font-semibold text-sm leading-tight">{qa.title}</Body>
+                {qa.body && <Hint className="block mt-0.5 text-xxs">{qa.body}</Hint>}
+              </button>
+            ))}
+          </div>
+          <Hint className="block mt-2 text-mil-muted">
+            ההודעה מגיעה לכל הפלוגה. לקהל אחר ←{' '}
+            <button
+              type="button"
+              onClick={() => navigate('/announcements')}
+              className="text-mil-olive font-semibold hover:underline"
+            >
+              הודעה מותאמת
+            </button>
+          </Hint>
+        </Section>
+
+        {/* ── 5. Quick personal damage report ── */}
         <Section label="פעולות מהירות">
           <button
             onClick={() => setDamageOpen(true)}
