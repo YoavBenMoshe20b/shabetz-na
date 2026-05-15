@@ -5,6 +5,7 @@ import type {
   SoldierStatusEvent, Delegation,
   CalendarEvent,
   Mission, Qualification, EquipmentItem, SoldierQualification, Assignment, SlotOperationalState,
+  ChecklistTemplate, ChecklistRun, ChecklistInstance,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment,
@@ -783,6 +784,33 @@ export const mockAssignments: Assignment[] = [];
 // notes) that survive any engine recompute. Seeded empty — fills at
 // runtime via the operations panel on MissionDetailPage.
 export const mockSlotOperationalState: SlotOperationalState[] = [];
+
+// ─── Checklists (Phase 6.2.c) ──────────────────────────────────────────
+// One canonical "basic gear" template seeded so PC can start a צל״ם
+// without first authoring a template. The catalog can grow at runtime
+// via a ChecklistComposer surface (future slice).
+
+export const mockChecklistTemplates: ChecklistTemplate[] = [
+  {
+    id: 'tpl-basic',
+    companyId: 'co1',
+    name: 'צל״ם בסיסי',
+    category: 'full',
+    items: [
+      { key: 'helmet',   label: 'קסדה',           level: 'critical' },
+      { key: 'vest',     label: 'ווסט',           level: 'critical' },
+      { key: 'weapon',   label: 'נשק אישי',       level: 'critical' },
+      { key: 'mags',     label: 'מחסניות',        expectedCount: 3, level: 'critical' },
+      { key: 'water',    label: 'מימייה מלאה',    level: 'required' },
+      { key: 'comms',    label: 'מכשיר קשר',      level: 'required' },
+      { key: 'medkit',   label: 'תיק חובש (אם רלוונטי)', level: 'soft' },
+    ],
+    createdAt: '2026-05-15T07:00:00.000Z',
+  },
+];
+
+export const mockChecklistRuns: ChecklistRun[] = [];
+export const mockChecklistInstances: ChecklistInstance[] = [];
 
 export const mockOverrideAlerts: OverrideAlert[] = [
   {

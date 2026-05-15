@@ -239,10 +239,18 @@ export default function PlatoonMissionsPage() {
           </Section>
         )}
 
+        {/* Primary CTA — open a new platoon mission. */}
+        <button
+          onClick={() => navigate('/platoon/missions/new')}
+          className="w-full bg-mil-olive hover:bg-mil-olive-light text-white px-5 py-3.5 rounded-xl-soft font-bold text-base transition-colors shadow-card"
+        >
+          + משימה חדשה למחלקה
+        </button>
+
         {/* Footer link to the weekly grid view */}
         <button
           onClick={() => navigate('/platoon')}
-          className="w-full text-center text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim py-2"
+          className="w-full text-center text-tiny font-semibold text-mil-muted hover:text-mil-text py-2"
         >
           תצוגת שבצ״ק שבועית ←
         </button>

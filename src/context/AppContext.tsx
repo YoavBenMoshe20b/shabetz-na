@@ -7,7 +7,9 @@ import type {
   CompanyMission, OverrideAlert,
   SoldierStatus, SoldierStatusEvent, Delegation,
   CalendarEvent,
-  Mission, Assignment, SelectorOutcomeRecord, SlotOperationalState, SlotExcuse, Qualification, EquipmentItem, SoldierQualification,
+  Mission, Assignment, SelectorOutcomeRecord, SlotOperationalState, SlotExcuse,
+  ChecklistTemplate, ChecklistRun, ChecklistInstance, ChecklistRunScope,
+  Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment, SignedEquipmentStatus,
@@ -42,6 +44,7 @@ import {
   mockSoldierStatusEvents, mockDelegations,
   mockCalendarEvents,
   mockMissions, mockAssignments, mockSlotOperationalState, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
+  mockChecklistTemplates, mockChecklistRuns, mockChecklistInstances,
   mockLeaveRotationPolicy, mockLeaveBlocks,
   mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
   mockSignedEquipment,
@@ -225,6 +228,14 @@ interface AppContextType {
   toggleSlotSoldierLock:  (slotId: string, soldierId: string) => void;
   addSlotExcuse:          (slotId: string, excuse: SlotExcuse) => void;
   removeSlotExcuse:       (slotId: string, soldierId: string) => void;
+
+  // ── Checklists (Phase 6.2.c) ────────────────────────────────────
+  checklistTemplates:     ChecklistTemplate[];
+  checklistRuns:          ChecklistRun[];
+  checklistInstances:     ChecklistInstance[];
+  createChecklistRun:     (input: { templateId: string; scope: ChecklistRunScope; missionId?: string; notes?: string; soldierIds: string[] }) => ChecklistRun | null;
+  setChecklistInstanceItem: (instanceId: string, itemKey: string, patch: { present?: boolean; actualCount?: number; notes?: string }) => void;
+  completeChecklistRun:   (runId: string) => void;
 
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
@@ -706,6 +717,91 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Clear all operational state for a slot. */
   const clearSlotOps = (slotId: string) => {
     setSlotOperationalState((prev) => prev.filter((s) => s.slotId !== slotId));
+  };
+
+  // ── Checklists (Phase 6.2.c) ──────────────────────────────────────
+  const [checklistTemplates] = usePersistedState<ChecklistTemplate[]>(
+    'checklistTemplates', mockChecklistTemplates, SEED_VERSION,
+  );
+  const [checklistRuns, setChecklistRuns] = usePersistedState<ChecklistRun[]>(
+    'checklistRuns', mockChecklistRuns, SEED_VERSION,
+  );
+  const [checklistInstances, setChecklistInstances] = usePersistedState<ChecklistInstance[]>(
+    'checklistInstances', mockChecklistInstances, SEED_VERSION,
+  );
+
+  const createChecklistRun = (input: {
+    templateId: string;
+    scope: ChecklistRunScope;
+    missionId?: string;
+    notes?: string;
+    soldierIds: string[];
+  }): ChecklistRun | null => {
+    if (!currentUser) return null;
+    const tpl = checklistTemplates.find((t) => t.id === input.templateId);
+    if (!tpl) return null;
+    const runId = newId('crun');
+    const nowIso = new Date().toISOString();
+    const run: ChecklistRun = {
+      id: runId,
+      companyId: tpl.companyId,
+      templateId: input.templateId,
+      scope: input.scope,
+      missionId: input.missionId,
+      initiatedByUserId: currentUser.id,
+      initiatedByName: currentUser.name,
+      notes: input.notes,
+      status: 'open',
+      createdAt: nowIso,
+    };
+    const instances: ChecklistInstance[] = input.soldierIds.map((sid) => ({
+      id: newId('cinst'),
+      runId,
+      soldierId: sid,
+      status: 'pending',
+      items: tpl.items.map((it) => ({
+        key: it.key,
+        present: false,
+        actualCount: it.expectedCount,
+      })),
+    }));
+    setChecklistRuns((prev) => [run, ...prev]);
+    setChecklistInstances((prev) => [...instances, ...prev]);
+    return run;
+  };
+
+  const setChecklistInstanceItem = (
+    instanceId: string,
+    itemKey: string,
+    patch: { present?: boolean; actualCount?: number; notes?: string },
+  ) => {
+    setChecklistInstances((prev) => prev.map((inst) => {
+      if (inst.id !== instanceId) return inst;
+      const items = inst.items.map((it) => (it.key === itemKey ? { ...it, ...patch } : it));
+      // Auto-status: if all critical items checked → in-progress; if any critical missing → in-progress
+      const tpl = checklistTemplates.find((t) => t.id === checklistRuns.find((r) => r.id === inst.runId)?.templateId);
+      let status = inst.status;
+      if (tpl) {
+        const critical = tpl.items.filter((i) => i.level === 'critical');
+        const allCriticalPresent = critical.every((c) =>
+          items.find((it) => it.key === c.key)?.present === true,
+        );
+        const anyTouched = items.some((it) => it.present);
+        if (allCriticalPresent && items.every((it) => it.present || tpl.items.find((tplI) => tplI.key === it.key)?.level === 'soft')) {
+          status = 'passed';
+        } else if (anyTouched) {
+          status = 'in-progress';
+        }
+      }
+      return { ...inst, items, status };
+    }));
+  };
+
+  const completeChecklistRun = (runId: string) => {
+    const nowIso = new Date().toISOString();
+    setChecklistRuns((prev) => prev.map((r) =>
+      r.id === runId ? { ...r, status: 'completed', completedAt: nowIso } : r,
+    ));
   };
 
   /** Toggle a soldier's locked-on-slot state. Adds to lockedSoldierIds
@@ -1989,6 +2085,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       selectorOutcomes, recordSelectorOutcome,
       slotOperationalState, setSlotOps, clearSlotOps,
       toggleSlotSoldierLock, addSlotExcuse, removeSlotExcuse,
+      checklistTemplates, checklistRuns, checklistInstances,
+      createChecklistRun, setChecklistInstanceItem, completeChecklistRun,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,

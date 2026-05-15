@@ -23,6 +23,7 @@ import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import Header from '../components/Header';
 import StaffingSheet from '../components/StaffingSheet';
 import SlotOperationsSheet from '../components/SlotOperationsSheet';
+import ChecklistRunSheet from '../components/ChecklistRunSheet';
 import type { MissionNote, Platoon, UserRole, SelectorOutcomeRecord, Soldier } from '../types';
 import {
   Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill,
@@ -40,6 +41,7 @@ export default function MissionDetailPage() {
     assignments, setSlotAssignment,
     selectorOutcomes, recordSelectorOutcome,
     slotOperationalState,
+    checklistTemplates, checklistRuns, createChecklistRun,
   } = useApp();
   const myCompany = useMyCompany();
 
@@ -107,6 +109,8 @@ export default function MissionDetailPage() {
   const [staffingSlot, setStaffingSlot] = useState<MaterializedSlot | null>(null);
   /** Slot currently open in the SlotOperationsSheet — Mission Operations Layer. */
   const [opsSlot, setOpsSlot] = useState<MaterializedSlot | null>(null);
+  /** Active checklist run sheet open for this mission. */
+  const [activeChecklistRunId, setActiveChecklistRunId] = useState<string | null>(null);
 
   // ── Route gates AFTER all hooks have run. ────────────────────────
   if (!currentUser) return <Navigate to="/login" replace />;
@@ -413,6 +417,67 @@ export default function MissionDetailPage() {
           );
         })()}
 
+        {/* צל״ם — Phase 6.2.c. Start a readiness check for the soldiers
+            assigned to this week's slots. Active runs are listed for
+            quick resume. */}
+        {(isCC || isPC) && weekSlots.length > 0 && (() => {
+          const missionRuns = checklistRuns.filter((r) => r.missionId === mission.id);
+          const activeRuns = missionRuns.filter((r) => r.status === 'open');
+          const handleStart = () => {
+            if (checklistTemplates.length === 0) return;
+            const tpl = checklistTemplates[0];
+            const soldierIds = Array.from(new Set(
+              weekSlots.flatMap((s) => [
+                ...s.assignedSoldierIds,
+                ...(s.commanderSoldierId ? [s.commanderSoldierId] : []),
+              ]),
+            ));
+            if (soldierIds.length === 0) return;
+            const run = createChecklistRun({
+              templateId: tpl.id,
+              scope: { kind: 'soldiers', soldierIds },
+              missionId: mission.id,
+              notes: `${tpl.name} למשימה ${mission.name}`,
+              soldierIds,
+            });
+            if (run) setActiveChecklistRunId(run.id);
+          };
+          return (
+            <Section label={`צל״ם · ${activeRuns.length} פעיל`}>
+              <div className="bg-mil-card border border-mil-border rounded-xl-soft p-4">
+                {activeRuns.length === 0 ? (
+                  <>
+                    <Body className="font-semibold leading-tight">אין ריצת צל״ם פעילה</Body>
+                    <Hint className="block mt-1 text-mil-muted leading-snug">
+                      התחל בדיקת ציוד וקריטיות לחיילים המשובצים.
+                    </Hint>
+                  </>
+                ) : (
+                  <div className="space-y-2 mb-3">
+                    {activeRuns.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => setActiveChecklistRunId(r.id)}
+                        className="w-full text-right px-3 py-2.5 rounded-md bg-mil-bg-alt border border-mil-border hover:border-mil-olive"
+                      >
+                        <Body className="font-semibold text-sm">
+                          {checklistTemplates.find((t) => t.id === r.templateId)?.name ?? 'צל״ם'}
+                        </Body>
+                        <Hint className="text-mil-muted">
+                          {r.notes || `התחיל ${formatRelative(r.createdAt)}`}
+                        </Hint>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <Button variant="primary" size="md" fullWidth onClick={handleStart}>
+                  + התחל צל״ם חדש
+                </Button>
+              </div>
+            </Section>
+          );
+        })()}
+
         {weekSlots.length > 0 && (
           <Section label="משמרות השבוע">
             <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
@@ -532,6 +597,17 @@ export default function MissionDetailPage() {
           candidatePool={candidatePool}
         />
       )}
+
+      {activeChecklistRunId && (() => {
+        const run = checklistRuns.find((r) => r.id === activeChecklistRunId);
+        return run ? (
+          <ChecklistRunSheet
+            open
+            onClose={() => setActiveChecklistRunId(null)}
+            run={run}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
