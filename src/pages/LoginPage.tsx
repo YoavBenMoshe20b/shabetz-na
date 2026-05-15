@@ -17,6 +17,7 @@ import { useApp } from '../context/AppContext';
 import { Card, Button, PageMain, PageTitle, CardTitle, Body, Muted, Hint } from '../components/ui';
 import { validatePassword, isPasswordValid, validatePhone, validateIdLast4 } from '../services/authService';
 import { mockSoldiers, mockUsers } from '../data/mockData';
+import { USE_SUPABASE } from '../api';
 
 type Mode = 'signIn' | 'claim' | 'bootstrap';
 
@@ -155,6 +156,18 @@ export default function LoginPage() {
                 </Button>
               </div>
             </Card>
+
+            {/* Demo accounts — visible only in mock mode. In production
+                (USE_SUPABASE=true) this is hidden completely. */}
+            {!USE_SUPABASE && (
+              <DemoAccountsPanel
+                onPick={(phone: string) => {
+                  setSiPhone(phone);
+                  setSiPass('Test@1234');
+                  setError('');
+                }}
+              />
+            )}
           </form>
         )}
 
@@ -425,3 +438,59 @@ function PwRules({ pwv }: { pwv: ReturnType<typeof validatePassword> }) {
 }
 
 const inp = 'w-full bg-mil-bg border border-mil-border rounded-xl px-4 py-3 text-mil-text text-base focus:outline-none focus:ring-2 focus:ring-mil-olive/30 focus:border-mil-olive placeholder:text-mil-ghost';
+
+// ─── Demo accounts panel ────────────────────────────────────────────
+//
+// Mock-mode helper that surfaces the seeded users so a reviewer can
+// tap-to-fill instead of memorizing phones. Hidden when USE_SUPABASE
+// is true. Password is always 'Test@1234' in mock mode.
+
+function DemoAccountsPanel({ onPick }: { onPick: (phone: string) => void }) {
+  const [open, setOpen] = useState(false);
+  // Roles to surface, in the order they help the reviewer step through
+  // the CC → PC → Soldier flow.
+  const accounts: { label: string; name: string; phone: string }[] = [
+    { label: 'מ״פ',   name: 'יוסי כהן',   phone: '0501234567' },
+    { label: 'סמ״פ',  name: 'דנה לוי',    phone: '0507777666' },
+    { label: 'מ״מ 1', name: 'רוני שמש',   phone: '0502222111' },
+    { label: 'מ״מ 2', name: 'עומר בר',    phone: '0501414141' },
+    { label: 'מ״מ 3', name: 'יואב סער',   phone: '0501919191' },
+    { label: 'סמל 1', name: 'ניסים דהן',  phone: '0509999888' },
+    { label: 'רס״פ',  name: 'אבי כהן',    phone: '0502323232' },
+    { label: 'שליש',  name: 'רון אביב',   phone: '0502424242' },
+    { label: 'חייל',  name: 'משה ישראלי', phone: '0509876543' },
+  ];
+  return (
+    <div className="mt-3 bg-mil-card border border-mil-border rounded-xl-soft overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-right px-4 py-3 flex items-center justify-between hover:bg-mil-bg-alt transition-colors"
+      >
+        <span className="text-tiny font-semibold text-mil-muted tracking-wide uppercase">
+          חשבונות דמו
+        </span>
+        <span className="text-tiny text-mil-ghost">{open ? 'הסתר' : 'הצג'} ←</span>
+      </button>
+      {open && (
+        <div className="border-t border-mil-border bg-mil-bg-alt px-3 py-2 space-y-1">
+          <Muted className="block text-tiny leading-snug pb-1">
+            לחץ/י על שורה כדי למלא טלפון + סיסמה (Test@1234).
+          </Muted>
+          {accounts.map((a) => (
+            <button
+              key={a.phone}
+              type="button"
+              onClick={() => onPick(a.phone)}
+              className="w-full text-right px-2 py-1.5 rounded-md flex items-baseline gap-2 hover:bg-mil-card transition-colors"
+            >
+              <span className="text-tiny font-semibold text-mil-olive min-w-[44px]">{a.label}</span>
+              <span className="text-tiny font-medium text-mil-text">{a.name}</span>
+              <span className="mr-auto text-tiny font-mono tabular-nums text-mil-ghost" dir="ltr">{a.phone}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
