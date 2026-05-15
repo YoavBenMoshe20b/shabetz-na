@@ -32,7 +32,6 @@ import { isShalish, isRasap } from './utils/permissions';
 import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import DelegationBanner from './components/DelegationBanner';
-import EscalationActiveBanner from './components/EscalationActiveBanner';
 import { EmergencyBanner } from './components/ui';
 
 // Eager — entry surfaces every authed user lands on
@@ -109,9 +108,13 @@ function AppRoutes() {
         />
       )}
 
-      {/* Active escalation (הקפצה) — higher priority than DelegationBanner;
-          renders only if the viewer's audience covers an active event. */}
-      {currentUser && !isFullScreen && <EscalationActiveBanner />}
+      {/* Phase 6.7 — REMOVED EscalationActiveBanner from the global
+          layout. Active escalations now surface via:
+            • the bell badge (AlertsButton) — count includes them
+            • /alerts page — full feed
+            • FocusSection — when a decision is required
+          No top banner per operational UX principle: critical events
+          must NOT dominate every screen as a sticky strip. */}
 
       {currentUser && !isFullScreen && <DelegationBanner />}
 

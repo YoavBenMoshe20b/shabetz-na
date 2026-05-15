@@ -39,6 +39,17 @@ export default function SoldierDashboard() {
   const myProfile = resolveMySoldier(soldiers, currentUser);
   const mySquadName = squads.find((s) => s.id === myProfile?.squadId)?.name ?? myProfile?.teamClass ?? '';
 
+  // Soldiers in the viewer's own platoon — scoped via squad membership.
+  // Without this, "צוות המחלקה" rendered all 74 company soldiers as if
+  // they were one platoon. Hard cap is the platoon's actual size (~20).
+  const platoonTeammates = useMemo(() => {
+    if (!myPlatoon) return soldiers;
+    const platoonSquadIds = new Set(
+      squads.filter((sq) => sq.platoonId === myPlatoon.id).map((sq) => sq.id),
+    );
+    return soldiers.filter((s) => s.squadId && platoonSquadIds.has(s.squadId));
+  }, [soldiers, squads, myPlatoon]);
+
   const [showWeek,    setShowWeek]    = useState(false);
   const [showRoster,  setShowRoster]  = useState(false);
   const [leaveOpen,   setLeaveOpen]   = useState(false);
@@ -217,13 +228,13 @@ export default function SoldierDashboard() {
         </CollapsibleCard>
 
         <CollapsibleCard
-          title="צוות המחלקה"
-          count={soldiers.length}
+          title={`צוות ${myPlatoon?.name ?? 'המחלקה'}`}
+          count={platoonTeammates.length}
           open={showRoster}
           onToggle={() => setShowRoster((v) => !v)}
         >
           <div className="divide-y divide-mil-border max-h-80 overflow-y-auto">
-            {soldiers.map((s) => {
+            {platoonTeammates.map((s) => {
               const onLeave = onLeaveSoldierIds.has(s.id);
               const tone =
                 onLeave ? 'bg-mil-sand' :

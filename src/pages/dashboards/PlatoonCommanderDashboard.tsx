@@ -203,37 +203,103 @@ export default function PlatoonCommanderDashboard() {
           )}
         </header>
 
-        {/* שבצ״ק CTA — the PC's primary action surface. Includes a count
-            of understaffed slots so the operator sees what needs them
-            BEFORE drilling in. Sits above everything else because this
-            is the platoon commander's main job. */}
+        {/* Action Center — the PC's primary surface. Shows live staffing
+            pressure with: a prominent count, breakdown by severity, and
+            up to 3 understaffed slots inline that route directly into
+            the platoon week. Designed to feel like a command-and-control
+            tile, not a generic dashboard card. */}
         {(() => {
           const understaffed = myPlatoonSlots.filter(
             (s) => s.status === 'partially-staffed' || s.status === 'open',
-          ).length;
+          );
+          const open = understaffed.filter((s) => s.status === 'open');
+          const partial = understaffed.filter((s) => s.status === 'partially-staffed');
+          const upcoming = understaffed
+            .filter((s) => Date.parse(s.start) > now.getTime())
+            .sort((a, b) => a.start.localeCompare(b.start))
+            .slice(0, 3);
+
+          // Calm green tile when there's nothing to staff.
+          if (myPlatoonSlots.length === 0) {
+            return (
+              <section className="bg-mil-card border border-mil-border rounded-2xl-soft px-5 py-5">
+                <Hint className="block uppercase tracking-wide font-semibold text-mil-muted">לוח שיבוץ</Hint>
+                <Body className="mt-1 font-semibold text-base">אין משימות פעילות השבוע</Body>
+                <Muted className="mt-1 text-tiny leading-snug">כשמ״פ יוריד משימות למחלקה, הן יופיעו כאן.</Muted>
+              </section>
+            );
+          }
+          if (understaffed.length === 0) {
+            return (
+              <section className="bg-mil-success-bg border border-mil-success-border rounded-2xl-soft px-5 py-5">
+                <Hint className="block uppercase tracking-wide font-semibold text-mil-success">לוח שיבוץ</Hint>
+                <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+                  <Body className="font-bold text-lg">הכל מאוייש</Body>
+                  <Muted className="text-tiny">{myPlatoonSlots.length} משבצות השבוע</Muted>
+                </div>
+                <button
+                  onClick={() => navigate('/platoon')}
+                  className="mt-3 text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
+                >
+                  פתח שבצ״ק ←
+                </button>
+              </section>
+            );
+          }
+
           return (
-            <button
-              onClick={() => navigate('/platoon')}
-              className="w-full text-right bg-mil-card border border-mil-border rounded-xl-soft shadow-card hover:shadow-card-hover hover:border-mil-border-strong transition-all duration-200 ease-out-soft px-5 py-4 flex items-center gap-3.5"
-            >
-              <span className="w-9 h-9 rounded-xl-soft bg-mil-olive-bg text-mil-olive flex items-center justify-center flex-shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <path d="M16 2v4M8 2v4M3 10h18" />
-                </svg>
-              </span>
-              <div className="flex-1 min-w-0">
-                <Body className="font-semibold leading-tight">שבצ״ק המחלקה</Body>
-                <Hint className="block mt-0.5 text-mil-muted">
-                  {myPlatoonSlots.length === 0
-                    ? 'אין משימות פעילות השבוע'
-                    : understaffed > 0
-                      ? <><span className="font-bold text-mil-warn">{understaffed}</span> משבצות דורשות איוש · {myPlatoonSlots.length} סה״כ</>
-                      : `${myPlatoonSlots.length} משבצות · הכל מאוייש`}
-                </Hint>
-              </div>
-              <span className="text-mil-olive font-semibold text-tiny">פתח ←</span>
-            </button>
+            <section className="bg-mil-card border-2 border-mil-warn-border rounded-2xl-soft overflow-hidden shadow-card">
+              <header className="bg-mil-warn-bg px-5 py-4 border-b border-mil-warn-border">
+                <Hint className="block uppercase tracking-wide font-bold text-mil-warn">דורש איוש</Hint>
+                <div className="mt-1 flex items-baseline gap-2.5 flex-wrap">
+                  <span className="text-3xl font-extrabold tabular-nums text-mil-warn">{understaffed.length}</span>
+                  <Body className="font-semibold">משבצות פתוחות השבוע</Body>
+                </div>
+                <Muted className="mt-1 text-tiny tabular-nums">
+                  {open.length > 0 && <><span className="font-bold text-mil-alert">{open.length}</span> ללא איוש · </>}
+                  {partial.length > 0 && <><span className="font-bold text-mil-warn">{partial.length}</span> חלקי · </>}
+                  {myPlatoonSlots.length} סה״כ
+                </Muted>
+              </header>
+
+              {upcoming.length > 0 && (
+                <div className="divide-y divide-mil-border">
+                  {upcoming.map((slot) => {
+                    const sDate = new Date(slot.start);
+                    const eDate = new Date(slot.end);
+                    const dayLabel = `${sDate.getDate().toString().padStart(2, '0')}/${(sDate.getMonth() + 1).toString().padStart(2, '0')}`;
+                    const timeRange = `${sDate.getHours().toString().padStart(2, '0')}:${sDate.getMinutes().toString().padStart(2, '0')}–${eDate.getHours().toString().padStart(2, '0')}:${eDate.getMinutes().toString().padStart(2, '0')}`;
+                    const assignedCount = slot.assignedSoldierIds.length + (slot.commanderSoldierId ? 1 : 0);
+                    const isOpen = slot.status === 'open';
+                    return (
+                      <button
+                        key={slot.id}
+                        onClick={() => navigate(`/platoon`)}
+                        className="w-full text-right px-5 py-3 hover:bg-mil-card-warm/40 transition-colors flex items-center gap-3"
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isOpen ? 'bg-mil-alert' : 'bg-mil-warn'}`} aria-hidden />
+                        <div className="flex-1 min-w-0">
+                          <Body className="font-semibold leading-tight truncate text-sm">{slot.missionName}</Body>
+                          <Hint className="block mt-0.5 text-mil-muted font-mono tabular-nums">
+                            {dayLabel} · {timeRange}
+                          </Hint>
+                        </div>
+                        <span className={`text-xs font-bold tabular-nums ${isOpen ? 'text-mil-alert' : 'text-mil-warn'}`}>
+                          {assignedCount}/{slot.requiredCount}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <button
+                onClick={() => navigate('/platoon')}
+                className="w-full bg-mil-olive hover:bg-mil-olive-light text-white px-5 py-3.5 font-bold text-base transition-colors"
+              >
+                אייש עכשיו ←
+              </button>
+            </section>
           );
         })()}
 
