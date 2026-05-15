@@ -1,0 +1,7 @@
+{
+  "_description": "Baseline state. Empty escalations / overrides / gaps. The default seed missions (g1×2, g2, g3) remain. Use for hero shots where the system should look 'all clear'.",
+  "escalationEvents": [],
+  "overrideAlerts": [],
+  "equipmentGaps": [],
+  "leaveRequests": []
+}

@@ -1,0 +1,37 @@
+{
+  "_description": "Soldier-side scenario. חייל 2 (אורן פרץ, u14) has a pending leave + an open equipment gap. Used to capture the SoldierDashboard with non-empty friction surfaces.",
+  "escalationEvents": [],
+  "overrideAlerts": [],
+  "equipmentGaps": [
+    {
+      "id": "eg-soldier-friction",
+      "companyId": "co1",
+      "reportedByUserId": "u14",
+      "reportedBySoldierId": "s3",
+      "reportedByName": "אורן פרץ",
+      "reportedByPlatoonId": "g1",
+      "kind": "missing",
+      "itemName": "מימייה",
+      "description": "הגיע מהבית בלי מימייה — צריך חדשה",
+      "status": "reported",
+      "createdAt": "2026-05-15T06:50:00.000Z"
+    }
+  ],
+  "leaveRequests": [
+    {
+      "id": "lr-soldier-friction",
+      "soldierId": "s3",
+      "soldierName": "אורן פרץ",
+      "soldierTeamClass": "כיתה ב",
+      "soldierSquadId": "su-g1-b",
+      "soldierSquadName": "כיתה ב",
+      "startDate": "2026-05-21",
+      "startTime": "07:00",
+      "endDate": "2026-05-23",
+      "endTime": "20:00",
+      "reason": "יום הולדת לאחות",
+      "status": "pending",
+      "submittedAt": "2026-05-14T18:30:00.000Z"
+    }
+  ]
+}

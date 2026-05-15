@@ -1,0 +1,73 @@
+{
+  "_description": "Three critical signals at once: active escalation, manpower shortfall via 3 critical override alerts, and an open equipment gap. Mimics 'morning storm' — operator opens the app to multiple urgent things.",
+  "escalationEvents": [
+    {
+      "id": "esc-demo-1",
+      "companyId": "co1",
+      "kind": "kapitza",
+      "reason": "התראה מרמ״ט — חזרה לבסיס",
+      "location": "מסדר חדר אוכל",
+      "status": "active",
+      "openedByUserId": "u1",
+      "openedByName": "יוסי כהן",
+      "openedAt": "2026-05-15T05:42:00.000Z",
+      "audience": { "kind": "company" }
+    }
+  ],
+  "overrideAlerts": [
+    {
+      "id": "ova-demo-1",
+      "companyId": "co1",
+      "platoonId": "g1",
+      "kind": "manpower-below-floor",
+      "description": "מחלקה 1 — 9/12 בבסיס. נדרשת הקפצה.",
+      "actorUserId": "u2",
+      "actorName": "רוני שמש",
+      "suggestedAction": "פתח שיבוץ",
+      "riskLevel": "high",
+      "status": "open",
+      "timestamp": "2026-05-15T05:55:00.000Z"
+    },
+    {
+      "id": "ova-demo-2",
+      "companyId": "co1",
+      "platoonId": "g2",
+      "kind": "manpower-below-floor",
+      "description": "מחלקה 2 — 10/12 בבסיס.",
+      "actorUserId": "u9",
+      "actorName": "עומר בר",
+      "suggestedAction": "פתח שיבוץ",
+      "riskLevel": "medium",
+      "status": "open",
+      "timestamp": "2026-05-15T06:02:00.000Z"
+    },
+    {
+      "id": "ova-demo-3",
+      "companyId": "co1",
+      "platoonId": "g3",
+      "kind": "fatigue-violation",
+      "description": "סער יואב — 9 ימים רצופים. דורש מנוחה.",
+      "actorUserId": "u10",
+      "actorName": "יואב סער",
+      "suggestedAction": "ראה מ״מ 3",
+      "riskLevel": "high",
+      "status": "open",
+      "timestamp": "2026-05-15T06:10:00.000Z"
+    }
+  ],
+  "equipmentGaps": [
+    {
+      "id": "eg-demo-chaos",
+      "companyId": "co1",
+      "reportedByUserId": "u14",
+      "reportedBySoldierId": "s3",
+      "reportedByName": "אורן פרץ",
+      "reportedByPlatoonId": "g1",
+      "kind": "missing",
+      "itemName": "מימייה",
+      "description": "הגיע מהבית בלי מימייה",
+      "status": "reported",
+      "createdAt": "2026-05-15T05:30:00.000Z"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "_description": "RasaP-facing scenario. Multiple equipment gaps at different stages of the pipeline so the /rasap queue + dashboard counts read 'busy day for logistics'.",
+  "escalationEvents": [],
+  "overrideAlerts": [],
+  "equipmentGaps": [
+    {
+      "id": "eg-logi-1",
+      "companyId": "co1",
+      "reportedByUserId": "u14",
+      "reportedBySoldierId": "s3",
+      "reportedByName": "אורן פרץ",
+      "reportedByPlatoonId": "g1",
+      "kind": "missing",
+      "itemName": "מימייה",
+      "description": "הגיע מהבית בלי מימייה",
+      "status": "reported",
+      "createdAt": "2026-05-15T07:10:00.000Z"
+    },
+    {
+      "id": "eg-logi-2",
+      "companyId": "co1",
+      "reportedByUserId": "u3",
+      "reportedBySoldierId": "s1",
+      "reportedByName": "משה ישראלי",
+      "reportedByPlatoonId": "g1",
+      "kind": "damaged",
+      "itemName": "מאיר 1",
+      "signedEquipmentId": "se-2",
+      "description": "עינית פנימית סדוקה — נדרשת החלפה",
+      "status": "reviewed-by-platoon",
+      "createdAt": "2026-05-14T18:30:00.000Z"
+    },
+    {
+      "id": "eg-logi-3",
+      "companyId": "co1",
+      "reportedByUserId": "u11",
+      "reportedBySoldierId": "s18",
+      "reportedByName": "אייל גלעד",
+      "reportedByPlatoonId": "g2",
+      "kind": "damaged",
+      "itemName": "ווסט",
+      "description": "אבזם נשבר",
+      "status": "forwarded-to-rasap",
+      "createdAt": "2026-05-14T16:00:00.000Z"
+    },
+    {
+      "id": "eg-logi-4",
+      "companyId": "co1",
+      "reportedByUserId": "u12",
+      "reportedBySoldierId": "s21",
+      "reportedByName": "שגיא ברנר",
+      "reportedByPlatoonId": "g3",
+      "kind": "logistics-issue",
+      "itemName": "סוללת קסם",
+      "description": "מחזיקה שעתיים — דורש בדיקה",
+      "status": "forwarded-to-rasap",
+      "createdAt": "2026-05-15T04:45:00.000Z"
+    }
+  ]
+}

@@ -33,3 +33,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright capture pipeline — assets generated locally, not source.
+demo-assets/
+playwright-report/
+test-results/

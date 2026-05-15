@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "capture-demo": "playwright test && bash demo/collect-videos.sh",
+    "capture-demo:mobile": "playwright test --project=mobile && bash demo/collect-videos.sh",
+    "capture-demo:desktop": "playwright test --project=desktop && bash demo/collect-videos.sh",
+    "capture-demo:roles": "playwright test demo/specs/roles.spec.ts",
+    "capture-demo:scenarios": "playwright test demo/specs/scenarios.spec.ts",
+    "capture-demo:flows": "playwright test demo/specs/flows.spec.ts && bash demo/collect-videos.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
@@ -18,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

@@ -1,0 +1,19 @@
+{
+  "_description": "Single active escalation — bright moment. Used to capture the EscalationActiveBanner / hero-level urgency without the chaos-shortage noise around it.",
+  "escalationEvents": [
+    {
+      "id": "esc-demo-only",
+      "companyId": "co1",
+      "kind": "kapitza",
+      "reason": "הקפצה — תרגיל מפתיע",
+      "location": "מסדר חדר אוכל · עכשיו",
+      "status": "active",
+      "openedByUserId": "u1",
+      "openedByName": "יוסי כהן",
+      "openedAt": "2026-05-15T07:30:00.000Z",
+      "audience": { "kind": "company" }
+    }
+  ],
+  "overrideAlerts": [],
+  "equipmentGaps": []
+}
