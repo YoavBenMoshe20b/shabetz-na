@@ -39,7 +39,7 @@ export interface AuthApi {
 
 const AuthCtx = createContext<AuthApi | null>(null);
 
-const MOCK_SESSION_KEY = 'shavatz-na/mock-session-phone';
+const MOCK_SESSION_KEY = 'ha-pluga-sheli/mock-session-phone';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const app = useApp();

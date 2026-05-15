@@ -35,7 +35,7 @@ export default function Header({ title }: { title: string }) {
             </svg>
           </button>
         )}
-        <span className="text-mil-text font-bold text-base tracking-tightish">שבץ־נא</span>
+        <span className="text-mil-text font-bold text-base tracking-tightish">הפלוגה שלי</span>
         <span className="w-1 h-1 rounded-full bg-mil-ghost/70" aria-hidden />
         <span className="text-mil-muted text-tiny font-medium truncate">{title}</span>
       </div>

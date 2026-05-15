@@ -1,11 +1,11 @@
 // persistedState — useState wrapper that survives page refresh.
 //
-// Demo persistence layer for Shabetz-Na. Each slice of AppContext that
+// Demo persistence layer for "הפלוגה שלי". Each slice of AppContext that
 // the user can mutate (assignments, missions, notes, leaves, etc.) is
 // snapshotted to localStorage on every change.
 //
 // Design notes:
-//   • Storage key shape: `shavatz-na:state:<slice>:v<version>`
+//   • Storage key shape: `ha-pluga-sheli:state:<slice>:v<version>`
 //     The version segment lets us invalidate old localStorage when the
 //     seed shape changes (bump version → old data ignored, fresh seed
 //     wins). Without this, code-side schema changes would never reach
@@ -23,7 +23,7 @@
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 
-const STORAGE_PREFIX = 'shavatz-na:state:';
+const STORAGE_PREFIX = 'ha-pluga-sheli:state:';
 
 function storageKey(slice: string, version: number): string {
   return `${STORAGE_PREFIX}${slice}:v${version}`;

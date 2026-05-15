@@ -1,6 +1,6 @@
 // CriticalAlertsBanner — top-of-dashboard critical alerts.
 //
-// Per the alerts-hierarchy principles for Shabetz-Na:
+// Per the alerts-hierarchy principles for "הפלוגה שלי":
 //   • critical → visible immediately, ALWAYS, breaks through QuietMode.
 //   • medium / low → live in the alerts center (AlertsSheet), not here.
 //

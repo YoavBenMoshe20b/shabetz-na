@@ -1,6 +1,6 @@
 // alerts/grouping.ts — pure dedup + aggregation for the alerts feed.
 //
-// Per the operational UX principles for Shabetz-Na:
+// Per the operational UX principles for "הפלוגה שלי":
 //   • critical → visible immediately, NEVER aggregated. Each one is its
 //     own row so the operator can act on each individually.
 //   • warning / info → aggregated by (kind + platoonId). When 3 platoons

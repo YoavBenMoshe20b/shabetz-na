@@ -6,7 +6,7 @@
 // function directly with the preference + a known `nowIso`.
 //
 // Storage shape:
-//   localStorage["shavatz-na:quietMode:<userId>"] = JSON.stringify(pref)
+//   localStorage["ha-pluga-sheli:quietMode:<userId>"] = JSON.stringify(pref)
 //
 // Re-evaluation strategy (avoids the cascading-renders anti-pattern of
 // setState-in-effect):
@@ -24,7 +24,7 @@ import {
   quietModeRemainingMinutes,
 } from '../utils/alerts/quietMode';
 
-const STORAGE_PREFIX = 'shavatz-na:quietMode:';
+const STORAGE_PREFIX = 'ha-pluga-sheli:quietMode:';
 const RECHECK_INTERVAL_MS = 30_000;
 
 function storageKey(userId: string): string {
