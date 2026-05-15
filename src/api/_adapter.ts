@@ -24,7 +24,7 @@ import type {
   Soldier, Mission, Announcement, EscalationEvent, Leave, LeaveRequest,
   OverrideAlert, PlatoonLeaveCycle, Platoon, Squad, Company,
   OperationalOrder, SoldierStatusEvent,
-  SignedEquipment, EquipmentGap, EquipmentItem,
+  SignedEquipment, EquipmentGap, EquipmentItem, Assignment, SelectorOutcomeRecord,
 } from '../types';
 
 // ─── Live registry — populated by AppContext on mount ────────────────────
@@ -54,6 +54,8 @@ export interface LiveSnapshot {
   signedEquipment?:    SignedEquipment[];
   equipmentGaps?:      EquipmentGap[];
   equipmentItems?:     EquipmentItem[];
+  assignments?:        Assignment[];
+  selectorOutcomes?:   SelectorOutcomeRecord[];
 }
 
 let live: LiveSnapshot = {};
@@ -81,6 +83,8 @@ export const read = {
   signedEquipment:    () => live.signedEquipment    ?? mock.mockSignedEquipment,
   equipmentGaps:      () => live.equipmentGaps      ?? mock.mockEquipmentGaps,
   equipmentItems:     () => live.equipmentItems     ?? mock.mockEquipmentItems,
+  assignments:        () => live.assignments        ?? mock.mockAssignments,
+  selectorOutcomes:   () => live.selectorOutcomes   ?? [],
 };
 
 // ─── Simulated network — used for write paths that resolve to identity ───

@@ -10,5 +10,6 @@ export * as leavesApi        from './leaves';
 export * as reportsApi       from './reports';
 export * as alertsApi        from './alerts';
 export * as equipmentApi     from './equipment';
+export * as assignmentsApi   from './assignments';
 export { USE_SUPABASE, supabase } from './_supabase';
 export { queryClient, qk, invalidate } from './queryClient';

@@ -32,6 +32,7 @@ const SEED_VERSION = 1;
 import * as missionsApi      from '../api/missions';
 import * as announcementsApi from '../api/announcements';
 import * as equipmentApi     from '../api/equipment';
+import * as assignmentsApi   from '../api/assignments';
 import * as leavesApi        from '../api/leaves';
 import * as alertsApi        from '../api/alerts';
 import * as soldiersApi      from '../api/soldiers';
@@ -427,6 +428,18 @@ const AppContext = createContext<AppContextType | null>(null);
 // update — the next refresh will reconcile via React Query. This keeps
 // every action's signature synchronous from the caller's perspective,
 // matching the existing demo behavior.
+// Parse the missionId out of a materialized slot id. Format produced by
+// materializeWeek is `mat-<missionId>-<YYYY-MM-DD>-<windowIndex>`. The
+// missionId itself may contain hyphens (e.g. `mi-gate-north`), so we
+// can't just split on '-'. Strategy: strip the prefix, strip the
+// trailing `-<date>-<idx>` (10 chars + 1 + N digits), keep the rest.
+function parseMissionIdFromSlotId(slotId: string): string | null {
+  if (!slotId.startsWith('mat-')) return null;
+  // Look for the date pattern YYYY-MM-DD and slice before it.
+  const m = slotId.match(/^mat-(.+?)-\d{4}-\d{2}-\d{2}-\d+$/);
+  return m ? m[1] : null;
+}
+
 function persist(fire: () => Promise<unknown>): void {
   if (!USE_SUPABASE) return;
   void fire().catch((err) => {
@@ -669,6 +682,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       decidedAt: new Date().toISOString(),
     };
     setSelectorOutcomes((prev) => [fresh, ...prev].slice(0, 200));
+    // Forward to Supabase when enabled. Audit records are append-only.
+    persist(() => assignmentsApi.recordSelectorOutcome(fresh));
   };
 
   const setSlotAssignment = (
@@ -678,35 +693,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ) => {
     const actorId = currentUser?.id ?? 'system';
     const nowIso = new Date().toISOString();
-    const next: Assignment[] = [
-      ...assignments.filter((a) => a.slotId !== slotId),
-      ...soldierIds.map((sid) => ({
-        id: newId('asg'),
-        slotId,
-        soldierId: sid,
-        role: (sid === options?.commanderSoldierId ? 'commander' : 'soldier') as 'soldier' | 'commander',
-        createdBy: actorId,
-        createdAt: nowIso,
-        overrideId: options?.overrideId,
-        overrideAlertId: options?.overrideAlertId,
-      })),
-    ];
+    const records = soldierIds.map((sid) => ({
+      id: newId('asg'),
+      slotId,
+      soldierId: sid,
+      role: (sid === options?.commanderSoldierId ? 'commander' : 'soldier') as 'soldier' | 'commander',
+      createdBy: actorId,
+      createdAt: nowIso,
+      overrideId: options?.overrideId,
+      overrideAlertId: options?.overrideAlertId,
+    }));
     // Commander as a separate Assignment record (also tied to this slot).
     if (options?.commanderSoldierId && !soldierIds.includes(options.commanderSoldierId)) {
-      next.push({
+      records.push({
         id: newId('asg'),
         slotId,
         soldierId: options.commanderSoldierId,
         role: 'commander',
         createdBy: actorId,
         createdAt: nowIso,
+        overrideId: undefined,
+        overrideAlertId: undefined,
       });
     }
-    setAssignments(next);
+    setAssignments([
+      ...assignments.filter((a) => a.slotId !== slotId),
+      ...records,
+    ]);
+    // Forward atomically to Supabase. The mission/company lookup comes
+    // from the slotId's parsed missionId — slotId format is
+    // `mat-<missionId>-<isoDate>-<wIdx>` so we extract the mission.
+    const missionId = parseMissionIdFromSlotId(slotId);
+    const mission = missionId ? missions.find((m) => m.id === missionId) : undefined;
+    if (mission) {
+      persist(() => assignmentsApi.setSlotAssignment({
+        companyId: mission.companyId,
+        slotId,
+        missionId: mission.id,
+        records: records.map((r) => ({
+          id: r.id,
+          soldierId: r.soldierId,
+          role: r.role,
+          overrideId: r.overrideId,
+          overrideAlertId: r.overrideAlertId,
+        })),
+      }));
+    }
   };
 
   const clearSlotAssignment = (slotId: string) => {
     setAssignments((prev) => prev.filter((a) => a.slotId !== slotId));
+    persist(() => assignmentsApi.clearSlotAssignment(slotId));
   };
 
   // ── Operational orders ─────────────────────────────────────────────
