@@ -112,7 +112,7 @@ export default function RasapDashboard() {
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
-      <Header title="רס״פ" />
+      <Header title="רס״פ · מפקד המפלג" />
       <PageMain>
 
         {/* ── 1. Personal greeting ── */}
@@ -120,7 +120,7 @@ export default function RasapDashboard() {
           <div className="min-w-0">
             <PageTitle>שלום, {currentUser?.name?.split(' ')[0]}</PageTitle>
             <Muted className="mt-1.5">
-              רס״פ · {myCompany?.name ?? 'פלוגה'}
+              מפקד המפלג · {myCompany?.name ?? 'פלוגה'}
             </Muted>
           </div>
           <AlertsButton />
@@ -150,6 +150,55 @@ export default function RasapDashboard() {
             לוח רס״פ מלא ←
           </button>
         </section>
+
+        {/* ── 2½. המפלג שלי — Rasap is FIRST a platoon commander ── */}
+        {(() => {
+          const maflagPlatoon = platoons.find((p) => p.id === currentUser?.commandedPlatoonId);
+          if (!maflagPlatoon) return null;
+          const maflagSquadIds = new Set(
+            squads.filter((sq) => sq.platoonId === maflagPlatoon.id).map((sq) => sq.id),
+          );
+          const maflagMembers = soldiers.filter((s) =>
+            s.squadId && maflagSquadIds.has(s.squadId),
+          );
+          return (
+            <Section label={`${maflagPlatoon.name} שלי · ${maflagMembers.length}`}>
+              <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card overflow-hidden">
+                <div className="divide-y divide-mil-border">
+                  {maflagMembers.slice(0, 6).map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => navigate(`/soldier/${m.id}`)}
+                      className="w-full text-right px-5 py-3 hover:bg-mil-card-hover transition-colors"
+                    >
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <Body className="font-semibold">{m.name}</Body>
+                        {m.operationalRoles.length > 0 && (
+                          <Hint className="text-mil-muted">· {m.operationalRoles.join(' · ')}</Hint>
+                        )}
+                        <Hint className="mr-auto text-mil-ghost">{m.currentStatus === 'in-base' ? 'בבסיס' : m.currentStatus === 'home' ? 'בבית' : '—'}</Hint>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-px bg-mil-border">
+                  <button
+                    onClick={() => navigate('/platoon')}
+                    className="bg-mil-card hover:bg-mil-card-hover px-4 py-2.5 text-tiny font-semibold text-mil-olive transition-colors"
+                  >
+                    שבצ״ק המפלג ←
+                  </button>
+                  <button
+                    onClick={() => navigate(`/platoon/${maflagPlatoon.id}/structure`)}
+                    className="bg-mil-card hover:bg-mil-card-hover px-4 py-2.5 text-tiny font-semibold text-mil-olive transition-colors"
+                  >
+                    מבנה ותפקידים ←
+                  </button>
+                </div>
+              </div>
+            </Section>
+          );
+        })()}
 
         {/* ── 3. Open damage queue ── */}
         <Section

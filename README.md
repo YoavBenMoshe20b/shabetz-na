@@ -1,109 +1,87 @@
-# שבץ־נא · Shabetz-na
+# הפלוגה שלי · Ha-Pluga-Sheli
 
-מערכת ניהול שמירות, שיבוצים ומילואים ברמת מחלקה / פלטון.
-A platoon-level scheduling and manpower management PWA, built mobile-first in Hebrew (RTL).
+מערכת command-and-control של פלוגה — שיבוצים, שבצ״ק, יציאות, צל״ם, לוגיסטיקה.
+A platoon-level operational scheduling PWA built mobile-first in Hebrew (RTL).
 
-> **Status:** Frontend MVP. Mock data only — no backend, no Firebase, no real auth.
-> Authentication is mocked and **must** be replaced with Firebase Auth (or equivalent) before production.
+**Live:** https://shabetz-na.vercel.app/ — rename in progress (Vercel project alias will become `ha-pluga-sheli.vercel.app`).
 
 ---
 
 ## What it does
 
-* Onboarding flow — soldier joins an existing platoon by code/QR, or a manager creates a new platoon and invites others.
-* Schedule period engine — manager defines a period, adds mission types (guard, ops room, kitchen, standby, patrol…) with timing, role, equipment, mixing, and conflict rules, then auto-generates a draft schedule.
-* Constraint-aware generator — fairness scoring across periods (guard hours, night shifts, mission-type repetition, rest gap), enemy-confusion within shift bounds, mission-conflict rules, class mixing.
-* Manager-only warnings — understaffing, missing roles, class violations, insufficient rest, unfair distribution. Hidden from soldiers.
-* Manual override — manager can click any slot to swap, remove, or force-assign a soldier, or regenerate just that one slot. The system assists; the commander decides.
-* Daily manpower report — who's on base / at home / unavailable, breakdown by class, pending leave requests with inline approve/reject.
-* Soldier dashboard — current operational state, "המשמרת הבאה שלי" countdown with teammates, and a "תעיר אותי" reminder (5 / 15 / 30 / 60 min).
-* Leave requests — soldier submits → manager (מ״מ / סמל) approves or rejects.
+- **Mission lifecycle** — CC creates missions through a 6-step wizard, assigns one or more platoons, sets time / manpower / command / rotation / fatigue / equipment.
+- **Engine-driven staffing** — for each materialized slot the engine produces a `SelectorOutcome`: picks, alternates, confidence (0-1) with explicit `decayReasons`, violations, and `why-not` for rejected candidates. No magic numbers.
+- **Operator override** — PC opens `StaffingSheet`, sees clean / forced / rejected partitions, can confirm or rewrite. `SoldierPriorityPin` adds a SOFT bonus but never bypasses hard filters.
+- **Audit trail** — every commit produces a `SelectorOutcomeRecord` with actor, timestamp, outcome snapshot, final picks, alternatives considered, violations, decay reasons. Surfaced as "היסטוריית שיבוץ" on the mission page.
+- **Schedule visibility** — PC's `PlatoonWeekPage` (`/platoon`) shows day rows, slot status, fatigue dots, inline "אייש" CTA. Soldier dashboard shows personal upcoming shifts. CC dashboard shows readiness, platoon table, focus, critical alerts.
+- **Alerts hierarchy** — critical visible immediately (banner + bell badge), warning/info aggregated in alerts center (dedup by kind + platoon).
+- **QuietMode** — 30m / 1h / 2h / 4h durations + critical breakthrough. Per-user preference.
+- **CHAPAK / MAFLAG** — non-combat platoons with configurable functional roles. CC and רס״פ can assign/reassign אחראי ציוד חפ״ק, אחראי מטבח, אחראי מים, נהג, סרס״פ, etc. via a chip editor at `/platoon/:id/structure`.
 
----
+## Roles
 
-## Tech stack
+- **מ״פ** (companyCommander) — full company surface, missions, escalations, configure CHAPAK
+- **סמ״פ** (deputyCompanyCommander) — same powers minus delegation grants
+- **מ״מ** (platoonCommander) — platoon schedule, staff slots, approve leave
+- **סמל** (platoonSergeant) — same platoon scope as PC
+- **רס״פ** — מפקד המפלג. Manages logistics, equipment lifecycle, MAFLAG members. NOT company-tier writes
+- **סרס״פ** — סגן רס״פ
+- **שליש** — admin officer, Report-1 access, no command writes
+- **חייל** — personal schedule, leave request, gear, status
 
-* React 18 + TypeScript
-* Vite 8
-* Tailwind CSS 3 (custom `mil-*` palette: warm cream, light olive, sand, no black/dark backgrounds)
-* React Router v6 with role-based `ProtectedRoute`
-* React Context API for global state — no Redux, no backend SDK
+## Stack
 
----
+- React 19 + Vite + TypeScript (strict), TailwindCSS
+- React Router v7, React Query v5
+- Pure engine in `src/utils/engine/` — no React, no Date.now(), deterministic, replayable
+- Supabase (Postgres + Auth + RLS) — currently behind `VITE_USE_SUPABASE` flag
+- localStorage demo persistence via `usePersistedState`
 
-## Run locally
+## Demo mode
 
-```bash
-npm install
-npm run dev      # http://localhost:5173
-npm run build    # type-check + production bundle
+`VITE_USE_SUPABASE=false` (default). Seed: 1 company, 5 platoons (3 combat × ~20 + CHAPAK 8 + MAFLAG 6), 13 mock users (u1–u13), 4 active missions across g1/g2/g3.
+
+Login: any seeded phone + `Test@1234`. The login page exposes a tap-to-fill "חשבונות דמו" panel in mock mode. UserSwitcher in the header hops between identities without re-auth.
+
+State persisted in localStorage:
+- Operator-confirmed slot assignments
+- Selector outcome audit (newest 200)
+- Missions / notes / leaves / leave requests / orders
+- Announcements / escalations / override alerts / equipment gaps
+- Signed equipment / soldier status events
+- Active user + role + QuietMode preference
+
+"איפוס נתוני דמו" in UserSwitcher wipes all persisted state.
+
+## Live (Supabase) mode
+
+Apply migrations 0001-0009 in `supabase/migrations/`. Set in `.env.local`:
+
+```
+VITE_USE_SUPABASE=true
+VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-## Demo accounts (mock auth, password: `Test@1234`)
+Tables with RLS already provisioned: companies, profiles, soldiers, platoons, squads, memberships, missions, mission_notes, assignments, selector_outcomes, engine_overrides, leaves, leave_requests, coverage_events, operational_orders, override_alerts, announcements, escalation_events, equipment_items, signed_equipment, equipment_gaps, equipment_lifecycle_events, soldier_status_events, audit_logs.
 
-| Username   | Name           | Role     | Has platoon? |
-| ---------- | -------------- | -------- | ------------ |
-| `yosi123`  | יוסי כהן       | Owner    | Yes (מחלקה א׳) |
-| `david99`  | דוד לוי        | Manager  | Yes (מחלקה א׳) |
-| `moshe7`   | משה ישראלי     | Soldier  | Yes (מחלקה א׳) |
-| `amit22`   | עמית גרין      | Soldier  | **No** — sees the StartPage |
-
-You can also click "הרשמה" on the login screen to create a brand-new user, which lands on the same StartPage flow.
-
----
-
-## Project structure
+## Scripts
 
 ```
-src/
-  pages/
-    LoginPage.tsx         # Login + Register tabs (identity only)
-    StartPage.tsx         # "join existing" vs "create new" choice
-    JoinPlatoonPage.tsx   # 4-step join flow (code → role/class → leaves → done)
-    CreatePlatoonPage.tsx # 5-step create flow (name → roles → command → confusion → invite code)
-    DashboardPage.tsx     # Manager: action cards · Soldier: ops + next-shift + wake-me-up
-    SchedulePage.tsx      # Period hub + 5-step mission wizard + warnings + override modal
-    LeavesPage.tsx        # Approved leaves + leave-request approval queue
-    ReportPage.tsx        # Daily manpower report
-    SoldiersPage.tsx · ProfilePage.tsx · MyGroupsPage.tsx · ...
-  components/
-    Header.tsx · BottomNav.tsx · ProtectedRoute.tsx · WarningBadge.tsx
-  context/
-    AppContext.tsx        # All global state · login / register / joinGroup / createGroup
-  utils/
-    scheduleAlgo.ts       # Engine: generateSchedule · regenerateSlot · applyEnemyConfusion
-    permissions.ts        # canEditSchedule / canPublishSchedule / canTriggerEmergency / ...
-  data/
-    mockData.ts           # Soldiers, periods, leaves, history, groups
-  types/
-    index.ts              # MissionType · TimeSlot · ShiftWarning · FairnessScore · ...
+npm run dev      # vite dev server
+npm run build    # tsc -b && vite build  ← matches Vercel CI
+npm run lint     # eslint
 ```
 
----
+## Architecture
 
-## Engine architecture (high level)
-
-1. Manager creates a `SchedulePeriod` (name + start/end).
-2. Manager adds `MissionType`s inside the period, each with min/recommended/max soldiers, required roles, shift bounds, conflict & overlap rules, soldier-mixing & class-mixing policies, equipment, and enemy-confusion settings.
-3. `generateSchedule(ctx)` runs:
-    - hard-constraint filter: leave overlap, mission conflicts, dedicated-mission rule, class-mixing rule, rest gap (≥6h)
-    - soft fairness scoring: current-period load · lifetime hours · mission-type repetition · night/difficult shift count · last-assignment recency · role-match bonus
-    - greedy pick of `recommendedSoldiers` lowest scores per slot
-    - returns updated mission types + manager-only warnings + per-soldier fairness scores
-4. Manager can manually override any slot or call `regenerateSlot()` to re-pick one slot only.
-5. When ready, manager clicks "פרסם" — soldiers can now see the schedule on their dashboards.
-
-All warnings carry `managerOnly: true`. The soldier UI never displays them.
-
----
-
-## What's intentionally not done yet
-
-* No real auth / backend. Login is a string compare against `mockUsers`.
-* No persistence — refreshing the page resets state.
-* No push notifications. "תעיר אותי" sets a `ReminderSetting` in context but doesn't fire anything.
-* No real AI — the engine is heuristic. Architecture is shaped to be replaced with a real solver later.
-* QR codes are placeholder boxes; share/copy buttons use `navigator.share` / `navigator.clipboard` if available.
-* No tests. Manual QA only.
-
-See `REVIEW_GUIDE.md` for a step-by-step walkthrough of every flow.
+See `/src` tree:
+- `utils/engine/` — pure functions: scoring, selector, burden, focus, hardFilters
+- `utils/persistedState.ts` — localStorage hook with version-keyed storage
+- `hooks/useEngineContext.ts` — impure→pure boundary (one place reads Date/React state)
+- `hooks/useChaosContext.ts` — 6 chaos + 4 recovery scenarios for engine stress
+- `context/AppContext.tsx` — legacy monolith (will fan out into providers)
+- `providers/` — Auth, Roster, Leave, Alerts, Mission, Equipment, Org façades
+- `api/` — domain modules, each dual-pathed (mock vs Supabase)
+- `components/` — UI primitives + composed components
+- `pages/` — routed surfaces; each role's dashboard lives in `pages/dashboards/`

@@ -1,201 +1,123 @@
-# Review Guide · שבץ־נא
+# Review Guide · הפלוגה שלי
 
-This document walks a reviewer through every flow in the MVP. The whole app is frontend-only with mock data — refresh resets state. Run `npm run dev` and open http://localhost:5173.
+A 10-minute walkthrough that exercises the CC → PC → Soldier flow end-to-end. Works against the deployed demo or `npm run dev`.
 
-> **Note:** This is an MVP. Auth is mocked, there is no backend, no persistence between page reloads, and no push notifications. The focus is on correct operational flow and UX, not infrastructure.
-
----
-
-## 1. Login & Register
-
-Open the site → you land on `/login`.
-
-* **Login tab** is the default. Click any user in the "משתמשי דמו" panel at the bottom to autofill credentials, then "התחברות".
-* **Register tab** lets you create a fresh user with no platoon. Try `Test@1234` for the password (it satisfies the live-validated rules).
-* Login screen is identity-only — no platoon-related buttons appear here.
-
-After login/register:
-
-* Users **with** a platoon → `/dashboard`
-* Users **without** a platoon → `/start`
-
-**Test:** click "amit22" in the dev panel (no group) → land on `/start`.
+**Production:** https://shabetz-na.vercel.app/
 
 ---
 
-## 2. StartPage — choose path
+## 0. Reset (optional)
 
-`/start` shows two big cards:
+Open the site. Click **"החלף"** in the header → **"איפוס נתוני דמו"** to wipe persisted state and start clean. Refresh.
 
-1. **"הצטרף למחלקה קיימת"** → `/join-platoon`
-2. **"צור מחלקה חדשה"** → `/create-platoon`
+## 1. Login
 
-There is no bottom navigation here — the user hasn't chosen a context yet.
+Default tab is **התחברות**. Open the collapsed **"חשבונות דמו"** panel under the form — tap any row to autofill phone + password (`Test@1234`).
 
----
+Start as **u1 יוסי כהן (מ״פ)**.
 
-## 3. Join existing platoon (4 steps)
+## 2. As מ״פ — create a mission
 
-`/join-platoon`
+1. CC Dashboard → **קיצורי דרך** → **"ניהול משימות"** → `/missions`
+2. **"+ משימה חדשה"** opens the 6-step wizard:
+   - Step 1: name + `assignedPlatoonIds` (try g1)
+   - Steps 2-5: fatigue / time / command / rotation / equipment
+   - Step 6: review + create
+3. The new mission lands with status `active-unstaffed`.
 
-* **Step 1:** Enter a platoon code. Use the demo: **`UNIT-4821`**. (Mock QR placeholder is shown but not functional.)
-* **Step 2:** Confirm platoon info. Pick a role from the platoon's `availableRoles` and a class (`כיתה 1` / `כיתה 2` / `כיתה 3` / `מפקדה` / `אחר`).
-* **Step 3:** Optional — submit one or more leave requests with date/time/reason.
-* **Step 4:** Success screen. "כניסה למחלקה →" goes to the soldier dashboard.
+Browse the CC dashboard:
+- **FocusSection** — decisions requiring action now (max 5)
+- **CriticalAlertsBanner** — itemized criticals with direct CTAs
+- **מחלקות** — readiness per platoon
+- **ב-12 השעות הקרובות** — timeline
+- **קיצורי דרך** — מבנה חפ״ק / מבנה מפלג CTAs
 
-**What to test:**
+## 3. Switch to PC
 
-* Wrong code → friendly error in Hebrew, lets you retry.
-* If you added leave requests, log in as `david99` (manager of `מחלקה א׳`) and verify they appear in the pending-approval queue.
+Header **"החלף"** → **u2 רוני שמש (מ״מ g1)**.
 
----
+PC Dashboard:
+- Hero with in-base / total + floor warning
+- Critical alerts banner (if any)
+- Active missions card
+- **"פתח שבצ״ק השבוע"** → `/platoon`
 
-## 4. Create new platoon (5 steps)
+## 4. As מ״מ — staff a slot (the heart of the demo)
 
-`/create-platoon`
+On `/platoon`:
+- 7-day rows. Each slot shows time / mission / status pill / assigned names.
+- Soldiers with fatigue above the platoon's p75 get a yellow dot next to their name.
+- Understaffed slots show an **"אייש"** chip on the right.
 
-* **Step 1:** Platoon name + unit + headcount.
-* **Step 2:** Define available roles. Preset chips (`קלע`, `חובש`, `נגביסט`, `מאגיסט`, `קשר מ״מ`, `רחפן`, `מ״מ`, `סמל`, `מ״כ`, `תצפיתן`) + a "+ custom" input. Selected roles are what soldiers can pick when they join.
-* **Step 3:** Commander (מ״מ) and Sergeant (סמל) names. They're auto-promoted to managers.
-* **Step 4:** Enemy confusion toggle. If enabled, slider for deviation (5–60 min). The system clamps deviation to `(maxShift − minShift) / 2` per mission so it never violates shift bounds.
-* **Step 5:** Success — generated invite code (`UNIT-XXXX`), QR placeholder, share/copy buttons, "התחל לבנות שיבוץ" → `/schedule`.
+Tap **"אייש"** on any slot:
 
-**What to test:**
+`StaffingSheet` opens:
+- **Engine outcome** — confidence % with explicit `decayReasons` (no magic numbers)
+- **מומלצים** — clean picks, score per dimension (load / fatigue / qualMatch / cohesion / burden)
+- **דחיפת מועמדים** (forced) — hidden behind a toggle; each forced pick demands a reason
+- **נדחים — why-not** — every rejected candidate with hard-filter codes (e.g. "soldier on leave", "missing qualification")
 
-* Custom role you added in step 2 should show up in the join flow for soldiers entering the new code.
+Pick → **"אשר שיבוץ"**.
 
----
+The assignment **persists** (localStorage in mock mode, Supabase when flag is on). Every surface in the app (CC dashboard, PC dashboard, SoldierDashboard, CalendarPage, SchedulePage, MissionDetailPage) materializes the slot with your soldiers instead of the engine's auto-pick.
 
-## 5. Manager dashboard
+## 5. Verify audit
 
-Login as `yosi123` (owner) or `david99` (manager).
+Tap the slot body (not the "אייש" chip) to navigate to `/mission/:id`.
 
-You see:
+**"היסטוריית שיבוץ"** section shows every commit:
+- actor + role + confidence
+- expand: alternates considered, violations, decay reasons, forced reasons
 
-* Platoon header with name + unit + miluim period.
-* Two large action cards: **"הכנס משימות לתקופה"** and **"הכנס יציאות"**.
-* "מצב כוח אדם" stats: בבסיס / בבית / לא זמין, plus a "צפה בדוח כוח אדם מלא" button.
-* "בקשות יציאה ממתינות" — inline approve/reject for any pending requests.
-* Bottom nav: מצב · שיבוץ · דוח · חיילים · יציאות (· בלת״מ).
+## 6. Switch to soldier
 
----
+Header **"החלף"** → **u3 משה ישראלי (חייל)**.
 
-## 6. Soldier dashboard
+SoldierDashboard:
+- **המשמרת הקרובה** — countdown + teammates (if you staffed them, they appear)
+- **השבוע שלי** — collapsible week of personal slots
+- **תעיר אותי** — reminders
+- **בקש יציאה** — leave request
 
-Login as `moshe7`.
+## 7. Back to CC
 
-You see:
+Header **"החלף"** → **u1** again. The mission status reflects the staffing.
 
-* Greeting with platoon + class + role.
-* "מצב כרגע" — grid of currently-active missions and who's assigned (computed from wall-clock time vs. slot windows).
-* "המשמרת הבאה שלי" — countdown, time, teammates, and the **"תעיר אותי"** wake-me-up panel with `5 / 15 / 30 / 60` min buttons. Selection is highlighted; "✓ נקבעה תזכורת" appears.
-* "חיילי המחלקה" — full roster with status dots: green = on base, yellow = at home, gray = unavailable.
-* No manager warnings. No fairness data. No edit affordances.
+## 8. CHAPAK / MAFLAG
 
-**What to test:**
+From the CC shortcuts → **מבנה חפ״ק** (`/platoon/g-chapack/structure`):
+- 8 members of the forward-command unit (including CC as soldier s68, DCC as s69)
+- Each has a chip cluster of functional roles
+- **"ערוך תפקידים"** opens the chip palette: אחראי ציוד חפ״ק / אחראי קשר / מפעיל רחפן / נהג / מ״ק חפ״ק
 
-* Soldier never sees warnings or fairness output.
-* Soldier sees only published periods on `/schedule`.
+**מבנה מפלג** (`/platoon/g-meflag/structure`):
+- 6 members: רס״פ (u6 אבי כהן), סרס״פ (u13 יואב מורן), שליש (u8), אחראי מטבח, אחראי מים, etc.
+- Same chip editor with the MAFLAG catalog
 
----
+## 9. רס״פ
 
-## 7. Schedule period engine
+Header **"החלף"** → **u6 אבי כהן**.
 
-`/schedule` (manager only for editing, soldier for viewing).
+RasapDashboard — logistics-aware soldier view. Manages equipment lifecycle, MAFLAG members, signing.
 
-* Period selector at top — switch between periods, click "+ תקופה" to create one (name + start/end).
-* For the selected period: stats (משימות / משמרות / בעיות), "הוסף משימה", "חשב שיבוץ", "פרסם".
+## 10. QuietMode
 
-**Mission wizard (5 steps)** — opens via "+ הוסף משימה" or clicking "ערוך" on any mission:
-
-1. שם וקטגוריה
-2. כוח אדם + זמני פעילות + משך משמרת + min/max דקות + recurring vs manual slot
-3. תפקידים נדרשים + ערך־ ל־מ״מ / חובש + ציוד
-4. חפיפות + ערבוב חיילים + ערבוב כיתות
-5. קאדר + בלבול אויב (with live "deviation must stay within `(max−min)/2`" validation)
-
-**Click "חשב שיבוץ"** — runs the engine. After it finishes:
-
-* The "אזהרות מנהל" panel appears (manager-only) with critical / warning / info severity groupings.
-* The "איזון עומסים" panel (collapsible) shows per-soldier load index (0–100), current-period hours, total hours, with bars colored by `flag: overloaded | underloaded | balanced`.
-
-**Click any time slot** — opens the manual-override modal:
-
-* Lists currently assigned soldiers with "הסר" buttons.
-* Soldier picker dropdown + "+ שבץ ידנית".
-* "↻ חשב משמרת זו מחדש" — re-runs the engine for that one slot only.
-* Footer: "הסידור הוא עזר. ההחלטה הסופית בידי המפקד."
-
-**Click "פרסם"** — soldiers can now see this period.
+Profile (avatar menu) → **מצב שקט** section. Exactly four durations: 30m / 1h / 2h / 4h. Critical alerts always break through; non-critical alerts go silent on the dashboard layer until you open the AlertsSheet manually.
 
 ---
 
-## 8. Leave management
+## What persists vs. what resets
 
-`/leaves` (manager only).
+**Persisted (survives refresh):** current user + role, missions, slot assignments, selector outcomes, mission notes, leaves, leave requests, orders, announcements, escalations, override alerts, equipment gaps, signed equipment, soldier status events, QuietMode preference.
 
-* Two tabs:
-    1. **יציאות מאושרות** — currently-approved leaves (individual / class / platoon-wide), with "הוסף יציאה" form.
-    2. **בקשות ממתינות** — soldier-submitted requests with inline approve/reject.
+**Reset to seed:** soldier catalog (rare mutations), users, platoons, squads, qualifications, equipment items, dutyExclusions, leave policy.
 
-When a manager approves a request, the soldier's status flips to "בבית" automatically wherever applicable.
+**Storage prefix:** `ha-pluga-sheli:state:*` and `ha-pluga-sheli:quietMode:*` in localStorage.
 
 ---
 
-## 9. Daily manpower report
+## Known gaps
 
-`/report` (manager only). Click "דוח" in the bottom nav or the "צפה בדוח כוח אדם מלא" link from the dashboard.
-
-* Horizontal date picker (period days, with leave-count badges).
-* Daily stats: בבסיס / בבית / לא זמין.
-* Breakdown by class with progress bars.
-* Active missions for the selected day, with night-shift indicator.
-* Pending leave requests (inline approve/reject).
-* Soldiers on leave for the selected date.
-
----
-
-## 10. Manager warnings — what to look for
-
-After clicking "חשב שיבוץ" with the seeded period (`שבוע 12–18 במאי`), you should see a mix of:
-
-* **קריטי** — `understaffed`, `missingRole`, `onLeave` (soldier scheduled while on leave).
-* **אזהרה** — `commanderMissing`, `medicMissing`, `classViolation`, `insufficientRest`, `confusionViolation`.
-* **מידע** — `unfairDistribution` if hours spread > 12h between max-loaded and min-loaded soldier.
-
-**Test:** assign s2 (רוני שמש) to a slot during their leave (2024-05-20) — re-run the engine — `onLeave` warning should appear.
-
----
-
-## 11. Fairness engine — what to look for
-
-The seeded `mockSoldierHistory` has spread:
-
-* s3 (אורן פרץ) and s9 (ניסים דהן) are heavily loaded → should trend toward `overloaded`.
-* s4 (נועם כץ) and s8 (יניב שלום) are lightly loaded → should trend toward `underloaded`.
-
-After running the engine, the fairness panel should show s4/s8 selected for new slots more often than s3/s9 because their score is lower.
-
----
-
-## 12. Things to give feedback on
-
-* **Operational realism** — does any flow feel wrong for actual platoon command-and-control?
-* **Hebrew/RTL polish** — any text that's clipped, mis-aligned, mixed direction, or feels translated rather than native?
-* **Manager vs soldier separation** — are warnings/fairness correctly hidden from soldiers? Any soldier-side affordance that shouldn't be there?
-* **Engine fairness** — does the auto-generated draft "feel fair" for the seeded data, or does it always pick the same people?
-* **Manual override** — is the slot-edit modal fast enough for real use? Should it be inline instead of modal?
-* **Onboarding** — the 4/5-step flows: too many steps? not enough? Too much info on one screen?
-* **Bottom nav** — right tabs for managers? for soldiers? Anything missing?
-
----
-
-## Limitations to keep in mind
-
-* No persistence — refresh = reset.
-* No real auth — the password is compared as plain text against `mockUsers`.
-* No push notifications — "תעיר אותי" stores a `ReminderSetting` but doesn't fire.
-* QR is a styled placeholder.
-* The engine is a heuristic, not a real solver. It is shaped to be replaced.
-
-If something doesn't behave as described here, that's the bug — please file an issue.
+- Vercel project name still `shabetz-na` — URL alias rename pending dashboard action by the maintainer.
+- Engine debug page `/engine/debug` (CC only) wraps engine context in chaos overrides but does NOT use persisted assignments (intentional — chaos is hypothetical).
+- Supabase migration 0009 (assignments / selector_outcomes / engine_overrides) exists but `VITE_USE_SUPABASE=false` by default.
