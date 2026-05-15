@@ -58,6 +58,7 @@ const PlatoonGapsPage    = lazy(() => import('./pages/PlatoonGapsPage'));
 const PlatoonStructurePage = lazy(() => import('./pages/PlatoonStructurePage'));
 const PlatoonMissionsPage  = lazy(() => import('./pages/PlatoonMissionsPage'));
 const PlatoonNewMissionPage = lazy(() => import('./pages/PlatoonNewMissionPage'));
+const PlatoonLeaveBoardPage = lazy(() => import('./pages/PlatoonLeaveBoardPage'));
 const DemoGuidePage = lazy(() => import('./pages/DemoGuidePage'));
 const DelegationsPage    = lazy(() => import('./pages/DelegationsPage'));
 // Round 4
@@ -179,6 +180,9 @@ function AppRoutes() {
         <Route path="/mission/:id" element={currentUser ? <MissionDetailPage /> : auth} />
         <Route path="/coverage"     element={
           <ProtectedRoute minRole="companyCommander"><CoveragePage /></ProtectedRoute>
+        } />
+        <Route path="/coverage/platoons" element={
+          <ProtectedRoute minRole="companyCommander"><PlatoonLeaveBoardPage /></ProtectedRoute>
         } />
 
         {/* ── Round 4: דוח 1 + הודעות + יציאות פלוגתיות ─── */}

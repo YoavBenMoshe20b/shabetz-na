@@ -82,6 +82,23 @@ interface MaterializeInput {
     excusedUntil?: { soldierId: string; untilIso: string }[];
     lockedCommander?: string;
   }>;
+  /** Operational Leave Management — per-date per-platoon home/base.
+   *  When a slot's ownerPlatoon is `home` on the slot's date, its
+   *  soldiers are dropped from the eligible pool UNLESS a per-soldier
+   *  override marks them in-base. Operator can still force them via
+   *  the existing `assignments` channel — that bypasses materializer
+   *  auto-pick entirely. */
+  platoonLeaveDays?: Array<{
+    dateIso: string;
+    platoonId: string;
+    status: 'home' | 'in-base' | 'partial';
+  }>;
+  /** Soldier-level overrides on top of platoon-day. Same keys. */
+  soldierLeaveOverrides?: Array<{
+    dateIso: string;
+    soldierId: string;
+    status: 'home' | 'in-base';
+  }>;
 }
 
 export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
@@ -104,6 +121,17 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
   const opsBySlot = new Map<string, NonNullable<MaterializeInput['slotOperationalState']>[number]>();
   for (const op of input.slotOperationalState ?? []) {
     opsBySlot.set(op.slotId, op);
+  }
+
+  // Operational leave — index by `dateIso::platoonId`.
+  const platoonLeaveBy = new Map<string, NonNullable<MaterializeInput['platoonLeaveDays']>[number]>();
+  for (const d of input.platoonLeaveDays ?? []) {
+    platoonLeaveBy.set(`${d.dateIso}::${d.platoonId}`, d);
+  }
+  // Per-soldier overrides — index by `dateIso::soldierId`.
+  const soldierOverrideBy = new Map<string, NonNullable<MaterializeInput['soldierLeaveOverrides']>[number]>();
+  for (const o of input.soldierLeaveOverrides ?? []) {
+    soldierOverrideBy.set(`${o.dateIso}::${o.soldierId}`, o);
   }
 
   for (let offset = 0; offset < days; offset++) {
@@ -138,10 +166,24 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
             .map((e) => e.soldierId),
         );
 
-        const eligible = ownerPool.filter((s) =>
-          isAvailable(s, w.start, input.leaves, input.dutyExclusions)
-          && !excusedHere.has(s.id),
-        );
+        // Operational Leave — drop soldiers whose platoon is `home` on
+        // the slot's date, unless a per-soldier override says in-base.
+        const dateIsoForSlot = isoDate(day);
+        const ownerHome = platoonLeaveBy.get(`${dateIsoForSlot}::${ownerPlatoonId ?? ''}`);
+        const platoonIsHome = ownerHome?.status === 'home';
+
+        const eligible = ownerPool.filter((s) => {
+          if (!isAvailable(s, w.start, input.leaves, input.dutyExclusions)) return false;
+          if (excusedHere.has(s.id)) return false;
+          if (platoonIsHome) {
+            const override = soldierOverrideBy.get(`${dateIsoForSlot}::${s.id}`);
+            if (override?.status !== 'in-base') return false;
+          }
+          // Per-soldier home override even if platoon is in-base.
+          const sOverride = soldierOverrideBy.get(`${dateIsoForSlot}::${s.id}`);
+          if (sOverride?.status === 'home') return false;
+          return true;
+        });
 
         // If we have operator-confirmed assignments for this slot, USE
         // THEM verbatim. Auto-pick only runs when nothing is persisted —

@@ -9,6 +9,7 @@ import type {
   CalendarEvent,
   Mission, Assignment, SelectorOutcomeRecord, SlotOperationalState, SlotExcuse,
   ChecklistTemplate, ChecklistRun, ChecklistInstance, ChecklistRunScope,
+  PlatoonLeaveDay, PlatoonLeaveDayStatus, CompanyLeavePolicy, CompanyCoverageRuleSet, CoverageRule, SoldierLeaveOverride,
   Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
@@ -45,6 +46,7 @@ import {
   mockCalendarEvents,
   mockMissions, mockAssignments, mockSlotOperationalState, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
   mockChecklistTemplates, mockChecklistRuns, mockChecklistInstances,
+  mockPlatoonLeaveDays, mockCompanyLeavePolicy, mockCompanyCoverageRules, mockSoldierLeaveOverrides,
   mockLeaveRotationPolicy, mockLeaveBlocks,
   mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
   mockSignedEquipment,
@@ -236,6 +238,20 @@ interface AppContextType {
   createChecklistRun:     (input: { templateId: string; scope: ChecklistRunScope; missionId?: string; notes?: string; soldierIds: string[] }) => ChecklistRun | null;
   setChecklistInstanceItem: (instanceId: string, itemKey: string, patch: { present?: boolean; actualCount?: number; notes?: string }) => void;
   completeChecklistRun:   (runId: string) => void;
+
+  // ── Operational Leave Management (Phase 6.10) ────────────────────
+  platoonLeaveDays:        PlatoonLeaveDay[];
+  companyLeavePolicy:      CompanyLeavePolicy;
+  companyCoverageRules:    CompanyCoverageRuleSet;
+  soldierLeaveOverrides:   SoldierLeaveOverride[];
+  setPlatoonLeaveDay:      (dateIso: string, platoonId: string, status: PlatoonLeaveDayStatus, notes?: string) => void;
+  clearPlatoonLeaveDay:    (dateIso: string, platoonId: string) => void;
+  generatePlatoonRotation: (input: { startDateIso: string; days: number; order: string[]; homeStintDays?: number }) => void;
+  updateCompanyLeavePolicy: (patch: Partial<Omit<CompanyLeavePolicy, 'companyId' | 'updatedAt' | 'updatedByUserId'>>) => void;
+  upsertCoverageRule:      (rule: CoverageRule) => void;
+  removeCoverageRule:      (ruleId: string) => void;
+  setSoldierLeaveOverride: (dateIso: string, soldierId: string, status: 'home' | 'in-base', reason?: string) => void;
+  clearSoldierLeaveOverride: (dateIso: string, soldierId: string) => void;
 
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
@@ -795,6 +811,148 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return { ...inst, items, status };
     }));
+  };
+
+  // ── Operational Leave Management (Phase 6.10) ────────────────────
+  const [platoonLeaveDays, setPlatoonLeaveDays] = usePersistedState<PlatoonLeaveDay[]>(
+    'platoonLeaveDays', mockPlatoonLeaveDays, SEED_VERSION,
+  );
+  const [companyLeavePolicy, setCompanyLeavePolicy] = usePersistedState<CompanyLeavePolicy>(
+    'companyLeavePolicy', mockCompanyLeavePolicy, SEED_VERSION,
+  );
+  const [companyCoverageRules, setCompanyCoverageRules] = usePersistedState<CompanyCoverageRuleSet>(
+    'companyCoverageRules', mockCompanyCoverageRules, SEED_VERSION,
+  );
+  const [soldierLeaveOverrides, setSoldierLeaveOverrides] = usePersistedState<SoldierLeaveOverride[]>(
+    'soldierLeaveOverrides', mockSoldierLeaveOverrides, SEED_VERSION,
+  );
+
+  /** Toggle/set the home/in-base status for a (date, platoon) pair. */
+  const setPlatoonLeaveDay = (
+    dateIso: string,
+    platoonId: string,
+    status: PlatoonLeaveDayStatus,
+    notes?: string,
+  ) => {
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    setPlatoonLeaveDays((prev) => {
+      const filtered = prev.filter((d) => !(d.dateIso === dateIso && d.platoonId === platoonId));
+      // 'in-base' is the default; storing it explicitly is unnecessary
+      // unless the operator wants to LOCK the day. To keep the state
+      // file lean we drop in-base entries unless `notes` is provided.
+      if (status === 'in-base' && !notes) return filtered;
+      return [
+        ...filtered,
+        {
+          dateIso, platoonId, status, notes,
+          updatedAt: nowIso, updatedByUserId: actorId,
+        },
+      ];
+    });
+  };
+
+  const clearPlatoonLeaveDay = (dateIso: string, platoonId: string) => {
+    setPlatoonLeaveDays((prev) =>
+      prev.filter((d) => !(d.dateIso === dateIso && d.platoonId === platoonId)),
+    );
+  };
+
+  /** Apply an automatic rotation forward N days from a start date using
+   *  the current policy. Platoons in `order` rotate one-at-a-time
+   *  (default) with `homeStintDays` days each. Existing entries for the
+   *  same date+platoon are overwritten (unless locked). */
+  const generatePlatoonRotation = (input: {
+    startDateIso: string;
+    days: number;
+    order: string[];
+    homeStintDays?: number;
+  }) => {
+    const stint = input.homeStintDays ?? companyLeavePolicy.homeStintDays;
+    if (input.order.length === 0 || stint <= 0) return;
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    const next: PlatoonLeaveDay[] = [];
+    const start = new Date(input.startDateIso);
+    for (let i = 0; i < input.days; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dateIso = d.toISOString().slice(0, 10);
+      const slotIndex = Math.floor(i / stint) % input.order.length;
+      const homePlatoon = input.order[slotIndex];
+      next.push({
+        dateIso,
+        platoonId: homePlatoon,
+        status: 'home',
+        updatedAt: nowIso,
+        updatedByUserId: actorId,
+      });
+    }
+    setPlatoonLeaveDays((prev) => {
+      // Keep locked entries; overwrite any unlocked entries in the
+      // target range; append new ones for unrepresented (date, platoon).
+      const inRange = (e: PlatoonLeaveDay) => {
+        const iso = e.dateIso;
+        return iso >= input.startDateIso
+          && iso <= (next[next.length - 1]?.dateIso ?? input.startDateIso);
+      };
+      const lockedInRange = prev.filter((e) => inRange(e) && e.locked);
+      const outOfRange = prev.filter((e) => !inRange(e));
+      const lockedKeys = new Set(lockedInRange.map((e) => `${e.dateIso}::${e.platoonId}`));
+      const fresh = next.filter((e) => !lockedKeys.has(`${e.dateIso}::${e.platoonId}`));
+      return [...outOfRange, ...lockedInRange, ...fresh];
+    });
+  };
+
+  const updateCompanyLeavePolicy = (patch: Partial<Omit<CompanyLeavePolicy, 'companyId' | 'updatedAt' | 'updatedByUserId'>>) => {
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    setCompanyLeavePolicy((prev) => ({
+      ...prev,
+      ...patch,
+      updatedAt: nowIso,
+      updatedByUserId: actorId,
+    }));
+  };
+
+  const upsertCoverageRule = (rule: CoverageRule) => {
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    setCompanyCoverageRules((prev) => ({
+      ...prev,
+      rules: [
+        ...prev.rules.filter((r) => r.id !== rule.id),
+        rule,
+      ],
+      updatedAt: nowIso,
+      updatedByUserId: actorId,
+    }));
+  };
+
+  const removeCoverageRule = (ruleId: string) => {
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    setCompanyCoverageRules((prev) => ({
+      ...prev,
+      rules: prev.rules.filter((r) => r.id !== ruleId),
+      updatedAt: nowIso,
+      updatedByUserId: actorId,
+    }));
+  };
+
+  const setSoldierLeaveOverride = (dateIso: string, soldierId: string, status: 'home' | 'in-base', reason?: string) => {
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    setSoldierLeaveOverrides((prev) => [
+      ...prev.filter((o) => !(o.dateIso === dateIso && o.soldierId === soldierId)),
+      { id: newId('slo'), dateIso, soldierId, status, reason, createdAt: nowIso, createdByUserId: actorId },
+    ]);
+  };
+
+  const clearSoldierLeaveOverride = (dateIso: string, soldierId: string) => {
+    setSoldierLeaveOverrides((prev) =>
+      prev.filter((o) => !(o.dateIso === dateIso && o.soldierId === soldierId)),
+    );
   };
 
   const completeChecklistRun = (runId: string) => {
@@ -2087,6 +2245,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toggleSlotSoldierLock, addSlotExcuse, removeSlotExcuse,
       checklistTemplates, checklistRuns, checklistInstances,
       createChecklistRun, setChecklistInstanceItem, completeChecklistRun,
+      platoonLeaveDays, companyLeavePolicy, companyCoverageRules, soldierLeaveOverrides,
+      setPlatoonLeaveDay, clearPlatoonLeaveDay, generatePlatoonRotation,
+      updateCompanyLeavePolicy, upsertCoverageRule, removeCoverageRule,
+      setSoldierLeaveOverride, clearSoldierLeaveOverride,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,

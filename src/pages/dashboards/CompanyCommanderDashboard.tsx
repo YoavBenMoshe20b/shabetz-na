@@ -344,6 +344,8 @@ export default function CompanyCommanderDashboard() {
               onClick={() => navigate('/missions')} icon="missions" />
             <NavTile label="יציאות וכיסוי" hint="מי בבית, מי בבסיס, אירועי כיסוי"
               onClick={() => navigate('/coverage')} icon="coverage" />
+            <NavTile label="ניהול יציאות פלוגתיות" hint="לוח חודש · סבב מחלקות · חוקי כיסוי חפ״ק/מפלג"
+              onClick={() => navigate('/coverage/platoons')} icon="coverage" />
             <NavTile label="מבנה חפ״ק" hint="אחראי ציוד · קשר · רחפן · נהג"
               onClick={() => navigate('/platoon/g-chapack/structure')} icon="missions" />
             <NavTile label="מבנה מפלג" hint="רס״פ · סרס״פ · שליש · מטבח · מים"

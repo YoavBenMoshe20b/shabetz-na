@@ -1364,6 +1364,116 @@ export interface SlotOperationalState {
   updatedByUserId: string;
 }
 
+// ─── Operational Leave Management (Phase 6.10) ─────────────────────────────
+//
+// Day-based model for "who's home / who's in base" planning at the
+// COMPANY level. Distinct from the existing PlatoonLeaveCycle (which
+// is a richer segment-based scheduling artifact). This is the simpler
+// operational layer the CC/DCC actually uses to plan rotations.
+//
+// Two parallel concepts:
+//   1. PlatoonLeaveDay — per-date per-platoon home/base. Best fit for
+//      combat platoons (g1/g2/g3) that rotate as a unit.
+//   2. CoverageRule — operational invariants for CHAPAK/MAFLAG who
+//      DON'T rotate as a unit. Rules like "min 3 חפ״ק in base", "min 1
+//      driver", "team [s12,s13,s71] always together", etc.
+//
+// Engine consumes both: materializer excludes home-platoon soldiers
+// from the eligible pool; coverage rules surface as warnings (Phase
+// 6.10 MVP doesn't enforce them at pick-time — that's a follow-up).
+
+export type PlatoonLeaveDayStatus = 'home' | 'in-base' | 'partial';
+
+export interface PlatoonLeaveDay {
+  /** ISO YYYY-MM-DD. */
+  dateIso: string;
+  platoonId: string;
+  status: PlatoonLeaveDayStatus;
+  /** Optional human note ("חזרה הדרגתית", "תרגיל בוקר"). */
+  notes?: string;
+  /** When locked, automatic rotation generators must NOT overwrite. */
+  locked?: boolean;
+  updatedAt: string;
+  updatedByUserId: string;
+}
+
+export interface CompanyLeavePolicy {
+  companyId: string;
+  /** Concurrent home-platoon cap. */
+  maxPlatoonsHome: number;
+  /** Default cycle stint (days a platoon spends home before coming back). */
+  homeStintDays: number;
+  /** Minimum days between consecutive home stints for the same platoon. */
+  minBaseGapDays: number;
+  /** Policy mode — "manual" disables auto-generation; "one-at-a-time" /
+   *  "two-at-a-time" are convenience presets. */
+  mode: 'manual' | 'one-at-a-time' | 'two-at-a-time';
+  updatedAt: string;
+  updatedByUserId: string;
+}
+
+/** Operational coverage invariant. Evaluated PER DAY against the set of
+ *  soldiers who would be "in base" that day. When violated, surfaces as
+ *  a warning. The engine does NOT yet enforce these at pick-time. */
+export type CoverageRule =
+  | {
+      id: string;
+      kind: 'min-count-in-platoon';
+      label: string;
+      platoonId: string;
+      min: number;
+    }
+  | {
+      id: string;
+      kind: 'min-with-functional-role';
+      label: string;
+      functionalRole: FunctionalRole;
+      min: number;
+      scopePlatoonId?: string;
+    }
+  | {
+      id: string;
+      kind: 'min-with-operational-role';
+      label: string;
+      operationalRole: OperationalRole;
+      min: number;
+      scopePlatoonId?: string;
+    }
+  | {
+      id: string;
+      kind: 'team-together';
+      label: string;
+      soldierIds: string[];
+    }
+  | {
+      id: string;
+      kind: 'mutual-exclusion';
+      label: string;
+      soldierIds: string[];
+    };
+
+export interface CompanyCoverageRuleSet {
+  companyId: string;
+  rules: CoverageRule[];
+  updatedAt: string;
+  updatedByUserId: string;
+}
+
+/** Soldier-level override that beats the platoon-day default for one
+ *  specific (date, soldier) pair. Use cases: a soldier from a home
+ *  platoon called back early, or a single soldier from an in-base
+ *  platoon sent home for a personal reason without taking the whole
+ *  unit out. */
+export interface SoldierLeaveOverride {
+  id: string;
+  dateIso: string;
+  soldierId: string;
+  status: 'home' | 'in-base';
+  reason?: string;
+  createdAt: string;
+  createdByUserId: string;
+}
+
 // ─── Engine: overrides — audit record vs upward alert ────────────────────────
 //
 // Override is the immutable, always-emitted audit record of a rule-breaking

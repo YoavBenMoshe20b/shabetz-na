@@ -6,6 +6,7 @@ import type {
   CalendarEvent,
   Mission, Qualification, EquipmentItem, SoldierQualification, Assignment, SlotOperationalState,
   ChecklistTemplate, ChecklistRun, ChecklistInstance,
+  PlatoonLeaveDay, CompanyLeavePolicy, CompanyCoverageRuleSet, SoldierLeaveOverride,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment,
@@ -811,6 +812,98 @@ export const mockChecklistTemplates: ChecklistTemplate[] = [
 
 export const mockChecklistRuns: ChecklistRun[] = [];
 export const mockChecklistInstances: ChecklistInstance[] = [];
+
+// ─── Operational Leave Management seed (Phase 6.10) ────────────────────
+//
+// A simple 30-day rotation seeded forward from today: g1 home days
+// 4-7, g2 home days 11-14, g3 home days 18-21. Combat platoons only —
+// CHAPAK / MAFLAG don't have a unit-level rotation by default.
+
+const _LEAVE_SEED_TODAY = new Date();
+_LEAVE_SEED_TODAY.setHours(0, 0, 0, 0);
+
+function _leaveDate(offsetDays: number): string {
+  const d = new Date(_LEAVE_SEED_TODAY);
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+function _platoonRange(platoonId: string, fromOffset: number, toOffset: number): PlatoonLeaveDay[] {
+  const out: PlatoonLeaveDay[] = [];
+  for (let i = fromOffset; i <= toOffset; i++) {
+    out.push({
+      dateIso: _leaveDate(i),
+      platoonId,
+      status: 'home',
+      updatedAt: '2026-05-15T08:00:00.000Z',
+      updatedByUserId: 'u1',
+    });
+  }
+  return out;
+}
+
+export const mockPlatoonLeaveDays: PlatoonLeaveDay[] = [
+  ..._platoonRange('g1', 4, 7),
+  ..._platoonRange('g2', 11, 14),
+  ..._platoonRange('g3', 18, 21),
+];
+
+export const mockCompanyLeavePolicy: CompanyLeavePolicy = {
+  companyId: 'co1',
+  maxPlatoonsHome: 1,
+  homeStintDays: 4,
+  minBaseGapDays: 7,
+  mode: 'one-at-a-time',
+  updatedAt: '2026-05-15T08:00:00.000Z',
+  updatedByUserId: 'u1',
+};
+
+// Coverage rules for non-rotating units (חפ״ק / מפלג). Seeded with
+// reasonable defaults — operator can edit/add via the page.
+export const mockCompanyCoverageRules: CompanyCoverageRuleSet = {
+  companyId: 'co1',
+  rules: [
+    {
+      id: 'cr-chap-min',
+      kind: 'min-count-in-platoon',
+      label: 'מינימום 3 אנשי חפ״ק בבסיס',
+      platoonId: 'g-chapack',
+      min: 3,
+    },
+    {
+      id: 'cr-meflag-min',
+      kind: 'min-count-in-platoon',
+      label: 'מינימום 2 אנשי מפלג בבסיס',
+      platoonId: 'g-meflag',
+      min: 2,
+    },
+    {
+      id: 'cr-driver-min',
+      kind: 'min-with-functional-role',
+      label: 'מינימום נהג אחד',
+      functionalRole: 'driver',
+      min: 1,
+    },
+    {
+      id: 'cr-comms-min',
+      kind: 'min-with-functional-role',
+      label: 'מינימום מש״ק קשר אחד',
+      functionalRole: 'mashak-kesher',
+      min: 1,
+    },
+    {
+      id: 'cr-equip-chap',
+      kind: 'min-with-functional-role',
+      label: 'אחראי ציוד חפ״ק חייב להיות בבסיס',
+      functionalRole: 'equipment-lead-chapack',
+      min: 1,
+    },
+  ],
+  updatedAt: '2026-05-15T08:00:00.000Z',
+  updatedByUserId: 'u1',
+};
+
+export const mockSoldierLeaveOverrides: SoldierLeaveOverride[] = [];
 
 export const mockOverrideAlerts: OverrideAlert[] = [
   {
