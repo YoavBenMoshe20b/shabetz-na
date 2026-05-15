@@ -38,3 +38,8 @@ dist-ssr
 demo-assets/
 playwright-report/
 test-results/
+
+# Final export package — only the binary assets are local; text artifacts
+# (scripts, shot order, subtitles) are committed.
+demo-export/assets/mobile/
+demo-export/assets/desktop/
