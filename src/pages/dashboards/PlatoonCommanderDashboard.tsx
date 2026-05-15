@@ -17,11 +17,10 @@ import { buildPlatoonTimeline } from '../../utils/timeline';
 import { materializeWeek } from '../../utils/materialize';
 import Header from '../../components/Header';
 import {
-  Section, PageMain, Body, Muted, Hint, Button, Card,
+  Section, PageMain, Body, Muted, Hint, Card,
 } from '../../components/ui';
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import AlertsButton from '../../components/AlertsButton';
-import CriticalAlertsBanner from '../../components/CriticalAlertsBanner';
 import PersonalActionsFab from '../../components/PersonalActionsFab';
 import { TimelineCard } from './_shared/TimelineCard';
 
@@ -204,7 +203,39 @@ export default function PlatoonCommanderDashboard() {
           )}
         </header>
 
-        <CriticalAlertsBanner />
+        {/* שבצ״ק CTA — the PC's primary action surface. Includes a count
+            of understaffed slots so the operator sees what needs them
+            BEFORE drilling in. Sits above everything else because this
+            is the platoon commander's main job. */}
+        {(() => {
+          const understaffed = myPlatoonSlots.filter(
+            (s) => s.status === 'partially-staffed' || s.status === 'open',
+          ).length;
+          return (
+            <button
+              onClick={() => navigate('/platoon')}
+              className="w-full text-right bg-mil-card border border-mil-border rounded-xl-soft shadow-card hover:shadow-card-hover hover:border-mil-border-strong transition-all duration-200 ease-out-soft px-5 py-4 flex items-center gap-3.5"
+            >
+              <span className="w-9 h-9 rounded-xl-soft bg-mil-olive-bg text-mil-olive flex items-center justify-center flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <Body className="font-semibold leading-tight">שבצ״ק המחלקה</Body>
+                <Hint className="block mt-0.5 text-mil-muted">
+                  {myPlatoonSlots.length === 0
+                    ? 'אין משימות פעילות השבוע'
+                    : understaffed > 0
+                      ? <><span className="font-bold text-mil-warn">{understaffed}</span> משבצות דורשות איוש · {myPlatoonSlots.length} סה״כ</>
+                      : `${myPlatoonSlots.length} משבצות · הכל מאוייש`}
+                </Hint>
+              </div>
+              <span className="text-mil-olive font-semibold text-tiny">פתח ←</span>
+            </button>
+          );
+        })()}
 
         {activeMissions.length > 0 && (
           <Section label="פעיל עכשיו">
@@ -246,10 +277,6 @@ export default function PlatoonCommanderDashboard() {
             </div>
           )}
         </Section>
-
-        <Button variant="primary" size="lg" fullWidth onClick={() => navigate('/platoon')}>
-          פתח שבצ״ק השבוע ←
-        </Button>
 
         <Section label="כיסוי המחלקה">
           <Card>

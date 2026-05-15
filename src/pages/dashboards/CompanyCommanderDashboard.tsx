@@ -24,7 +24,6 @@ import {
 } from '../../components/ui';
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import FocusSection from '../../components/FocusSection';
-import CriticalAlertsBanner from '../../components/CriticalAlertsBanner';
 import EscalationSheet from '../../components/EscalationSheet';
 import AlertsButton from '../../components/AlertsButton';
 import PersonalActionsFab from '../../components/PersonalActionsFab';
@@ -248,14 +247,11 @@ export default function CompanyCommanderDashboard() {
           )}
         </section>
 
-        {/* Critical alerts — itemized, each with a direct CTA. Auto-hides
-            when there are no criticals. Always visible (breaks through
-            QuietMode). Sits above Focus because critical events demand
-            awareness before the operator considers what to decide next. */}
-        <CriticalAlertsBanner />
-
         {/* Focus — "what requires a decision now". Engine-driven, max 5 items.
-            Auto-hides when nothing demands a decision. */}
+            Auto-hides when nothing demands a decision. Criticals surface
+            here as items with severity='critical' when they require a
+            decision, and via the bell badge / AlertsSheet for awareness.
+            NO top-of-page critical banner — per operational UX principle. */}
         <FocusSection />
 
         {/* Escalation CTA — surfaces FIRST after hero so the operator's

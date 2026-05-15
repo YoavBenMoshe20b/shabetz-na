@@ -23,10 +23,20 @@ const ROLE_ORDER: UserRole[] = [
 ];
 
 export default function UserSwitcher() {
-  const { currentUser, users, switchUser } = useApp();
+  const { currentUser, users, switchUser, platoons } = useApp();
   const [open, setOpen] = useState(false);
 
   if (!currentUser || users.length <= 1) return null;
+
+  // Build a quick lookup: userId → "מחלקה X" label, so a reviewer can
+  // immediately see WHICH platoon each PC commands or each soldier
+  // belongs to. Without this, every demo session opens with the same
+  // question — "which u-number is for which platoon?".
+  const platoonLabel = (u: MockUser): string | null => {
+    const targetPlatoonId = u.commandedPlatoonId ?? u.platoonId;
+    if (!targetPlatoonId) return null;
+    return platoons.find((p) => p.id === targetPlatoonId)?.name ?? null;
+  };
 
   // Group by base role, ordered. Soldiers further grouped by
   // functional/operational role for clarity (רס״פ / שליש first).
@@ -88,6 +98,7 @@ export default function UserSwitcher() {
                     <UserRow
                       key={u.id}
                       user={u}
+                      platoonName={platoonLabel(u)}
                       active={u.id === currentUser.id}
                       onClick={() => {
                         switchUser(u.id);
@@ -119,10 +130,12 @@ export default function UserSwitcher() {
 
 function UserRow({
   user,
+  platoonName,
   active,
   onClick,
 }: {
   user: MockUser;
+  platoonName: string | null;
   active: boolean;
   onClick: () => void;
 }) {
@@ -141,8 +154,8 @@ function UserRow({
         {functional && (
           <span className="text-tiny text-mil-muted">· {functional}</span>
         )}
-        {user.teamClass && (
-          <span className="text-tiny text-mil-ghost mr-auto">{user.teamClass}</span>
+        {platoonName && (
+          <span className="text-tiny text-mil-olive font-semibold mr-auto">{platoonName}</span>
         )}
       </div>
     </button>
