@@ -13,6 +13,7 @@ import RoleBadge from './RoleBadge';
 import { roleLabel } from '../utils/permissions';
 import type { UserRole } from '../types';
 import CommandMenu from './CommandMenu';
+import UserSwitcher from './UserSwitcher';
 
 export default function Header({ title }: { title: string }) {
   const navigate = useNavigate();
@@ -45,6 +46,8 @@ export default function Header({ title }: { title: string }) {
           title={isOnline ? 'מחובר' : 'לא מחובר'}
           aria-hidden
         />
+
+        <UserSwitcher />
 
         {currentUser && (
           <div className="relative">

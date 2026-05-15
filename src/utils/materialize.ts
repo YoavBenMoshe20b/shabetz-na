@@ -61,11 +61,31 @@ interface MaterializeInput {
   startDay:        Date;
   /** Number of days to materialize, default 7. */
   days?:           number;
+  /** Optional persisted assignments keyed by materialized slot.id
+   *  (`mat-<missionId>-<isoDate>-<windowIdx>`). When provided, the
+   *  materializer USES these assignments instead of its auto-pick
+   *  heuristic. This is the bridge from operator-confirmed staffing
+   *  back into the schedule everyone sees.
+   *
+   *  The Assignment shape (slotId, soldierId, role) lives in types.
+   *  We accept a flat array here and group internally. */
+  assignments?:    { slotId: string; soldierId: string; role: 'soldier' | 'commander' }[];
 }
 
 export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
   const days = input.days ?? 7;
   const slots: MaterializedSlot[] = [];
+
+  // Index assignments by slotId for O(1) lookup during slot construction.
+  // Operator-confirmed staffing wins over the auto-pick heuristic — that's
+  // the whole point of persistence.
+  const assignmentsBySlot = new Map<string, { soldiers: string[]; commander?: string }>();
+  for (const a of input.assignments ?? []) {
+    const cur = assignmentsBySlot.get(a.slotId) ?? { soldiers: [] };
+    if (a.role === 'commander') cur.commander = a.soldierId;
+    else cur.soldiers.push(a.soldierId);
+    assignmentsBySlot.set(a.slotId, cur);
+  }
 
   for (let offset = 0; offset < days; offset++) {
     const day = new Date(input.startDay);
@@ -85,20 +105,36 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
         const commanderRequired = mission.command.fieldCommandRequired;
         const commanderRanks    = commanderOnlyRanks(mission.command.rankPolicy);
 
+        const slotId = `mat-${mission.id}-${isoDate(day)}-${wIdx}`;
+        const persisted = assignmentsBySlot.get(slotId);
+
         const eligible = ownerPool.filter((s) => isAvailable(s, w.start, input.leaves, input.dutyExclusions));
 
-        // Pick commander first (so soldier slots don't accidentally consume them).
+        // If we have operator-confirmed assignments for this slot, USE
+        // THEM verbatim. Auto-pick only runs when nothing is persisted —
+        // it's a placeholder for "what the engine would do", not a
+        // decision that overrides the operator.
         let commander: Soldier | undefined;
-        if (commanderRequired && commanderRanks.length > 0) {
-          commander = eligible.find((s) => commanderRanks.includes(soldierCommandRank(s)));
-        }
+        let assigned: Soldier[];
 
-        // Pick the rest from eligible pool minus commander.
-        const restPool   = commander ? eligible.filter((s) => s.id !== commander!.id) : eligible;
-        const needRegular = mission.command.commanderCountsAsManpower && commander
-          ? Math.max(0, required - 1)
-          : required;
-        const assigned   = restPool.slice(0, needRegular);
+        if (persisted) {
+          commander = persisted.commander
+            ? input.soldiers.find((s) => s.id === persisted.commander)
+            : undefined;
+          assigned = persisted.soldiers
+            .map((id) => input.soldiers.find((s) => s.id === id))
+            .filter((s): s is Soldier => !!s);
+        } else {
+          // Auto-pick: commander first (so soldier slots don't accidentally consume them).
+          if (commanderRequired && commanderRanks.length > 0) {
+            commander = eligible.find((s) => commanderRanks.includes(soldierCommandRank(s)));
+          }
+          const restPool = commander ? eligible.filter((s) => s.id !== commander!.id) : eligible;
+          const needRegular = mission.command.commanderCountsAsManpower && commander
+            ? Math.max(0, required - 1)
+            : required;
+          assigned = restPool.slice(0, needRegular);
+        }
 
         const totalCount = assigned.length + (commander ? 1 : 0);
         const status: AssignmentSlotStatus =
@@ -120,7 +156,7 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
         }
 
         slots.push({
-          id:                `mat-${mission.id}-${isoDate(day)}-${wIdx}`,
+          id:                slotId,
           companyId:         mission.companyId,
           missionId:         mission.id,
           start:             w.start.toISOString(),

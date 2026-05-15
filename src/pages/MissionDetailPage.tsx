@@ -36,6 +36,7 @@ export default function MissionDetailPage() {
     qualifications, equipmentItems, delegations,
     addMissionNote, editMissionNote, deleteMissionNote,
     setMissionStatus,
+    assignments, setSlotAssignment,
   } = useApp();
   const myCompany = useMyCompany();
 
@@ -77,7 +78,8 @@ export default function MissionDetailPage() {
     missions: [mission],
     platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
-  }) : [], [mission, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+    assignments,
+  }) : [], [mission, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
 
   /** Candidate pool for StaffingSheet — soldiers from platoons assigned
    *  to this mission. Engine layer applies hard filters; we only need
@@ -437,10 +439,16 @@ export default function MissionDetailPage() {
           slot={staffingSlot}
           candidatePool={candidatePool}
           onAssign={(soldierIds, forcedReason) => {
-            // Phase 6.2.a — wires UI to engine. Persistence of assignment
-            // updates lands in 6.2.b alongside the broader staffing
-            // mutation; for now we collect the intent and close.
-            void soldierIds; void forcedReason;
+            // Phase 6.3.a — persistence is live. The slot's assignment
+            // replaces auto-pick on next materialization, so every
+            // surface (CC dashboard, PC dashboard, SoldierDashboard,
+            // SchedulePage) immediately reflects the operator's intent.
+            // `forcedReason` will be surfaced via SelectorOutcomeRecord
+            // in 6.3.b; for now we keep the audit trail in-component.
+            void forcedReason;
+            if (staffingSlot) {
+              setSlotAssignment(staffingSlot.id, soldierIds);
+            }
             setStaffingSlot(null);
           }}
         />

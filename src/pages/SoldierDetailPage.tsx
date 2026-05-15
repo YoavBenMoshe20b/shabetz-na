@@ -41,7 +41,7 @@ export default function SoldierDetailPage() {
   const {
     currentUser, soldiers, allSoldiers, squads, platoons,
     qualifications, soldierQualifications,
-    signedEquipment, soldierStatusEvents, leaves, missions, dutyExclusions,
+    signedEquipment, soldierStatusEvents, leaves, missions, dutyExclusions, assignments,
     updateSoldierSquad, updateSoldierOperationalRoles,
   } = useApp();
 
@@ -75,7 +75,8 @@ export default function SoldierDetailPage() {
   const weekSlots = useMemo(() => materializeWeek({
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+    assignments,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
 
   const age = useMemo(() => {
     if (!target?.dateOfBirth) return null;

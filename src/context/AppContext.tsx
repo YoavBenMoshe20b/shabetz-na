@@ -7,7 +7,7 @@ import type {
   CompanyMission, OverrideAlert,
   SoldierStatus, SoldierStatusEvent, Delegation,
   CalendarEvent,
-  Mission, Qualification, EquipmentItem, SoldierQualification,
+  Mission, Assignment, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment, SignedEquipmentStatus,
@@ -34,7 +34,7 @@ import {
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
   mockSoldierStatusEvents, mockDelegations,
   mockCalendarEvents,
-  mockMissions, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
+  mockMissions, mockAssignments, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
   mockLeaveRotationPolicy, mockLeaveBlocks,
   mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
   mockSignedEquipment,
@@ -190,6 +190,21 @@ interface AppContextType {
    *  automatically on the next paint. */
   updateMission:          (id: string, patch: Partial<Omit<Mission, 'id' | 'companyId' | 'createdAt'>>) => void;
 
+  // ── Slot assignments (operator-confirmed staffing) ─────────────────
+  /** Persisted operator assignments keyed by materialized slot id.
+   *  When a slot has assignments here, the materializer USES THEM
+   *  verbatim — overriding its auto-pick heuristic. */
+  assignments:            Assignment[];
+  /** Replace all assignments for one slot atomically. Pass empty
+   *  `soldierIds` and no `commanderSoldierId` to effectively clear via
+   *  `clearSlotAssignment` instead. */
+  setSlotAssignment:      (
+    slotId: string,
+    soldierIds: string[],
+    options?: { commanderSoldierId?: string; overrideId?: string; overrideAlertId?: string },
+  ) => void;
+  clearSlotAssignment:    (slotId: string) => void;
+
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
   addOrder:               (data: Omit<OperationalOrder, 'id' | 'createdAt'>) => OperationalOrder;
@@ -338,6 +353,7 @@ interface AppContextType {
   joinCompany:    (code: string, identity: JoinIdentity) => { ok: boolean; error?: string };
   logout:         () => void;
   switchRole:     (role: UserRole) => void; // dev/test only
+  switchUser:     (userId: string) => void; // demo-only: hop between mock users without re-auth
   addPeriod:      (p: SchedulePeriod) => void;
   updatePeriod:   (p: SchedulePeriod) => void;
   addAuditLog:    (entry: Omit<AuditLog, 'id' | 'timestamp'>) => void;
@@ -606,6 +622,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ) => {
     setMissions((prev) => prev.map((m) => m.id === id ? { ...m, ...patch } : m));
     persist(() => missionsApi.update(id, patch));
+  };
+
+  // ── Slot assignments — operator-confirmed staffing ─────────────────
+  //
+  // Each Assignment links one soldier to one materialized slot (`slotId`
+  // produced by materializeWeek). The materializer overrides its
+  // auto-pick when assignments are present, so this is the bridge from
+  // a PC opening StaffingSheet → confirming a roster → everyone in the
+  // app (CC, PC, soldiers) seeing the assigned soldiers on the slot.
+  //
+  // setSlotAssignment replaces ALL assignments for a slot in one shot —
+  // committing the operator's full intent atomically.
+  const [assignments, setAssignments] = useState<Assignment[]>(mockAssignments);
+
+  const setSlotAssignment = (
+    slotId: string,
+    soldierIds: string[],
+    options?: { commanderSoldierId?: string; overrideId?: string; overrideAlertId?: string },
+  ) => {
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    const next: Assignment[] = [
+      ...assignments.filter((a) => a.slotId !== slotId),
+      ...soldierIds.map((sid) => ({
+        id: newId('asg'),
+        slotId,
+        soldierId: sid,
+        role: (sid === options?.commanderSoldierId ? 'commander' : 'soldier') as 'soldier' | 'commander',
+        createdBy: actorId,
+        createdAt: nowIso,
+        overrideId: options?.overrideId,
+        overrideAlertId: options?.overrideAlertId,
+      })),
+    ];
+    // Commander as a separate Assignment record (also tied to this slot).
+    if (options?.commanderSoldierId && !soldierIds.includes(options.commanderSoldierId)) {
+      next.push({
+        id: newId('asg'),
+        slotId,
+        soldierId: options.commanderSoldierId,
+        role: 'commander',
+        createdBy: actorId,
+        createdAt: nowIso,
+      });
+    }
+    setAssignments(next);
+  };
+
+  const clearSlotAssignment = (slotId: string) => {
+    setAssignments((prev) => prev.filter((a) => a.slotId !== slotId));
   };
 
   // ── Operational orders ─────────────────────────────────────────────
@@ -1400,6 +1466,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = () => { setCurrentUser(null); setCurrentRole('soldier'); };
   const switchRole = (role: UserRole) => setCurrentRole(role);
+  // Demo-only: switch to a different mock user without re-authenticating.
+  // Skips password — used by UserSwitcher in the header to flip CC/PC/Soldier
+  // contexts mid-session. NOT a production code path; the real signIn must
+  // remain phone+password.
+  const switchUser = (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return;
+    setCurrentUser(user);
+    setCurrentRole(user.role);
+  };
 
   const addPeriod    = (p: SchedulePeriod) => setPeriods((prev) => [...prev, p]);
   const updatePeriod = (p: SchedulePeriod) => setPeriods((prev) => prev.map((x) => x.id === p.id ? p : x));
@@ -1719,6 +1795,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       overrideAlerts, recordOverrideAlert, acknowledgeAlert, resolveAlert,
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
       missions, addMission, setMissionStatus, updateMission,
+      assignments, setSlotAssignment, clearSlotAssignment,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,
@@ -1735,7 +1812,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reportEquipmentGap, reviewEquipmentGap, forwardEquipmentGap,
       resolveEquipmentGap, dismissEquipmentGap,
       signIn, lookupClaim, claimIdentity, bootstrapCC, joinCompany,
-      logout, switchRole, addPeriod, updatePeriod, addAuditLog,
+      logout, switchRole, switchUser, addPeriod, updatePeriod, addAuditLog,
       updateSoldierAvailability, setHasEmergency, setReminder, addLeave, removeLeave,
       addLeaveRequest, approveLeaveRequest, rejectLeaveRequest,
       allSoldiers,

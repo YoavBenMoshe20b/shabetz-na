@@ -23,7 +23,7 @@ export default function PlatoonWeekPage() {
   const navigate = useNavigate();
   const {
     currentRole, currentUser,
-    soldiers, leaves, platoons, squads, missions, dutyExclusions, missionNotes,
+    soldiers, leaves, platoons, squads, missions, dutyExclusions, missionNotes, assignments,
   } = useApp();
 
   // Hooks first; route gate after.
@@ -38,7 +38,8 @@ export default function PlatoonWeekPage() {
   const materializedSlots = useMemo(() => materializeWeek({
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+    assignments,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
 
   const myPlatoonSlots = useMemo(() => myPlatoon
     ? materializedSlots.filter((s) => s.ownerPlatoonId === myPlatoon.id)

@@ -45,7 +45,7 @@ const QUICK_ANNOUNCEMENTS: Array<{ title: string; body?: string; kind: Announcem
 export default function RasapDashboard() {
   const navigate = useNavigate();
   const {
-    currentUser, soldiers, platoons, leaves, missions, dutyExclusions, squads,
+    currentUser, soldiers, platoons, leaves, missions, dutyExclusions, squads, assignments,
     signedEquipment, equipmentGaps, addAnnouncement,
   } = useApp();
   const myCompany = useMyCompany();
@@ -62,7 +62,8 @@ export default function RasapDashboard() {
   const materializedSlots = useMemo(() => materializeWeek({
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+    assignments,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
 
   // My personal slots (Rasap can also be assigned to ops missions)
   const myNextShift = useMemo(() => {

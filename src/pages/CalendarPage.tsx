@@ -30,7 +30,7 @@ export default function CalendarPage() {
   const {
     currentUser, currentRole,
     calendarEvents, leaves, soldiers, platoons, squads,
-    missions, dutyExclusions,
+    missions, dutyExclusions, assignments,
     announcements, escalationEvents, platoonLeaveCycles,
   } = useApp();
 
@@ -48,7 +48,8 @@ export default function CalendarPage() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: monthGridStart,
     days: 42,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, monthGridStart]);
+    assignments,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, monthGridStart, assignments]);
 
   const viewer: CalendarViewer = {
     soldierProfileId:   currentUser?.soldierProfileId,

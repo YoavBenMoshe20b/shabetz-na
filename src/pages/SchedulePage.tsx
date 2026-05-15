@@ -25,7 +25,7 @@ export default function SchedulePage() {
   const navigate = useNavigate();
   const {
     currentUser, currentRole, missions, orders,
-    platoons, squads, soldiers, leaves, dutyExclusions,
+    platoons, squads, soldiers, leaves, dutyExclusions, assignments,
     addOrder, setOrderStatus, setMissionStatus,
   } = useApp();
 
@@ -58,7 +58,8 @@ export default function SchedulePage() {
   const weekSlots = useMemo(() => materializeWeek({
     missions: orderMissions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
-  }), [orderMissions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
+    assignments,
+  }), [orderMissions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
 
   // Route gates AFTER all hooks.
   if (!currentUser) return <Navigate to="/login" replace />;
