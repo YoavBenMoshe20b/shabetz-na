@@ -216,9 +216,9 @@ export default function CompanyCommanderDashboard() {
               {totalInBase}
             </span>
             <div className="pb-1.5">
-              <Body className="font-semibold leading-tight">בבסיס עכשיו</Body>
+              <Body className="font-semibold leading-tight">בבסיס · כל הפלוגה</Body>
               <Hint className="text-tiny mt-0.5">
-                <span className="tabular-nums font-semibold text-mil-text">{totalSoldiers}</span> סה״כ
+                <span className="tabular-nums font-semibold text-mil-text">{totalSoldiers}</span> סה״כ פלוגתי
                 · <span className="tabular-nums font-semibold text-mil-text">{Math.round(readinessPct)}%</span> כשירות
               </Hint>
             </div>

@@ -56,6 +56,7 @@ const EquipmentPage      = lazy(() => import('./pages/EquipmentPage'));
 const SoldierDetailPage  = lazy(() => import('./pages/SoldierDetailPage'));
 const PlatoonGapsPage    = lazy(() => import('./pages/PlatoonGapsPage'));
 const PlatoonStructurePage = lazy(() => import('./pages/PlatoonStructurePage'));
+const PlatoonMissionsPage  = lazy(() => import('./pages/PlatoonMissionsPage'));
 const DemoGuidePage = lazy(() => import('./pages/DemoGuidePage'));
 const DelegationsPage    = lazy(() => import('./pages/DelegationsPage'));
 // Round 4
@@ -147,6 +148,9 @@ function AppRoutes() {
         } />
         <Route path="/platoon"      element={
           <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}><PlatoonWeekPage /></ProtectedRoute>
+        } />
+        <Route path="/platoon/missions" element={
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}><PlatoonMissionsPage /></ProtectedRoute>
         } />
         <Route path="/platoon/gaps" element={
           <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}><PlatoonGapsPage /></ProtectedRoute>

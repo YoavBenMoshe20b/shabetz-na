@@ -237,12 +237,20 @@ export default function PlatoonCommanderDashboard() {
                   <Body className="font-bold text-lg">הכל מאוייש</Body>
                   <Muted className="text-tiny">{myPlatoonSlots.length} משבצות השבוע</Muted>
                 </div>
-                <button
-                  onClick={() => navigate('/platoon')}
-                  className="mt-3 text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
-                >
-                  פתח שבצ״ק ←
-                </button>
+                <div className="mt-3 flex items-baseline gap-3">
+                  <button
+                    onClick={() => navigate('/platoon/missions')}
+                    className="text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
+                  >
+                    משימות המחלקה ←
+                  </button>
+                  <button
+                    onClick={() => navigate('/platoon')}
+                    className="text-tiny font-semibold text-mil-muted hover:text-mil-text"
+                  >
+                    תצוגת שבוע ←
+                  </button>
+                </div>
               </section>
             );
           }
@@ -274,7 +282,7 @@ export default function PlatoonCommanderDashboard() {
                     return (
                       <button
                         key={slot.id}
-                        onClick={() => navigate(`/platoon`)}
+                        onClick={() => navigate('/platoon/missions')}
                         className="w-full text-right px-5 py-3 hover:bg-mil-card-warm/40 transition-colors flex items-center gap-3"
                       >
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isOpen ? 'bg-mil-alert' : 'bg-mil-warn'}`} aria-hidden />
@@ -294,7 +302,7 @@ export default function PlatoonCommanderDashboard() {
               )}
 
               <button
-                onClick={() => navigate('/platoon')}
+                onClick={() => navigate('/platoon/missions')}
                 className="w-full bg-mil-olive hover:bg-mil-olive-light text-white px-5 py-3.5 font-bold text-base transition-colors"
               >
                 אייש עכשיו ←
