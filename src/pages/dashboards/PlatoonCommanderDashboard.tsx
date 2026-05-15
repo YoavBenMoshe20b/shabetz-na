@@ -58,6 +58,7 @@ export default function PlatoonCommanderDashboard() {
   const {
     soldiers, leaves, platoons, squads, currentUser, soldierStatusEvents,
     missions, dutyExclusions, equipmentGaps, assignments,
+    slotOperationalState,
   } = useApp();
   const approvableRequests = useApprovableLeaveRequests();
   const myAlerts = useAlertsForCompany();
@@ -83,7 +84,8 @@ export default function PlatoonCommanderDashboard() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
     assignments,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
+    slotOperationalState,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments, slotOperationalState]);
 
   const myPlatoonSlots = useMemo(() =>
     myPlatoon

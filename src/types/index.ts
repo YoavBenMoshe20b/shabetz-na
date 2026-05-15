@@ -1313,6 +1313,57 @@ export interface Assignment {
   overrideId?: string;
 }
 
+// ─── Mission Operations Layer (Phase 6.9) ──────────────────────────────────
+//
+// Per-slot operator-asserted state that ANY future re-pick must respect.
+// The engine treats this as hard constraint input — separate from
+// Assignment (which is "current picks") so the operator's deliberate
+// manipulations survive any recompute / auto-restaff / chaos overlay.
+//
+// Keys:
+//   • lockedSoldierIds — these soldiers stay on this slot. Auto-pick may
+//     fill REMAINING capacity but must not displace a locked soldier.
+//   • lockedPair — these two soldiers move together. Either both in the
+//     slot, or neither. Mirrors the operational "זוגות קבועים" pattern.
+//   • lockedCommander — explicit commander pin for this slot.
+//   • excusedUntil — per-soldier temporary exclusion. The materializer
+//     drops them from THIS slot's eligible pool until the cutoff iso.
+//   • forcedRationale — Hebrew prose captured when the operator force-
+//     assigned despite a violation. Survives across recomputes.
+//   • operationalNotes — free-form per-slot note (PC/PS context).
+//
+// All times are ISO. updatedAt + updatedByUserId record the operator
+// who last mutated this state.
+
+export interface SlotExcuse {
+  soldierId: string;
+  untilIso: string;
+  reason?: string;
+}
+
+export interface SlotOperationalState {
+  /** Deterministic materialized slot id (`mat-<missionId>-<date>-<idx>`). */
+  slotId: string;
+  /** Soldiers protected from auto-rebalance on this slot. */
+  lockedSoldierIds?: string[];
+  /** Atomic pair — both present or neither. */
+  lockedPair?: [string, string];
+  /** Explicit commander for this slot. */
+  lockedCommander?: string;
+  /** Per-soldier temporary exclusion from this slot's eligible pool. */
+  excusedUntil?: SlotExcuse[];
+  /** Free-form rationale when the operator force-assigned despite a
+   *  violation. Stored separately from SelectorOutcomeRecord because
+   *  this MUST persist even if the audit table is pruned. */
+  forcedRationale?: string;
+  /** PC/PS operational note attached to the slot. */
+  operationalNotes?: string;
+  /** ISO timestamp of last mutation. */
+  updatedAt: string;
+  /** User who last mutated this state. */
+  updatedByUserId: string;
+}
+
 // ─── Engine: overrides — audit record vs upward alert ────────────────────────
 //
 // Override is the immutable, always-emitted audit record of a rule-breaking

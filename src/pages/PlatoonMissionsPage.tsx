@@ -33,6 +33,7 @@ export default function PlatoonMissionsPage() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     assignments, setSlotAssignment, recordSelectorOutcome,
     announcements, addAnnouncement, selectorOutcomes,
+    slotOperationalState,
   } = useApp();
 
   const myPlatoon = useMemo(
@@ -51,7 +52,8 @@ export default function PlatoonMissionsPage() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 14,
     assignments,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
+    slotOperationalState,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments, slotOperationalState]);
 
   // Missions assigned to the PC's platoon. Includes new and old.
   const platoonMissions = useMemo(() => {

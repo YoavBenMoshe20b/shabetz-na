@@ -32,7 +32,7 @@ export default function SoldierDashboard() {
   const navigate = useNavigate();
   const {
     soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest, updateSoldierStatus,
-    missions, dutyExclusions, assignments,
+    missions, dutyExclusions, assignments, slotOperationalState,
   } = useApp();
   const myPlatoon = platoons.find((p) => p.id === currentUser?.platoonId);
 
@@ -65,7 +65,8 @@ export default function SoldierDashboard() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
     assignments,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
+    slotOperationalState,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments, slotOperationalState]);
 
   const mySlots = useMemo(() => {
     if (!myProfile) return [];

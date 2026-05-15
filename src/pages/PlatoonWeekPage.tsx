@@ -27,6 +27,7 @@ export default function PlatoonWeekPage() {
     currentRole, currentUser,
     soldiers, leaves, platoons, squads, missions, dutyExclusions, missionNotes, assignments,
     setSlotAssignment, recordSelectorOutcome,
+    slotOperationalState,
   } = useApp();
   const engineCtx = useEngineContext();
 
@@ -43,7 +44,8 @@ export default function PlatoonWeekPage() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
     assignments,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
+    slotOperationalState,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments, slotOperationalState]);
 
   const myPlatoonSlots = useMemo(() => myPlatoon
     ? materializedSlots.filter((s) => s.ownerPlatoonId === myPlatoon.id)

@@ -70,6 +70,18 @@ interface MaterializeInput {
    *  The Assignment shape (slotId, soldierId, role) lives in types.
    *  We accept a flat array here and group internally. */
   assignments?:    { slotId: string; soldierId: string; role: 'soldier' | 'commander' }[];
+  /** Mission Operations Layer state — durable per-slot operator
+   *  manipulations. Currently consumed for: excusedUntil (filters the
+   *  eligible pool when auto-picking). `lockedSoldierIds` is recorded
+   *  for future auto-restaff logic; today's materializer already
+   *  respects all soldiers in `assignments` so explicit locks are
+   *  visual + forward-compatible. */
+  slotOperationalState?: Array<{
+    slotId: string;
+    lockedSoldierIds?: string[];
+    excusedUntil?: { soldierId: string; untilIso: string }[];
+    lockedCommander?: string;
+  }>;
 }
 
 export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
@@ -85,6 +97,13 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
     if (a.role === 'commander') cur.commander = a.soldierId;
     else cur.soldiers.push(a.soldierId);
     assignmentsBySlot.set(a.slotId, cur);
+  }
+
+  // Index operational state by slotId. Excuses become per-slot hard
+  // exclusions in the eligible pool; locks survive future auto-restaff.
+  const opsBySlot = new Map<string, NonNullable<MaterializeInput['slotOperationalState']>[number]>();
+  for (const op of input.slotOperationalState ?? []) {
+    opsBySlot.set(op.slotId, op);
   }
 
   for (let offset = 0; offset < days; offset++) {
@@ -107,8 +126,22 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
 
         const slotId = `mat-${mission.id}-${isoDate(day)}-${wIdx}`;
         const persisted = assignmentsBySlot.get(slotId);
+        const ops = opsBySlot.get(slotId);
 
-        const eligible = ownerPool.filter((s) => isAvailable(s, w.start, input.leaves, input.dutyExclusions));
+        // Excused-until soldiers are dropped from this slot's eligible
+        // pool when the excuse is still in effect at the slot's start.
+        // Operator manipulations win over auto-pick.
+        const slotStartIso = w.start.toISOString();
+        const excusedHere = new Set(
+          (ops?.excusedUntil ?? [])
+            .filter((e) => e.untilIso > slotStartIso)
+            .map((e) => e.soldierId),
+        );
+
+        const eligible = ownerPool.filter((s) =>
+          isAvailable(s, w.start, input.leaves, input.dutyExclusions)
+          && !excusedHere.has(s.id),
+        );
 
         // If we have operator-confirmed assignments for this slot, USE
         // THEM verbatim. Auto-pick only runs when nothing is persisted —

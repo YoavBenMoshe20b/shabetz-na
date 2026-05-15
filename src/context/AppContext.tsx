@@ -7,7 +7,7 @@ import type {
   CompanyMission, OverrideAlert,
   SoldierStatus, SoldierStatusEvent, Delegation,
   CalendarEvent,
-  Mission, Assignment, SelectorOutcomeRecord, Qualification, EquipmentItem, SoldierQualification,
+  Mission, Assignment, SelectorOutcomeRecord, SlotOperationalState, SlotExcuse, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment, SignedEquipmentStatus,
@@ -41,7 +41,7 @@ import {
   mockSoldierHistory, mockMiluimPeriods, mockCompanies, mockSquads, mockCompanyMissions, mockOverrideAlerts,
   mockSoldierStatusEvents, mockDelegations,
   mockCalendarEvents,
-  mockMissions, mockAssignments, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
+  mockMissions, mockAssignments, mockSlotOperationalState, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
   mockLeaveRotationPolicy, mockLeaveBlocks,
   mockCoverageEvents, mockDutyExclusions, mockLeaveRotationPlans,
   mockSignedEquipment,
@@ -214,6 +214,17 @@ interface AppContextType {
   /** Audit trail of staffing decisions. Newest first. */
   selectorOutcomes:       SelectorOutcomeRecord[];
   recordSelectorOutcome:  (record: Omit<SelectorOutcomeRecord, 'id' | 'decidedAt'>) => void;
+
+  // ── Mission Operations Layer ────────────────────────────────────
+  /** Per-slot operator manipulations (locks, excuses, notes, forced
+   *  rationale). Persisted; the materializer respects this on every
+   *  recompute. */
+  slotOperationalState:   SlotOperationalState[];
+  setSlotOps:             (slotId: string, patch: Partial<Omit<SlotOperationalState, 'slotId' | 'updatedAt' | 'updatedByUserId'>>) => void;
+  clearSlotOps:           (slotId: string) => void;
+  toggleSlotSoldierLock:  (slotId: string, soldierId: string) => void;
+  addSlotExcuse:          (slotId: string, excuse: SlotExcuse) => void;
+  removeSlotExcuse:       (slotId: string, soldierId: string) => void;
 
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
@@ -666,6 +677,101 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // setSlotAssignment replaces ALL assignments for a slot in one shot —
   // committing the operator's full intent atomically.
   const [assignments, setAssignments] = usePersistedState<Assignment[]>('assignments', mockAssignments, SEED_VERSION);
+
+  // Mission Operations Layer (Phase 6.9) — durable per-slot operator
+  // manipulations. The engine reads these as hard input alongside
+  // assignments; the materializer respects them on every recompute.
+  // Keyed by slot.id (deterministic from materializeWeek).
+  const [slotOperationalState, setSlotOperationalState] = usePersistedState<SlotOperationalState[]>(
+    'slotOperationalState', mockSlotOperationalState, SEED_VERSION,
+  );
+
+  /** Merge a partial operational state for one slot. Atomic write. */
+  const setSlotOps = (slotId: string, patch: Partial<Omit<SlotOperationalState, 'slotId' | 'updatedAt' | 'updatedByUserId'>>) => {
+    const actorId = currentUser?.id ?? 'system';
+    const nowIso = new Date().toISOString();
+    setSlotOperationalState((prev) => {
+      const existing = prev.find((s) => s.slotId === slotId);
+      const merged: SlotOperationalState = {
+        ...(existing ?? { slotId, updatedAt: nowIso, updatedByUserId: actorId }),
+        ...patch,
+        slotId,
+        updatedAt: nowIso,
+        updatedByUserId: actorId,
+      };
+      return [...prev.filter((s) => s.slotId !== slotId), merged];
+    });
+  };
+
+  /** Clear all operational state for a slot. */
+  const clearSlotOps = (slotId: string) => {
+    setSlotOperationalState((prev) => prev.filter((s) => s.slotId !== slotId));
+  };
+
+  /** Toggle a soldier's locked-on-slot state. Adds to lockedSoldierIds
+   *  if absent, removes if present. */
+  const toggleSlotSoldierLock = (slotId: string, soldierId: string) => {
+    setSlotOperationalState((prev) => {
+      const existing = prev.find((s) => s.slotId === slotId);
+      const currentLocked = existing?.lockedSoldierIds ?? [];
+      const nextLocked = currentLocked.includes(soldierId)
+        ? currentLocked.filter((id) => id !== soldierId)
+        : [...currentLocked, soldierId];
+      const actorId = currentUser?.id ?? 'system';
+      const nowIso = new Date().toISOString();
+      const merged: SlotOperationalState = {
+        ...(existing ?? { slotId, updatedAt: nowIso, updatedByUserId: actorId }),
+        slotId,
+        lockedSoldierIds: nextLocked.length > 0 ? nextLocked : undefined,
+        updatedAt: nowIso,
+        updatedByUserId: actorId,
+      };
+      return [...prev.filter((s) => s.slotId !== slotId), merged];
+    });
+  };
+
+  /** Add a per-slot soldier exclusion until iso timestamp. */
+  const addSlotExcuse = (slotId: string, excuse: SlotExcuse) => {
+    setSlotOperationalState((prev) => {
+      const existing = prev.find((s) => s.slotId === slotId);
+      const currentExcuses = existing?.excusedUntil ?? [];
+      // Replace any prior excuse for the same soldier; one excuse per
+      // (slot, soldier) makes the semantics unambiguous.
+      const nextExcuses = [
+        ...currentExcuses.filter((e) => e.soldierId !== excuse.soldierId),
+        excuse,
+      ];
+      const actorId = currentUser?.id ?? 'system';
+      const nowIso = new Date().toISOString();
+      const merged: SlotOperationalState = {
+        ...(existing ?? { slotId, updatedAt: nowIso, updatedByUserId: actorId }),
+        slotId,
+        excusedUntil: nextExcuses,
+        updatedAt: nowIso,
+        updatedByUserId: actorId,
+      };
+      return [...prev.filter((s) => s.slotId !== slotId), merged];
+    });
+  };
+
+  /** Remove a specific excuse from a slot. */
+  const removeSlotExcuse = (slotId: string, soldierId: string) => {
+    setSlotOperationalState((prev) => {
+      const existing = prev.find((s) => s.slotId === slotId);
+      if (!existing) return prev;
+      const remainingExcuses = (existing.excusedUntil ?? []).filter((e) => e.soldierId !== soldierId);
+      const actorId = currentUser?.id ?? 'system';
+      const nowIso = new Date().toISOString();
+      const merged: SlotOperationalState = {
+        ...existing,
+        slotId,
+        excusedUntil: remainingExcuses.length > 0 ? remainingExcuses : undefined,
+        updatedAt: nowIso,
+        updatedByUserId: actorId,
+      };
+      return [...prev.filter((s) => s.slotId !== slotId), merged];
+    });
+  };
 
   // Audit trail: every operator-confirmed staffing produces a record
   // capturing the engine outcome at decision time + the final picks.
@@ -1881,6 +1987,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       missions, addMission, setMissionStatus, updateMission,
       assignments, setSlotAssignment, clearSlotAssignment,
       selectorOutcomes, recordSelectorOutcome,
+      slotOperationalState, setSlotOps, clearSlotOps,
+      toggleSlotSoldierLock, addSlotExcuse, removeSlotExcuse,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,

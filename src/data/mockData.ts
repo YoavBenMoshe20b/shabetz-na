@@ -4,7 +4,7 @@ import type {
   CompanyMission, OverrideAlert,
   SoldierStatusEvent, Delegation,
   CalendarEvent,
-  Mission, Qualification, EquipmentItem, SoldierQualification, Assignment,
+  Mission, Qualification, EquipmentItem, SoldierQualification, Assignment, SlotOperationalState,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment,
@@ -777,6 +777,12 @@ export const mockCompanyMissions: CompanyMission[] = [
 // when a PC opens StaffingSheet and confirms a roster.
 
 export const mockAssignments: Assignment[] = [];
+
+// ─── Slot Operational State (Phase 6.9) ────────────────────────────────
+// Per-slot operator manipulations (locks, excuses, forced rationale,
+// notes) that survive any engine recompute. Seeded empty — fills at
+// runtime via the operations panel on MissionDetailPage.
+export const mockSlotOperationalState: SlotOperationalState[] = [];
 
 export const mockOverrideAlerts: OverrideAlert[] = [
   {

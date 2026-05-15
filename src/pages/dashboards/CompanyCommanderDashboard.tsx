@@ -120,7 +120,7 @@ export default function CompanyCommanderDashboard() {
   const navigate = useNavigate();
   const {
     soldiers, leaves, squads, platoons, overrideAlerts, soldierStatusEvents,
-    missions, dutyExclusions, assignments,
+    missions, dutyExclusions, assignments, slotOperationalState,
     currentUser, delegations,
   } = useApp();
   const myCompany = useMyCompany();
@@ -137,7 +137,8 @@ export default function CompanyCommanderDashboard() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     startDay: todayStart, days: 7,
     assignments,
-  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments]);
+    slotOperationalState,
+  }), [missions, platoons, squads, soldiers, leaves, dutyExclusions, todayStart, assignments, slotOperationalState]);
 
   const platoonStats = useMemo(() => {
     return myPlatoons.map((p) => {

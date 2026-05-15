@@ -65,8 +65,9 @@ export function useEngineContext(options: UseEngineContextOptions = {}): EngineC
       startDay: todayStart,
       days: 7,
       assignments: app.assignments,
+      slotOperationalState: app.slotOperationalState,
     }),
-    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments],
+    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments, app.slotOperationalState],
   );
 
   // Precompute burden per soldier. The context carries these so the
@@ -161,7 +162,8 @@ export function useMaterializedWeek(asOfIso?: string) {
       startDay: todayStart,
       days: 7,
       assignments: app.assignments,
+      slotOperationalState: app.slotOperationalState,
     }),
-    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments],
+    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments, app.slotOperationalState],
   );
 }
