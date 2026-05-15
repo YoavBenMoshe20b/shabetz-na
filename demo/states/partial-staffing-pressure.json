@@ -1,0 +1,34 @@
+{
+  "_description": "Scene 3 of the cinematic — PC opens to slots that need staffing. Forces the orange 'דורש איוש' tile to render on the Action Center by writing partial assignments (only some required soldiers picked) so the materializer can't auto-fill via assignment-passthrough. Also seeds a few SlotOperationalState locks + excuses so the per-slot chips ('🔒 N נעולים' / '🚫 N הוצאות') render on camera.",
+  "assignments": [
+    {
+      "id": "asg-cinematic-1",
+      "slotId": "mat-mi-gate-north-2026-05-15-0",
+      "soldierId": "s1",
+      "role": "soldier",
+      "createdBy": "u2",
+      "createdAt": "2026-05-15T05:00:00.000Z"
+    }
+  ],
+  "slotOperationalState": [
+    {
+      "slotId": "mat-mi-gate-north-2026-05-15-0",
+      "lockedSoldierIds": ["s1"],
+      "operationalNotes": "לא להכניס חיילים לילה חדשים — צוות מנוסה בלבד",
+      "updatedAt": "2026-05-15T05:05:00.000Z",
+      "updatedByUserId": "u2"
+    },
+    {
+      "slotId": "mat-mi-night-patrol-2026-05-15-0",
+      "lockedSoldierIds": ["s9"],
+      "lockedCommander": "s9",
+      "excusedUntil": [
+        { "soldierId": "s3", "untilIso": "2026-05-16T06:00:00.000Z", "reason": "ועדה רפואית" }
+      ],
+      "updatedAt": "2026-05-15T05:30:00.000Z",
+      "updatedByUserId": "u2"
+    }
+  ],
+  "escalationEvents": [],
+  "overrideAlerts": []
+}

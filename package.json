@@ -13,7 +13,8 @@
     "capture-demo:desktop": "playwright test --project=desktop && bash demo/collect-videos.sh",
     "capture-demo:roles": "playwright test demo/specs/roles.spec.ts",
     "capture-demo:scenarios": "playwright test demo/specs/scenarios.spec.ts",
-    "capture-demo:flows": "playwright test demo/specs/flows.spec.ts && bash demo/collect-videos.sh"
+    "capture-demo:flows": "playwright test demo/specs/flows.spec.ts && bash demo/collect-videos.sh",
+    "capture-demo:cinematic": "playwright test demo/specs/cinematic.spec.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

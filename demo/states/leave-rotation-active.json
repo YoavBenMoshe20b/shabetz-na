@@ -1,0 +1,17 @@
+{
+  "_description": "Scene 5 — operational leave board with a visibly active rotation. Three combat platoons cycling 4-day home stints across the next month, plus pre-seeded coverage warnings that the camera will linger on. Mirrors mockPlatoonLeaveDays seed shape so the engine respects it.",
+  "platoonLeaveDays": [
+    { "dateIso": "2026-05-19", "platoonId": "g1", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-05-20", "platoonId": "g1", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-05-21", "platoonId": "g1", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-05-22", "platoonId": "g1", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-05-26", "platoonId": "g2", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-05-27", "platoonId": "g2", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-05-28", "platoonId": "g2", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-05-29", "platoonId": "g2", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-06-02", "platoonId": "g3", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-06-03", "platoonId": "g3", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-06-04", "platoonId": "g3", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" },
+    { "dateIso": "2026-06-05", "platoonId": "g3", "status": "home", "updatedAt": "2026-05-15T08:00:00.000Z", "updatedByUserId": "u1" }
+  ]
+}

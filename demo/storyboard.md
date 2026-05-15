@@ -1,5 +1,7 @@
 # Storyboard — "הפלוגה שלי" cinematic feedback demo
 
+> **NOTE — Phase 7.0 superseded the early storyboard.** The authoritative cinematic plan now lives in **[cinematic-script.md](./cinematic-script.md)**. This file remains as a historical record of the first-pass 90s structure; the new script is 1:45 with more operational depth (leaves + ops layer + checklist were added after this was written).
+
 A 90-second feedback piece, not a marketing reel. The goal: a viewer who's never seen the product understands within 90 seconds:
 1. **What** the system does (operational scheduling for a platoon)
 2. **Why** it exists (because chaos happens and someone has to staff slots fast)
