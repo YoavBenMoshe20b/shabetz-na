@@ -65,10 +65,17 @@ export default function PlatoonCommanderDashboard() {
   const myPlatoon = platoons.find((g) => g.id === currentUser?.commandedPlatoonId)
     ?? platoons.find((g) => g.memberIds.includes(currentUser?.id ?? ''));
 
-  // currentStatus is the source of truth.
-  const inBase     = soldiers.filter((s) => s.currentStatus === 'in-base').length;
-  const atHome     = soldiers.filter((s) => s.currentStatus === 'home').length;
-  const inactive   = soldiers.filter((s) => s.currentStatus === 'inactive-temp').length;
+  // currentStatus is the source of truth. SCOPED to the PC's own
+  // platoon — without this, the hero counted every soldier in the
+  // company and PC g1 saw "72/74" (company-wide totals).
+  const myPlatoonSoldiers = useMemo(() => {
+    if (!myPlatoon) return soldiers;
+    const sqIds = new Set(squads.filter((sq) => sq.platoonId === myPlatoon.id).map((sq) => sq.id));
+    return soldiers.filter((s) => s.squadId && sqIds.has(s.squadId));
+  }, [soldiers, squads, myPlatoon]);
+  const inBase     = myPlatoonSoldiers.filter((s) => s.currentStatus === 'in-base').length;
+  const atHome     = myPlatoonSoldiers.filter((s) => s.currentStatus === 'home').length;
+  const inactive   = myPlatoonSoldiers.filter((s) => s.currentStatus === 'inactive-temp').length;
 
   const now = useMemo(() => new Date(), []);
   const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
