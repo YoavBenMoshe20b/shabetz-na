@@ -22,7 +22,7 @@ import { buildMissionSummary } from '../utils/missionSummary';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import Header from '../components/Header';
 import StaffingSheet from '../components/StaffingSheet';
-import type { MissionNote, Platoon, UserRole } from '../types';
+import type { MissionNote, Platoon, UserRole, SelectorOutcomeRecord, Soldier } from '../types';
 import {
   Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill,
 } from '../components/ui';
@@ -37,6 +37,7 @@ export default function MissionDetailPage() {
     addMissionNote, editMissionNote, deleteMissionNote,
     setMissionStatus,
     assignments, setSlotAssignment,
+    selectorOutcomes, recordSelectorOutcome,
   } = useApp();
   const myCompany = useMyCompany();
 
@@ -394,6 +395,19 @@ export default function MissionDetailPage() {
         })()}
 
         {/* This week's slots */}
+        {/* Assignment audit — Phase 6.3.d. Shows the history of staffing
+            decisions for this mission, newest first. Each row carries
+            the engine's outcome at decision time + actor + timestamp. */}
+        {(() => {
+          const missionAudit = selectorOutcomes.filter((r) => r.missionId === mission.id);
+          if (missionAudit.length === 0) return null;
+          return (
+            <Section label={`היסטוריית שיבוץ · ${missionAudit.length}`}>
+              <AssignmentAuditList records={missionAudit} soldiers={soldiers} platoons={platoons} />
+            </Section>
+          );
+        })()}
+
         {weekSlots.length > 0 && (
           <Section label="משמרות השבוע">
             <div className="bg-mil-card border border-mil-border rounded-2xl divide-y divide-mil-border overflow-hidden">
@@ -438,16 +452,24 @@ export default function MissionDetailPage() {
           onClose={() => setStaffingSlot(null)}
           slot={staffingSlot}
           candidatePool={candidatePool}
-          onAssign={(soldierIds, forcedReason) => {
-            // Phase 6.3.a — persistence is live. The slot's assignment
-            // replaces auto-pick on next materialization, so every
-            // surface (CC dashboard, PC dashboard, SoldierDashboard,
-            // SchedulePage) immediately reflects the operator's intent.
-            // `forcedReason` will be surfaced via SelectorOutcomeRecord
-            // in 6.3.b; for now we keep the audit trail in-component.
-            void forcedReason;
-            if (staffingSlot) {
+          onAssign={(soldierIds, outcome, forcedReason) => {
+            // Phase 6.3.d — persist BOTH the assignment AND the audit
+            // record. The SelectorOutcomeRecord captures alternatives,
+            // violations, confidence, decayReasons at decision time —
+            // immutable evidence of WHY this assignment was made.
+            if (staffingSlot && mission) {
               setSlotAssignment(staffingSlot.id, soldierIds);
+              recordSelectorOutcome({
+                companyId: mission.companyId,
+                slotId: staffingSlot.id,
+                missionId: mission.id,
+                outcome,
+                finalSoldierIds: soldierIds,
+                actorUserId: currentUser.id,
+                actorRole: currentRole,
+                ...(forcedReason ? {} : {}),
+              });
+              void forcedReason;
             }
             setStaffingSlot(null);
           }}
@@ -511,6 +533,124 @@ function NoteCard({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Assignment audit ─────────────────────────────────────────────────────
+//
+// Renders a list of SelectorOutcomeRecord entries — one per staffing
+// decision the operator confirmed. Each card is collapsed by default;
+// tap expands to reveal alternatives + violations + decay reasons.
+
+function AssignmentAuditList({
+  records, soldiers, platoons,
+}: {
+  records: SelectorOutcomeRecord[];
+  soldiers: Soldier[];
+  platoons: Platoon[];
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const soldierName = (id: string) => soldiers.find((s) => s.id === id)?.name ?? id;
+  void platoons; // reserved for slot-platoon labeling in a later slice
+
+  return (
+    <div className="space-y-2">
+      {records.map((r) => {
+        const expanded = expandedId === r.id;
+        const finalNames = r.finalSoldierIds.map(soldierName).join(' · ');
+        const ts = formatRelative(r.decidedAt);
+        const conf = Math.round(r.outcome.confidence * 100);
+        const confTone =
+          conf >= 75 ? 'text-mil-success' :
+          conf >= 50 ? 'text-mil-warn' :
+          'text-mil-alert';
+        return (
+          <div key={r.id} className="bg-mil-card border border-mil-border rounded-xl-soft overflow-hidden">
+            <button
+              onClick={() => setExpandedId(expanded ? null : r.id)}
+              className="w-full text-right px-4 py-3 hover:bg-mil-card-warm/40 transition-colors"
+            >
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <Hint className="font-mono tabular-nums text-mil-muted">{ts}</Hint>
+                <Hint className="text-mil-muted">·</Hint>
+                <Hint className="font-semibold">
+                  {r.actorRole === 'companyCommander' ? 'מ״פ'
+                    : r.actorRole === 'deputyCompanyCommander' ? 'סמ״פ'
+                    : r.actorRole === 'platoonCommander' ? 'מ״מ'
+                    : r.actorRole === 'platoonSergeant' ? 'סמל'
+                    : 'חייל'}
+                </Hint>
+                <Hint className={`mr-auto font-semibold tabular-nums ${confTone}`}>
+                  ביטחון {conf}%
+                </Hint>
+              </div>
+              <Body className="text-sm mt-1 leading-snug font-medium">
+                {finalNames || <span className="text-mil-warn">שובץ ריק</span>}
+              </Body>
+              <Hint className="block mt-0.5 text-mil-muted">
+                {expanded ? 'הסתר פרטים' : 'הצג פרטים'} ←
+              </Hint>
+            </button>
+
+            {expanded && (
+              <div className="border-t border-mil-border bg-mil-bg-alt px-4 py-3 space-y-2.5">
+                {/* Confidence decay reasons */}
+                {r.outcome.decayReasons.length > 0 && (
+                  <div>
+                    <Hint className="font-semibold uppercase tracking-wide text-mil-muted">סיבות לירידת ביטחון</Hint>
+                    <ul className="mt-1 space-y-0.5">
+                      {r.outcome.decayReasons.map((reason, i) => (
+                        <li key={i} className="text-tiny text-mil-muted leading-snug">↓ {reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Alternates considered */}
+                {r.outcome.alternates.length > 0 && (
+                  <div>
+                    <Hint className="font-semibold uppercase tracking-wide text-mil-muted">חלופות שנשקלו</Hint>
+                    <p className="text-tiny text-mil-muted mt-1 leading-snug">
+                      {r.outcome.alternates.slice(0, 5).map((a) => soldierName(a.soldierId)).join(' · ')}
+                      {r.outcome.alternates.length > 5 && ` · +${r.outcome.alternates.length - 5} נוספים`}
+                    </p>
+                  </div>
+                )}
+
+                {/* Violations on the picks */}
+                {r.outcome.violations.length > 0 && (
+                  <div>
+                    <Hint className="font-semibold uppercase tracking-wide text-mil-alert">חריגות</Hint>
+                    <ul className="mt-1 space-y-0.5">
+                      {r.outcome.violations.map((v, i) => (
+                        <li key={i} className="text-tiny text-mil-alert leading-snug">
+                          {soldierName(v.soldierId)} — {v.explain}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Picks with forced reason */}
+                {r.outcome.picked.filter((p) => p.forcedReason).length > 0 && (
+                  <div>
+                    <Hint className="font-semibold uppercase tracking-wide text-mil-warn">שיבוצים בכפייה</Hint>
+                    <ul className="mt-1 space-y-0.5">
+                      {r.outcome.picked.filter((p) => p.forcedReason).map((p) => (
+                        <li key={p.soldierId} className="text-tiny text-mil-warn leading-snug">
+                          {soldierName(p.soldierId)} — {p.forcedReason}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

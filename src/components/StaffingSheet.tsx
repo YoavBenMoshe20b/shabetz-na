@@ -33,7 +33,10 @@ interface StaffingSheetProps {
   candidatePool: Soldier[];
   /** Called when the operator confirms an assignment. The engine has
    *  already produced the recommendation; this fires the actual write. */
-  onAssign: (soldierIds: string[], forcedReason?: string) => void;
+  /** Called when the operator confirms an assignment.
+   *  The outcome snapshot is for the auditor — callers persist it as
+   *  a SelectorOutcomeRecord alongside the assignment itself. */
+  onAssign: (soldierIds: string[], outcome: SelectorOutcome, forcedReason?: string) => void;
 }
 
 export default function StaffingSheet({
@@ -213,6 +216,7 @@ export default function StaffingSheet({
               });
               onAssign(
                 [...pickedIds],
+                outcome,
                 forced ? 'אישור מ״פ — שיבוץ בכפייה דרך StaffingSheet' : undefined,
               );
             }}

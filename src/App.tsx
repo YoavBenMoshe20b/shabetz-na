@@ -57,6 +57,7 @@ const PlatoonWeekPage    = lazy(() => import('./pages/PlatoonWeekPage'));
 const EquipmentPage      = lazy(() => import('./pages/EquipmentPage'));
 const SoldierDetailPage  = lazy(() => import('./pages/SoldierDetailPage'));
 const PlatoonGapsPage    = lazy(() => import('./pages/PlatoonGapsPage'));
+const PlatoonStructurePage = lazy(() => import('./pages/PlatoonStructurePage'));
 const DelegationsPage    = lazy(() => import('./pages/DelegationsPage'));
 // Round 4
 const Report1Page        = lazy(() => import('./pages/Report1Page'));
@@ -155,6 +156,10 @@ function AppRoutes() {
         <Route path="/platoon/gaps" element={
           <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}><PlatoonGapsPage /></ProtectedRoute>
         } />
+        {/* Structure page — for non-combat platoons (חפ״ק / מפלג) with
+            configurable functional-role flags. Open to everyone in the
+            company; the in-page chip editor is gated. */}
+        <Route path="/platoon/:id/structure" element={<PlatoonStructurePage />} />
         <Route path="/delegations" element={
           <ProtectedRoute minRole="platoonCommander"><DelegationsPage /></ProtectedRoute>
         } />

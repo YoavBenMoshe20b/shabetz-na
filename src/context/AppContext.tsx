@@ -7,7 +7,7 @@ import type {
   CompanyMission, OverrideAlert,
   SoldierStatus, SoldierStatusEvent, Delegation,
   CalendarEvent,
-  Mission, Assignment, Qualification, EquipmentItem, SoldierQualification,
+  Mission, Assignment, SelectorOutcomeRecord, Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment, SignedEquipmentStatus,
@@ -23,6 +23,12 @@ import type {
 import { newId } from '../utils/id';
 import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle, isRasap } from '../utils/permissions';
 import { USE_SUPABASE } from '../api/_supabase';
+import { usePersistedState } from '../utils/persistedState';
+
+// Seed version — bump when mockData shape changes in a way that should
+// invalidate everyone's localStorage. Old blobs at older versions are
+// ignored and the fresh seed wins. v1 = Phase 6.3.b initial persistence.
+const SEED_VERSION = 1;
 import * as missionsApi      from '../api/missions';
 import * as announcementsApi from '../api/announcements';
 import * as equipmentApi     from '../api/equipment';
@@ -204,6 +210,9 @@ interface AppContextType {
     options?: { commanderSoldierId?: string; overrideId?: string; overrideAlertId?: string },
   ) => void;
   clearSlotAssignment:    (slotId: string) => void;
+  /** Audit trail of staffing decisions. Newest first. */
+  selectorOutcomes:       SelectorOutcomeRecord[];
+  recordSelectorOutcome:  (record: Omit<SelectorOutcomeRecord, 'id' | 'decidedAt'>) => void;
 
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
@@ -267,6 +276,9 @@ interface AppContextType {
   updateSoldierSquad: (soldierId: string, squadId: string | null) => void;
   /** Set a soldier's operational roles (multi-select). */
   updateSoldierOperationalRoles: (soldierId: string, roles: OperationalRole[]) => void;
+  /** Set the soldier's functional-role flags (kitchen-lead, water-lead,
+   *  equipment-lead-chapack, etc.). Used by CHAPAK / MAFLAG admin UI. */
+  updateSoldierFunctionalRoles:  (soldierId: string, roles: string[]) => void;
 
   // ── Temporary command delegation ────────────────────────────────────
   commandDelegations:   CommandDelegation[];
@@ -423,20 +435,23 @@ function persist(fire: () => Promise<unknown>): void {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [currentUser,  setCurrentUser]  = useState<MockUser | null>(null);
-  const [currentRole,  setCurrentRole]  = useState<UserRole>('soldier');
-  const [users,        setUsers]        = useState<MockUser[]>(mockUsers);
+  // Persisted: login survives refresh. UserSwitcher and signIn both
+  // write here; logout clears it. Without this every page reload would
+  // bounce to /login which kills the demo flow.
+  const [currentUser,  setCurrentUser]  = usePersistedState<MockUser | null>('currentUser', null, SEED_VERSION);
+  const [currentRole,  setCurrentRole]  = usePersistedState<UserRole>('currentRole', 'soldier', SEED_VERSION);
+  const [users,        setUsers]        = usePersistedState<MockUser[]>('users', mockUsers, SEED_VERSION);
   // ── Roster: active-only at the boundary ───────────────────────────────
   // `allSoldiers` is the full historical record — UI/screens MUST NOT read
   // this directly. Only audit flows should touch it. The exported `soldiers`
   // selector below filters to status === 'active', and that's what every
   // operational screen sees.
-  const [allSoldiers,  setAllSoldiers]  = useState<Soldier[]>(mockSoldiers);
+  const [allSoldiers,  setAllSoldiers]  = usePersistedState<Soldier[]>('allSoldiers', mockSoldiers, SEED_VERSION);
   const soldiers = allSoldiers.filter((s) => s.status === 'active');
   const setSoldiers = setAllSoldiers;   // legacy callers — semantic equivalence
 
   // ── Operational status log + delegations (foundation, no UI yet) ──────
-  const [soldierStatusEvents, setSoldierStatusEvents] = useState<SoldierStatusEvent[]>(mockSoldierStatusEvents);
+  const [soldierStatusEvents, setSoldierStatusEvents] = usePersistedState<SoldierStatusEvent[]>('soldierStatusEvents', mockSoldierStatusEvents, SEED_VERSION);
   const [delegations] = useState<Delegation[]>(mockDelegations);
 
   // Internal helper — handles BOTH soldier-self-update and commander-
@@ -504,11 +519,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     expectedUntil?: string;
     reason?: string;
   }) => writeStatusTransition({ ...data, isManualOverride: true });
-  const [periods,      setPeriods]      = useState<SchedulePeriod[]>(mockSchedulePeriods);
+  const [periods,      setPeriods]      = usePersistedState<SchedulePeriod[]>('periods', mockSchedulePeriods, SEED_VERSION);
   const [auditLogs,    setAuditLogs]    = useState<AuditLog[]>(mockAuditLogs);
-  const [platoons, setPlatoons]           = useState<Platoon[]>(mockPlatoons);
-  const [leaves,        setLeaves]        = useState<Leave[]>(mockLeaves);
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(mockLeaveRequests);
+  const [platoons, setPlatoons]           = usePersistedState<Platoon[]>('platoons', mockPlatoons, SEED_VERSION);
+  const [leaves,        setLeaves]        = usePersistedState<Leave[]>('leaves', mockLeaves, SEED_VERSION);
+  const [leaveRequests, setLeaveRequests] = usePersistedState<LeaveRequest[]>('leaveRequests', mockLeaveRequests, SEED_VERSION);
   const [soldierHistory]                  = useState<SoldierHistory[]>(mockSoldierHistory);
   const [miluimPeriods]                   = useState<MiluimPeriod[]>(mockMiluimPeriods);
   const [reminders,     setReminders]     = useState<ReminderSetting[]>([]);
@@ -518,7 +533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastFairness,  setLastFairness]  = useState<FairnessScore[]>([]);
   const [lastGeneratedPeriodId, setLastGeneratedPeriodId] = useState<string | null>(null);
   const [companies,     setCompanies]     = useState<Company[]>(mockCompanies);
-  const [squads,      setSquads]      = useState<Squad[]>(mockSquads);
+  const [squads,      setSquads]      = usePersistedState<Squad[]>('squads', mockSquads, SEED_VERSION);
 
   const addSquad = (data: { platoonId: string; name: string }): Squad => {
     const newSu: Squad = {
@@ -565,7 +580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Override alerts (escalation upward to company commander) ──
   // The action that triggers the alert always succeeds first; recording the
   // alert is purely the upward signal. Calling code MUST NOT block on this.
-  const [overrideAlerts, setOverrideAlerts] = useState<OverrideAlert[]>(mockOverrideAlerts);
+  const [overrideAlerts, setOverrideAlerts] = usePersistedState<OverrideAlert[]>('overrideAlerts', mockOverrideAlerts, SEED_VERSION);
 
   const recordOverrideAlert = (data: Omit<OverrideAlert, 'id' | 'timestamp' | 'status'>): OverrideAlert => {
     const alert: OverrideAlert = {
@@ -598,7 +613,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // The engine pipeline (slice E3+) will read from these directly. Mission
   // authoring (slice E2) will add a setMissions write path; leave-rotation
   // configuration (slice E5) will replace the readonly policy with a setter.
-  const [missions, setMissions] = useState<Mission[]>(mockMissions);
+  const [missions, setMissions] = usePersistedState<Mission[]>('missions', mockMissions, SEED_VERSION);
 
   const addMission = (data: Omit<Mission, 'id' | 'createdAt'>): Mission => {
     const m: Mission = {
@@ -634,7 +649,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   //
   // setSlotAssignment replaces ALL assignments for a slot in one shot —
   // committing the operator's full intent atomically.
-  const [assignments, setAssignments] = useState<Assignment[]>(mockAssignments);
+  const [assignments, setAssignments] = usePersistedState<Assignment[]>('assignments', mockAssignments, SEED_VERSION);
+
+  // Audit trail: every operator-confirmed staffing produces a record
+  // capturing the engine outcome at decision time + the final picks.
+  // Persisted so refresh preserves the audit. Bounded — keep newest 200
+  // to avoid unbounded growth in long demo sessions.
+  const [selectorOutcomes, setSelectorOutcomes] = usePersistedState<SelectorOutcomeRecord[]>(
+    'selectorOutcomes', [], SEED_VERSION,
+  );
+
+  const recordSelectorOutcome = (record: Omit<SelectorOutcomeRecord, 'id' | 'decidedAt'>) => {
+    const fresh: SelectorOutcomeRecord = {
+      ...record,
+      id: newId('sor'),
+      decidedAt: new Date().toISOString(),
+    };
+    setSelectorOutcomes((prev) => [fresh, ...prev].slice(0, 200));
+  };
 
   const setSlotAssignment = (
     slotId: string,
@@ -675,7 +707,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Operational orders ─────────────────────────────────────────────
-  const [orders, setOrders] = useState<OperationalOrder[]>(mockOperationalOrders);
+  const [orders, setOrders] = usePersistedState<OperationalOrder[]>('orders', mockOperationalOrders, SEED_VERSION);
 
   const addOrder = (data: Omit<OperationalOrder, 'id' | 'createdAt'>): OperationalOrder => {
     const o: OperationalOrder = {
@@ -694,7 +726,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Mission notes — separate state so they can be authored independently
   // of the mission's structured definition (commanders annotate without
   // re-publishing the mission).
-  const [missionNotes, setMissionNotes] = useState<MissionNote[]>(mockMissionNotes);
+  const [missionNotes, setMissionNotes] = usePersistedState<MissionNote[]>('missionNotes', mockMissionNotes, SEED_VERSION);
 
   const addMissionNote = (data: {
     missionId: string;
@@ -758,7 +790,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [leaveRotationPlans] = useState<LeaveRotationPlan[]>(mockLeaveRotationPlans);
 
   // ── Signed equipment (per-soldier gear ledger) ─────────────────────
-  const [signedEquipment, setSignedEquipment] = useState<SignedEquipment[]>(mockSignedEquipment);
+  const [signedEquipment, setSignedEquipment] = usePersistedState<SignedEquipment[]>('signedEquipment', mockSignedEquipment, SEED_VERSION);
   // ── Equipment lifecycle event log (round 6) — append-only audit ────
   const [equipmentLifecycle, setEquipmentLifecycle] = useState<EquipmentLifecycleEvent[]>([]);
   // ── Equipment inventory items (CC-defined catalogue) ──────────────
@@ -964,8 +996,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ));
   };
 
+  // Functional role flags — different category from operationalRoles.
+  // Used for CHAPAK/MAFLAG configurable responsibilities (kitchen-lead,
+  // water-lead, equipment-lead-chapack, driver, srasap, etc.). Free-form
+  // string flags so command can introduce new responsibilities without
+  // schema changes.
+  const updateSoldierFunctionalRoles = (soldierId: string, roles: string[]) => {
+    setAllSoldiers((prev) => prev.map((s) => s.id === soldierId
+      ? { ...s, functionalRoles: roles }
+      : s
+    ));
+  };
+
   // ── Temporary command delegation ────────────────────────────────────
-  const [commandDelegations, setCommandDelegations] = useState<CommandDelegation[]>(mockCommandDelegations);
+  const [commandDelegations, setCommandDelegations] = usePersistedState<CommandDelegation[]>('commandDelegations', mockCommandDelegations, SEED_VERSION);
 
   const activeCommandDelegations = (): CommandDelegation[] => {
     const now = Date.now();
@@ -1039,7 +1083,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // ── Equipment gap reports ──────────────────────────────────────────
-  const [equipmentGaps, setEquipmentGaps] = useState<EquipmentGap[]>(mockEquipmentGaps);
+  const [equipmentGaps, setEquipmentGaps] = usePersistedState<EquipmentGap[]>('equipmentGaps', mockEquipmentGaps, SEED_VERSION);
 
   const reportEquipmentGap = (data: {
     soldierId: string;
@@ -1563,9 +1607,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Each action performs a permission check at the write boundary. When a
   // backend replaces this layer, the check moves server-side; the action
   // signature stays the same so consumers don't change.
-  const [announcements,       setAnnouncements]       = useState<Announcement[]>(mockAnnouncements);
-  const [escalationEvents,    setEscalationEvents]    = useState<EscalationEvent[]>(mockEscalationEvents);
-  const [platoonLeaveCycles,  setPlatoonLeaveCycles]  = useState<PlatoonLeaveCycle[]>(mockPlatoonLeaveCycles);
+  const [announcements,       setAnnouncements]       = usePersistedState<Announcement[]>('announcements', mockAnnouncements, SEED_VERSION);
+  const [escalationEvents,    setEscalationEvents]    = usePersistedState<EscalationEvent[]>('escalationEvents', mockEscalationEvents, SEED_VERSION);
+  const [platoonLeaveCycles,  setPlatoonLeaveCycles]  = usePersistedState<PlatoonLeaveCycle[]>('platoonLeaveCycles', mockPlatoonLeaveCycles, SEED_VERSION);
 
   // — Announcements —
   const addAnnouncement = (
@@ -1796,6 +1840,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       calendarEvents, addCalendarEvent, fillPlatoonTime, setLockedDate,
       missions, addMission, setMissionStatus, updateMission,
       assignments, setSlotAssignment, clearSlotAssignment,
+      selectorOutcomes, recordSelectorOutcome,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,
@@ -1805,7 +1850,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signOutEquipment, returnEquipment, markEquipmentDamage,
       setInventoryItems: setEquipmentItemsState,
       updateSoldierProfile,
-      updateSoldierSquad, updateSoldierOperationalRoles,
+      updateSoldierSquad, updateSoldierOperationalRoles, updateSoldierFunctionalRoles,
       commandDelegations, activeCommandDelegations,
       createCommandDelegation, revokeCommandDelegation,
       equipmentGaps,

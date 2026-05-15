@@ -8,13 +8,15 @@
 // Editing (re-assign, swap, drag) is a future slice. This page is the
 // operational picture first; the editing affordances layer on top.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useEngineContext } from '../hooks/useEngineContext';
 import { isPlatoonLeadership, isRasap } from '../utils/permissions';
 import Header from '../components/Header';
+import StaffingSheet from '../components/StaffingSheet';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
-import type { Soldier, MissionNote } from '../types';
+import type { Soldier, MissionNote, SoldierBurden } from '../types';
 import {
   Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint, StatusPill,
 } from '../components/ui';
@@ -24,7 +26,9 @@ export default function PlatoonWeekPage() {
   const {
     currentRole, currentUser,
     soldiers, leaves, platoons, squads, missions, dutyExclusions, missionNotes, assignments,
+    setSlotAssignment, recordSelectorOutcome,
   } = useApp();
+  const engineCtx = useEngineContext();
 
   // Hooks first; route gate after.
   const myPlatoon = useMemo(() =>
@@ -63,6 +67,16 @@ export default function PlatoonWeekPage() {
   // Quick total for the hero
   const totalSlots = myPlatoonSlots.length;
   const understaffed = myPlatoonSlots.filter((s) => s.status === 'partially-staffed' || s.status === 'open').length;
+
+  // Inline staffing: clicking "אייש" on a slot opens the StaffingSheet
+  // without leaving this page. Candidate pool is the platoon's soldiers
+  // (engine adds hard filters and scoring on top).
+  const [staffingSlot, setStaffingSlot] = useState<MaterializedSlot | null>(null);
+  const candidatePool = useMemo(() => {
+    if (!myPlatoon) return [];
+    const sqIds = new Set(squads.filter((sq) => sq.platoonId === myPlatoon.id).map((sq) => sq.id));
+    return soldiers.filter((s) => s.squadId && sqIds.has(s.squadId));
+  }, [myPlatoon, squads, soldiers]);
 
   // Route gate AFTER hooks. רס״פ also qualifies — page scopes to his
   // commandedPlatoonId (the logistics platoon) automatically.
@@ -106,15 +120,43 @@ export default function PlatoonWeekPage() {
                 isToday={date.getTime() === todayStart.getTime()}
                 slots={slots}
                 soldiers={soldiers}
+                burdens={engineCtx.burdens}
                 missionNotes={missionNotes}
                 myPlatoonId={myPlatoon?.id}
                 onSlotClick={(slot) => navigate(`/mission/${slot.missionId}`)}
+                onStaffClick={(slot) => setStaffingSlot(slot)}
               />
             ))}
           </div>
         )}
 
       </PageMain>
+
+      {staffingSlot && (
+        <StaffingSheet
+          open
+          onClose={() => setStaffingSlot(null)}
+          slot={staffingSlot}
+          candidatePool={candidatePool}
+          onAssign={(soldierIds, outcome, forcedReason) => {
+            const mission = missions.find((m) => m.id === staffingSlot.missionId);
+            if (currentUser && mission) {
+              setSlotAssignment(staffingSlot.id, soldierIds);
+              recordSelectorOutcome({
+                companyId: mission.companyId,
+                slotId: staffingSlot.id,
+                missionId: mission.id,
+                outcome,
+                finalSoldierIds: soldierIds,
+                actorUserId: currentUser.id,
+                actorRole: currentRole,
+              });
+              void forcedReason;
+            }
+            setStaffingSlot(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -122,11 +164,13 @@ export default function PlatoonWeekPage() {
 // ─── Day section ──────────────────────────────────────────────────────────
 
 function DaySection({
-  date, isToday, slots, soldiers, missionNotes, myPlatoonId, onSlotClick,
+  date, isToday, slots, soldiers, burdens, missionNotes, myPlatoonId, onSlotClick, onStaffClick,
 }: {
   date: Date; isToday: boolean; slots: MaterializedSlot[]; soldiers: Soldier[];
+  burdens: Record<string, SoldierBurden>;
   missionNotes: MissionNote[]; myPlatoonId?: string;
   onSlotClick: (slot: MaterializedSlot) => void;
+  onStaffClick: (slot: MaterializedSlot) => void;
 }) {
   const dayName = HE_DAYS[date.getDay()];
   const dateLabel = `${date.getDate()} ב${HE_MONTHS[date.getMonth()]}`;
@@ -158,8 +202,10 @@ function DaySection({
                 key={slot.id}
                 slot={slot}
                 soldiers={soldiers}
+                burdens={burdens}
                 notes={slotNotes}
                 onClick={() => onSlotClick(slot)}
+                onStaff={() => onStaffClick(slot)}
               />
             );
           })}
@@ -170,12 +216,14 @@ function DaySection({
 }
 
 function SlotRow({
-  slot, soldiers, notes, onClick,
+  slot, soldiers, burdens, notes, onClick, onStaff,
 }: {
   slot: MaterializedSlot;
   soldiers: Soldier[];
+  burdens: Record<string, SoldierBurden>;
   notes: MissionNote[];
   onClick: () => void;
+  onStaff: () => void;
 }) {
   const start = new Date(slot.start);
   const end   = new Date(slot.end);
@@ -188,6 +236,15 @@ function SlotRow({
     : null;
   const assignedCount = assignedSoldiers.length + (commander ? 1 : 0);
 
+  // Fatigue indicators — any assigned soldier with burden in upper p75
+  // gets a yellow dot on their name.
+  const isOverburdened = (id: string): boolean => {
+    const b = burdens[id];
+    return !!b && b.overShoot;
+  };
+
+  const understaffed = slot.status === 'partially-staffed' || slot.status === 'open';
+
   // Stripe color encodes intensity
   const stripe =
     slot.missionIntensity === 'ambush'         ? 'bg-mil-warn'  :
@@ -197,30 +254,53 @@ function SlotRow({
     'bg-mil-olive-dim';
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-right flex overflow-hidden hover:bg-mil-card-warm/40 transition-colors"
-    >
+    <div className="flex overflow-hidden hover:bg-mil-card-warm/40 transition-colors">
       <div className={`w-1 ${stripe} flex-shrink-0`} aria-hidden />
-      <div className="flex-1 px-4 py-3.5">
-        {/* First line: time range · mission name · status */}
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex-1 text-right px-4 py-3.5"
+      >
+        {/* First line: time range · mission name · status · staff CTA */}
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-tiny font-mono tabular-nums text-mil-text font-semibold">{timeRange}</span>
           <Body className="font-semibold flex-1 truncate">{slot.missionName}</Body>
           <StatusInline slot={slot} count={assignedCount} />
+          {understaffed && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); onStaff(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onStaff(); } }}
+              className="text-tiny font-semibold text-mil-olive bg-mil-olive-bg px-2 py-0.5 rounded-md hover:bg-mil-olive-bg/80 cursor-pointer"
+            >
+              אייש
+            </span>
+          )}
         </div>
 
-        {/* Second line: assigned names */}
+        {/* Second line: assigned names — with fatigue dots on over-burdened */}
         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
           {commander && (
-            <span className="text-tiny text-mil-text">
+            <span className="text-tiny text-mil-text inline-flex items-center gap-1">
+              {isOverburdened(commander.id) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-mil-warn" aria-label="עומס מעל הממוצע" />
+              )}
               <span className="font-bold">{commander.name}</span>
               <span className="text-mil-olive-dim text-[10px] mr-1">מפקד</span>
             </span>
           )}
           {assignedSoldiers.length > 0 ? (
-            <span className="text-tiny text-mil-muted">
-              {assignedSoldiers.map((s) => s.name).join(' · ')}
+            <span className="text-tiny text-mil-muted inline-flex flex-wrap items-baseline gap-x-1.5">
+              {assignedSoldiers.map((s, i) => (
+                <span key={s.id} className="inline-flex items-center gap-1">
+                  {isOverburdened(s.id) && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-mil-warn" aria-label="עומס מעל הממוצע" />
+                  )}
+                  <span>{s.name}</span>
+                  {i < assignedSoldiers.length - 1 && <span className="text-mil-ghost">·</span>}
+                </span>
+              ))}
             </span>
           ) : (
             !commander && <span className="text-tiny text-mil-warn font-semibold">לא מאוייש</span>
@@ -248,8 +328,9 @@ function SlotRow({
             )}
           </div>
         )}
-      </div>
-    </button>
+
+      </button>
+    </div>
   );
 }
 

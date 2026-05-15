@@ -11,6 +11,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { roleLabel } from '../utils/permissions';
+import { clearAllPersistedState } from '../utils/persistedState';
 import type { MockUser, UserRole } from '../types';
 
 const ROLE_ORDER: UserRole[] = [
@@ -97,6 +98,18 @@ export default function UserSwitcher() {
                 </div>
               );
             })}
+            <hr className="my-1 border-mil-border" />
+            <button
+              onClick={() => {
+                if (window.confirm('לאפס את כל נתוני הדמו? משימות, שיבוצים, יציאות והערות יחזרו לברירת המחדל.')) {
+                  clearAllPersistedState();
+                  window.location.reload();
+                }
+              }}
+              className="block w-full text-right text-tiny px-3 py-2 rounded-lg text-mil-alert hover:bg-mil-alert-bg transition-colors"
+            >
+              איפוס נתוני דמו
+            </button>
           </div>
         </>
       )}
