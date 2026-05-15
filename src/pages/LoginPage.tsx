@@ -119,6 +119,15 @@ export default function LoginPage() {
         <div className="text-center pt-6">
           <h1 className="text-4xl font-extrabold text-mil-olive">הפלוגה שלי</h1>
           <Muted className="mt-2">מערכת מוכנות מבצעית</Muted>
+          {!USE_SUPABASE && (
+            <button
+              type="button"
+              onClick={() => navigate('/demo-guide')}
+              className="mt-2 text-tiny font-semibold text-mil-olive hover:text-mil-olive-dim"
+            >
+              מדריך דמו · 12 משתמשים ←
+            </button>
+          )}
         </div>
 
         {mode !== 'bootstrap' && (
@@ -451,15 +460,18 @@ function DemoAccountsPanel({ onPick }: { onPick: (phone: string) => void }) {
   // `commands` makes the PC ↔ platoon mapping unambiguous — the reviewer
   // shouldn't have to memorise that u9 is for מחלקה 2.
   const accounts: { label: string; name: string; phone: string; commands?: string }[] = [
-    { label: 'מ״פ',   name: 'יוסי כהן',   phone: '0501234567', commands: 'כל הפלוגה · חפ״ק' },
-    { label: 'סמ״פ',  name: 'דנה לוי',    phone: '0507777666', commands: 'כל הפלוגה' },
-    { label: 'מ״מ',   name: 'רוני שמש',   phone: '0502222111', commands: 'מחלקה 1' },
-    { label: 'מ״מ',   name: 'עומר בר',    phone: '0501414141', commands: 'מחלקה 2' },
-    { label: 'מ״מ',   name: 'יואב סער',   phone: '0501919191', commands: 'מחלקה 3' },
-    { label: 'סמל',   name: 'ניסים דהן',  phone: '0509999888', commands: 'מחלקה 1' },
-    { label: 'רס״פ',  name: 'אבי כהן',    phone: '0502323232', commands: 'מפלג' },
-    { label: 'שליש',  name: 'רון אביב',   phone: '0502424242' },
-    { label: 'חייל',  name: 'משה ישראלי', phone: '0509876543', commands: 'מחלקה 1 · כיתה א' },
+    { label: 'מ״פ',     name: 'יוסי כהן',   phone: '0501234567', commands: 'כל הפלוגה · חפ״ק' },
+    { label: 'סמ״פ',    name: 'דנה לוי',    phone: '0507777666', commands: 'כל הפלוגה' },
+    { label: 'מ״מ 1',  name: 'רוני שמש',   phone: '0502222111', commands: 'מחלקה 1' },
+    { label: 'מ״מ 2',  name: 'עומר בר',    phone: '0501414141', commands: 'מחלקה 2' },
+    { label: 'מ״מ 3',  name: 'יואב סער',   phone: '0501919191', commands: 'מחלקה 3' },
+    { label: 'סמל 1',  name: 'ניסים דהן',  phone: '0509999888', commands: 'מחלקה 1' },
+    { label: 'סמל 2',  name: 'אייל גלעד',  phone: '0501818181', commands: 'מחלקה 2' },
+    { label: 'סמל 3',  name: 'שגיא ברנר',  phone: '0502121212', commands: 'מחלקה 3' },
+    { label: 'רס״פ',    name: 'אבי כהן',    phone: '0502323232', commands: 'מפלג' },
+    { label: 'שליש',    name: 'רון אביב',   phone: '0502424242', commands: 'מפלג · Report-1' },
+    { label: 'חייל 1', name: 'משה ישראלי', phone: '0509876543', commands: 'מחלקה 1 · כיתה א' },
+    { label: 'חייל 2', name: 'אורן פרץ',   phone: '0503333222', commands: 'מחלקה 1 · כיתה ב · יציאה ממתינה + ליקוי' },
   ];
   return (
     <div className="mt-3 bg-mil-card border border-mil-border rounded-xl-soft overflow-hidden">

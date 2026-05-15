@@ -58,6 +58,7 @@ const EquipmentPage      = lazy(() => import('./pages/EquipmentPage'));
 const SoldierDetailPage  = lazy(() => import('./pages/SoldierDetailPage'));
 const PlatoonGapsPage    = lazy(() => import('./pages/PlatoonGapsPage'));
 const PlatoonStructurePage = lazy(() => import('./pages/PlatoonStructurePage'));
+const DemoGuidePage = lazy(() => import('./pages/DemoGuidePage'));
 const DelegationsPage    = lazy(() => import('./pages/DelegationsPage'));
 // Round 4
 const Report1Page        = lazy(() => import('./pages/Report1Page'));
@@ -160,6 +161,8 @@ function AppRoutes() {
             configurable functional-role flags. Open to everyone in the
             company; the in-page chip editor is gated. */}
         <Route path="/platoon/:id/structure" element={<PlatoonStructurePage />} />
+        {/* Demo guide — reviewer-facing walkthrough. Open to anyone. */}
+        <Route path="/demo-guide" element={<DemoGuidePage />} />
         <Route path="/delegations" element={
           <ProtectedRoute minRole="platoonCommander"><DelegationsPage /></ProtectedRoute>
         } />

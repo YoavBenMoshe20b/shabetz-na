@@ -9,6 +9,7 @@
 // screen) and when there are zero alt users.
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { roleLabel } from '../utils/permissions';
 import { clearAllPersistedState } from '../utils/persistedState';
@@ -23,6 +24,7 @@ const ROLE_ORDER: UserRole[] = [
 ];
 
 export default function UserSwitcher() {
+  const navigate = useNavigate();
   const { currentUser, users, switchUser, platoons } = useApp();
   const [open, setOpen] = useState(false);
 
@@ -110,6 +112,15 @@ export default function UserSwitcher() {
               );
             })}
             <hr className="my-1 border-mil-border" />
+            <button
+              onClick={() => {
+                navigate('/demo-guide');
+                setOpen(false);
+              }}
+              className="block w-full text-right text-tiny px-3 py-2 rounded-lg text-mil-olive font-semibold hover:bg-mil-olive-bg transition-colors"
+            >
+              מדריך דמו · מי בודק מה
+            </button>
             <button
               onClick={() => {
                 if (window.confirm('לאפס את כל נתוני הדמו? משימות, שיבוצים, יציאות והערות יחזרו לברירת המחדל.')) {

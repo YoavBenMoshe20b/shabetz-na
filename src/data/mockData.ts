@@ -51,7 +51,7 @@ export const mockSoldiers: Soldier[] = [
   { id: 's1',  name: 'משה ישראלי',  phone: '0509876543', idLast4: '1111', companyId: 'co1', status: 'active', claimedAt: '2024-05-08T09:00:00', userId: 'u3', operationalRoles: ['קלע', 'חובש'],    teamClass: 'כיתה א', squadId: 'su-g1-a',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 2,
     dateOfBirth: '1998-03-14', dominantHand: 'right', weaponSide: 'right', shirtSize: 'L', pantsSize: '34', shoeSize: '43' },
   { id: 's2',  name: 'רוני שמש',    phone: '0502222111', idLast4: '2222', companyId: 'co1', status: 'active', userId: 'u2', operationalRoles: ['מ״מ', 'קשר מ״מ'], teamClass: 'כיתה א', squadId: 'su-g1-a',  currentStatus: 'home',    statusSetAt: '2024-05-12T00:00:00', statusExpectedUntil: '2024-05-14T22:00:00', availability: true,  availabilityNotes: [{ type: 'leave', description: 'חופשה', startDate: '2024-05-20', endDate: '2024-05-21' }], currentLoad: 1 },
-  { id: 's3',  name: 'אורן פרץ',    phone: '0503333222', idLast4: '3333', companyId: 'co1', status: 'active', operationalRoles: ['נגביסט'],          teamClass: 'כיתה ב', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 3 },
+  { id: 's3',  name: 'אורן פרץ',    phone: '0503333222', idLast4: '3333', companyId: 'co1', status: 'active', userId: 'u14', operationalRoles: ['נגביסט'],          teamClass: 'כיתה ב', squadId: 'su-g1-b',  currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 3 },
   { id: 's4',  name: 'נועם כץ',     phone: '0504444333', idLast4: '4444', companyId: 'co1', status: 'active', operationalRoles: ['קשר מ״מ'],         teamClass: 'כיתה ב', squadId: 'su-g1-b',  currentStatus: 'inactive-temp', statusSetAt: YESTERDAY_AM, availability: false, availabilityNotes: [{ type: 'other', description: 'לא זמין לשיבוץ' }], currentLoad: 0 },
   // s5 — סמ"פ, lives in חפ"ק (sq-chap-1) rather than a combat platoon
   { id: 's5',  name: 'איתי בן דוד', phone: '0505555444', idLast4: '5555', companyId: 'co1', status: 'active', operationalRoles: ['סמ״פ', 'רחפן'],   teamClass: 'חפ״ק',   squadId: 'sq-chap-1', currentStatus: 'in-base', statusSetAt: TWO_DAYS_AGO, availability: true,  availabilityNotes: [], currentLoad: 1 },
@@ -319,6 +319,18 @@ export const mockUsers: MockUser[] = [
     operationalRoles: ['סרס״פ'], teamClass: 'מפלג',
     createdAt: '2024-04-22T08:30:00',
   },
+  {
+    // חייל 2 — bound to soldier s3 (אורן פרץ, נגביסט, מחלקה 1 כיתה ב).
+    // Distinct from u3 (חייל 1): high currentLoad (3) so the engine
+    // de-prioritizes him AND he has both a pending leave request and an
+    // open equipment gap — surfaces a different soldier-side narrative.
+    id: 'u14', name: 'אורן פרץ', role: 'soldier',
+    phone: '0503333222', idLast4: '3333', password: 'Test@1234',
+    platoonId: 'g1', companyId: 'co1', squadId: 'su-g1-b',
+    soldierProfileId: 's3',
+    operationalRoles: ['נגביסט'], teamClass: 'כיתה ב',
+    createdAt: '2024-05-08T09:00:00',
+  },
 ];
 
 // ─── Leaves ──────────────────────────────────────────────────────────────────
@@ -381,6 +393,19 @@ export const mockLeaveRequests: LeaveRequest[] = [
     status: 'approved',
     reviewedBy: 'u2', reviewedByName: 'דוד לוי', reviewedAt: '2024-05-13T14:30:00',
     submittedAt: '2024-05-13T08:00:00',
+  },
+  {
+    // Pending request from u14 (חייל 2). When u14 logs in he sees this
+    // in "הבקשות שלי" with status pending. When his PC (u2) logs in he
+    // sees it in the approvable queue.
+    id: 'lr-u14-pending',
+    soldierId: 's3', soldierName: 'אורן פרץ',
+    soldierTeamClass: 'כיתה ב', soldierSquadId: 'su-g1-b', soldierSquadName: 'כיתה ב',
+    startDate: '2026-05-21', startTime: '07:00',
+    endDate:   '2026-05-23', endTime:   '20:00',
+    reason: 'יום הולדת לאחות',
+    status: 'pending',
+    submittedAt: '2026-05-14T18:30:00',
   },
   {
     id: 'lr3',
@@ -1373,6 +1398,21 @@ export const mockEquipmentGaps: EquipmentGap[] = [
     description:         'עינית פנימית סדוקה — נדרשת החלפה',
     status:              'reported',
     createdAt:           todayAt('07:30', -1),
+  },
+  {
+    // Gap reported by u14 (חייל 2 = s3 אורן פרץ). Surfaces on his
+    // SoldierDashboard + in /rasap queue + in PS review queue.
+    id:                  'eg-2',
+    companyId:           'co1',
+    reportedByUserId:    'u14',
+    reportedBySoldierId: 's3',
+    reportedByName:      'אורן פרץ',
+    reportedByPlatoonId: 'g1',
+    kind:                'missing',
+    itemName:            'מימייה',
+    description:         'הגיע מהבית בלי מימייה — צריך חדשה',
+    status:              'reported',
+    createdAt:           todayAt('09:15', 0),
   },
 ];
 
