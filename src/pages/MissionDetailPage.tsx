@@ -19,8 +19,9 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useApp, useMyCompany } from '../context/AppContext';
 import { isCompanyLeadership, isPlatoonLeadership, canEditMission } from '../utils/permissions';
 import { buildMissionSummary } from '../utils/missionSummary';
-import { materializeWeek } from '../utils/materialize';
+import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import Header from '../components/Header';
+import StaffingSheet from '../components/StaffingSheet';
 import type { MissionNote, Platoon, UserRole } from '../types';
 import {
   Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill,
@@ -78,12 +79,26 @@ export default function MissionDetailPage() {
     startDay: todayStart, days: 7,
   }) : [], [mission, platoons, squads, soldiers, leaves, dutyExclusions, todayStart]);
 
+  /** Candidate pool for StaffingSheet — soldiers from platoons assigned
+   *  to this mission. Engine layer applies hard filters; we only need
+   *  to scope by platoon membership here. */
+  const candidatePool = useMemo(() => {
+    if (!mission) return [];
+    const platoonIds = new Set(mission.assignedPlatoonIds);
+    const squadIds = new Set(
+      squads.filter((sq) => platoonIds.has(sq.platoonId)).map((sq) => sq.id),
+    );
+    return soldiers.filter((s) => s.squadId && squadIds.has(s.squadId));
+  }, [mission, squads, soldiers]);
+
   const [draftScope, setDraftScope] = useState<'company' | 'platoon'>(
     isCC ? 'company' : 'platoon'
   );
   const [draftText, setDraftText] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  /** Slot currently open in the StaffingSheet (null = sheet closed). */
+  const [staffingSlot, setStaffingSlot] = useState<MaterializedSlot | null>(null);
 
   // ── Route gates AFTER all hooks have run. ────────────────────────
   if (!currentUser) return <Navigate to="/login" replace />;
@@ -385,14 +400,28 @@ export default function MissionDetailPage() {
                 const end   = new Date(slot.end);
                 const platoon = platoons.find((p) => p.id === slot.ownerPlatoonId);
                 const assignedCount = slot.assignedSoldierIds.length + (slot.commanderSoldierId ? 1 : 0);
+                const understaffed = assignedCount < slot.requiredCount;
                 return (
-                  <div key={slot.id} className="px-5 py-3 flex items-center gap-3">
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={() => canEdit && setStaffingSlot(slot)}
+                    disabled={!canEdit}
+                    className="w-full text-right px-5 py-3 flex items-center gap-3 hover:bg-mil-card-hover transition-colors disabled:cursor-default disabled:hover:bg-transparent"
+                  >
                     <Hint className="text-tiny font-mono tabular-nums w-24 flex-shrink-0">
                       {formatDate(start)} · {hhmm(start)}–{hhmm(end)}
                     </Hint>
                     <Body className="flex-1 truncate">{platoon?.name ?? '—'}</Body>
-                    <Hint className="tabular-nums">{assignedCount}/{slot.requiredCount}</Hint>
-                  </div>
+                    <Hint className={`tabular-nums ${understaffed ? 'text-mil-alert font-semibold' : ''}`}>
+                      {assignedCount}/{slot.requiredCount}
+                    </Hint>
+                    {canEdit && (
+                      <span className="text-mil-olive-dim text-tiny font-semibold flex-shrink-0">
+                        איוש ←
+                      </span>
+                    )}
+                  </button>
                 );
               })}
             </div>
@@ -400,6 +429,22 @@ export default function MissionDetailPage() {
         )}
 
       </PageMain>
+
+      {staffingSlot && (
+        <StaffingSheet
+          open
+          onClose={() => setStaffingSlot(null)}
+          slot={staffingSlot}
+          candidatePool={candidatePool}
+          onAssign={(soldierIds, forcedReason) => {
+            // Phase 6.2.a — wires UI to engine. Persistence of assignment
+            // updates lands in 6.2.b alongside the broader staffing
+            // mutation; for now we collect the intent and close.
+            void soldierIds; void forcedReason;
+            setStaffingSlot(null);
+          }}
+        />
+      )}
     </div>
   );
 }

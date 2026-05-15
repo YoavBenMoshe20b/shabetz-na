@@ -21,6 +21,7 @@ import {
 } from '../../components/ui';
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import AlertsButton from '../../components/AlertsButton';
+import CriticalAlertsBanner from '../../components/CriticalAlertsBanner';
 import PersonalActionsFab from '../../components/PersonalActionsFab';
 import { TimelineCard } from './_shared/TimelineCard';
 
@@ -201,6 +202,8 @@ export default function PlatoonCommanderDashboard() {
             </div>
           )}
         </header>
+
+        <CriticalAlertsBanner />
 
         {activeMissions.length > 0 && (
           <Section label="פעיל עכשיו">

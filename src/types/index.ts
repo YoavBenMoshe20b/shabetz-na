@@ -267,6 +267,18 @@ export interface Leave {
   note?: string;
   createdBy: string;
   createdByName: string;
+
+  // ── Round 6 / Phase 6.0 — Recall handling ─────────────────────────
+  // When a leave is cut short due to escalation/operational need, we
+  // mark these three fields. The system tracks "recall debt" — the
+  // soldier is owed home-time in the next cycle. Burden score reads
+  // these to apply a recall penalty.
+  /** True when CC/PC recalled the soldier mid-leave. */
+  wasRecalled?: boolean;
+  /** ISO timestamp the recall was issued. */
+  recalledAt?: string;
+  /** Free-text reason ('הקפצה / חולה במחלקה / החלפה בשמירה'). */
+  recallReason?: string;
 }
 
 // Leave requests (soldier-initiated, manager approves)
@@ -475,6 +487,45 @@ export interface CompanySettings {
   minSoldiersOnBase: number;
   specialPlatoonsFollowLeaveRotation: boolean;
   companyHomePeriods: CompanyHomePeriod[];   // periods when whole company is home
+
+  /** Phase 6.0 — Fatigue policy at the COMPANY level.
+   *
+   *  Authority chain (highest to lowest):
+   *    1. mission.fatigueOverride?.minRestHoursByShiftLength
+   *    2. company.settings.fatigue?.minRestHoursByShiftLength
+   *    3. GLOBAL_DEFAULTS (defined in engine code, currently 8/12/24)
+   *
+   *  Each entry says "after a shift of N hours, the soldier needs M
+   *  hours of rest before the next shift". 0-hour shifts (admin) inherit
+   *  the next bracket up.
+   */
+  fatigue?: FatiguePolicy;
+}
+
+// ─── Fatigue policy — configurable per company/mission ────────────────────
+//
+// Single source of truth for "how long must a soldier rest before the
+// next shift". Authoritative defaults live in engine code (GLOBAL_DEFAULTS).
+// Companies override via CompanySettings.fatigue; specific missions can
+// further override via Mission.fatigueOverride.
+//
+// The model is a piecewise mapping: shift length (hours, ceiling) → minimum
+// rest required (hours). Implementation uses largest-key-≤-shift-length.
+
+export interface FatiguePolicy {
+  /** Map shift-length-ceiling → required-rest-hours.
+   *  Engine looks up `Math.max(...keys.filter(k => k <= shiftLength))`.
+   *  Example: { 8: 8, 12: 12, 24: 24, 48: 36 }
+   *    → 6h shift needs 8h rest, 16h shift needs 12h rest,
+   *      25h shift needs 24h rest, 50h shift needs 36h rest. */
+  minRestHoursByShiftLength: Record<number, number>;
+
+  /** Floor on absolute consecutive base days (no home leave) before the
+   *  burden score starts heavily penalizing scheduling. */
+  consecutiveBaseDaysCap?: number;
+
+  /** Window in days over which fatigue/burden are computed. Default 30. */
+  computationWindowDays?: number;
 }
 
 export interface Company {
@@ -972,12 +1023,31 @@ export interface QualificationRequirement {
   qualificationId: string;
   count: number;
 }
+/**
+ * Severity of an equipment requirement — drives engine behavior:
+ *
+ *   critical  — HARD filter. Soldier without the item is not even a candidate.
+ *               Mission cannot enter `active` status if the gap is open.
+ *               Example: נשק for a combat patrol; חבישה for a 24h shift.
+ *
+ *   required  — SOFT filter with heavy penalty. Soldier without the item
+ *               receives a -30 score. Mission can run but generates a
+ *               `warning` alert. Example: אפוד for standard guard.
+ *
+ *   soft      — INFORMATIONAL only. Soldier without the item receives a
+ *               -10 score nudge. No alert. Example: ציוד משני, פנס.
+ */
+export type EquipmentRequirementLevel = 'soft' | 'required' | 'critical';
+
 export interface EquipmentRequirement {
   equipmentItemId: string;
   count: number;
   /** True when each soldier needs one (helmet); false when one per shift
    *  satisfies the slot (ladder). */
   perSoldier: boolean;
+  /** Severity tier. Defaults to 'required' when absent to preserve legacy
+   *  data shape; new authoring sites MUST set this explicitly. */
+  level?: EquipmentRequirementLevel;
 }
 
 // ─── Engine: Mission — the unified contract ─────────────────────────────────
@@ -1075,7 +1145,27 @@ export interface Mission {
    *  EscalationEvent. Lets the escalation surface show the missions it
    *  created, and lets the mission surface show its escalation origin. */
   escalationId?: string;
+
+  // ── Phase 6.0 — Engine signals ──────────────────────────────────
+  /** Burden weight category. Hard shifts contribute disproportionately
+   *  to `SoldierBurden.hardShiftHours`. Defaults to 'standard' when
+   *  absent to preserve legacy mission shape. */
+  difficulty?: MissionDifficulty;
+
+  /** Per-mission override of fatigue rules. When absent, the engine
+   *  falls back to company.settings.fatigue → GLOBAL_DEFAULTS. */
+  fatigueOverride?: FatiguePolicy;
 }
+
+/**
+ * Mission difficulty tier — drives the burden score's `hardShiftHours`
+ * weight and the engine's repetition penalty.
+ *
+ *   standard  — guard, kitchen, cleaning, container loading.
+ *   hard      — 24/7 guard, patrol, מארב, heavy container ops, IDF support.
+ *   critical  — combat, off-base ops, night ops with operational risk.
+ */
+export type MissionDifficulty = 'standard' | 'hard' | 'critical';
 
 // ─── Operational order (צו) ──────────────────────────────────────────────────
 //
@@ -2228,3 +2318,770 @@ export const LOGISTICS_ROTATION_LABEL: Record<LogisticsRotationKind, string> = {
   loading:   'העמסת ציוד',
   custom:    'משימה לוגיסטית',
 };
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  PHASE 6.0 — ENGINE TYPES                                                ║
+// ║                                                                          ║
+// ║  The contract layer for the scheduling engine: scoring, burden,          ║
+// ║  replacements, checklists, and the focus-mode "what's burning now"      ║
+// ║  derived view. None of these own state directly — they're either        ║
+// ║  computed at read-time (Burden, Focus, CandidateScore) or persisted      ║
+// ║  in their own tables (ChecklistRun, Replacement).                        ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+// ─── Burden score — composite fairness signal ──────────────────────────
+//
+// Computed at read-time per soldier from the last `windowDays` of:
+//   • SoldierStatusEvent log     → daysBase, daysHome, consecutiveBaseDays
+//   • MaterializedSlot history   → totalShiftHours, hardShiftHours, missionVariety, repetitionFlag
+//   • LogisticsRotation history  → rotationLoad
+//   • Leave entries              → recallEvents, daysSinceLastHome
+//
+// The score is a SOFT input to the engine — it penalizes scheduling
+// already-burdened soldiers but never blocks. Display layer surfaces
+// the breakdown in human terms ("טחן: 4 משמרות קשות, 9 ימים רצופים").
+
+/**
+ * Burden score is computed from 12 raw operational signals, BUT the UI
+ * never shows the soldier as "12 numbers". Instead the engine groups
+ * the signals into 4 explainable factors, each with a plain-text reason.
+ * The PC/CC sees four bars + a headline; the raw signals stay available
+ * for forensic queries (audit, debugging) but are NOT the surfaced
+ * model.
+ *
+ * Design constraint per Phase 6.0 review: NEVER black-box. Every score
+ * must be reducible to a sentence a human can verify.
+ */
+
+export interface BurdenSignals {
+  // ── Time & distribution ─────────────────────────────────────────
+  daysBase:             number;
+  daysHome:             number;
+  consecutiveBaseDays:  number;
+  daysSinceLastHome:    number;
+
+  // ── Work intensity ──────────────────────────────────────────────
+  totalShiftHours:      number;
+  hardShiftHours:       number;
+  rotationLoad:         number;
+
+  // ── Patterns ────────────────────────────────────────────────────
+  consecutiveHardShifts: number;
+  missionVariety:       number;
+  /** True when soldier has done same mission type ≥ 4 times in 7 days. */
+  repetitionFlag:       boolean;
+
+  // ── Stress events ───────────────────────────────────────────────
+  recentRecallEvents:   number;
+  daysSinceLastRecall:  number | null;   // null = never recalled
+}
+
+/** A burden FACTOR is one of the four human-meaningful groupings. Each
+ *  factor carries its own sub-score (0-100) AND a plain Hebrew sentence
+ *  explaining WHY this factor scored what it did. The composite
+ *  burdenScore is a weighted blend of the four factor scores. */
+export interface BurdenFactor {
+  /** 0-100 contribution; higher = more burdened on this axis. */
+  score: number;
+  /** One sentence the operator reads first ("4 משמרות קשות תוך 7 ימים"). */
+  explain: string;
+  /** Which raw signals fed this factor — for forensic drill-down. */
+  signalKeys: Array<keyof BurdenSignals>;
+}
+
+export interface SoldierBurden {
+  soldierId: string;
+  /** ISO date stamp of when this snapshot was computed. */
+  computedAt: string;
+  /** Computation window — typically 30 days. */
+  windowDays: number;
+
+  /** Raw operational signals — NOT for direct UI display. Use `factors`. */
+  signals: BurdenSignals;
+
+  /** Four human-meaningful factors. UI surfaces these as bars + text. */
+  factors: {
+    /** How much actual work — shift hours, hard hours, rotations. */
+    workIntensity:   BurdenFactor;
+    /** How depleted — consecutive base days, days-since-home. */
+    recoveryDeficit: BurdenFactor;
+    /** How fair the pattern was — variety, repetition. */
+    rotationPattern: BurdenFactor;
+    /** Stress events — recalls. */
+    stressLoad:      BurdenFactor;
+  };
+
+  /** Weighted blend of the four factor scores. 0 = relaxed, 100 = redline. */
+  burdenScore: number;
+
+  /** The single-most important factor surfaced as one sentence.
+   *  Example: "טחן: 4 משמרות קשות + 9 ימים רצופים בבסיס". */
+  headline: string;
+
+  /** True iff burdenScore is above this platoon's p75. */
+  overShoot: boolean;
+}
+
+/** Tunable weights for the composite burdenScore. Stored centrally so
+ *  the formula can be revisited after 4 weeks of usage data without
+ *  touching engine code. These weights blend the four FACTORS — the
+ *  raw signal weights live inside each factor calculator. */
+export interface BurdenWeights {
+  workIntensity:   number;   // default 0.35
+  recoveryDeficit: number;   // default 0.30
+  rotationPattern: number;   // default 0.20
+  stressLoad:      number;   // default 0.15
+}
+
+// ─── Candidate score — engine's per-soldier-per-slot output ──────────
+//
+// What the staffing UI surfaces in the candidate list tooltip. Every
+// dimension has an `explain` string so the PC/CC sees WHY a candidate
+// scored what they scored. No black-box selection.
+
+export interface CandidateScore {
+  soldierId: string;
+  slotId: string;
+
+  /** Final score 0–100. Higher = more eligible. */
+  score: number;
+
+  /** True iff any hard filter would reject this candidate. UI typically
+   *  greys these out but still shows them (with the failed filter visible)
+   *  so the operator can override. */
+  hardFiltersFailed: HardFilterCode[];
+
+  /** Per-dimension breakdown. Each entry is independent so the UI can
+   *  render a histogram bar + plain-text reason. */
+  dimensions: CandidateScoreDimension[];
+}
+
+export interface CandidateScoreDimension {
+  /** Internal name for the dimension (used by tests). */
+  key: 'load' | 'fatigue' | 'qualMatch' | 'cohesion' | 'burden';
+  /** 0–100 contribution to the final score. */
+  value: number;
+  /** Human-readable explanation surfaced in the candidate tooltip. */
+  explain: string;
+}
+
+export type HardFilterCode =
+  | 'soldier-home'
+  | 'soldier-inactive'
+  | 'on-leave'
+  | 'in-leave-cycle-home'
+  | 'duty-exclusion'
+  | 'missing-qualifications'
+  | 'wrong-platoon'
+  | 'time-conflict'
+  | 'squad-policy-violation'
+  | 'critical-equipment-missing';
+
+// ─── Selector outcome — the full story of staffing one slot ──────────
+//
+// Per Phase 6.0 review: the staffing UI must NEVER show "X was picked"
+// without confidence + reasoning. Operators distrust black-box choices.
+// SelectorOutcome carries:
+//   • the picked soldiers (with their scores)
+//   • confidence (0-1) — how clear was the pick vs the next alternate?
+//   • forced flag — did we accept any constraint violation to fill?
+//   • plain-text reasoning — one or two sentences the operator reads
+//   • violations — every soft/hard constraint that was overridden
+//   • alternates — runner-up candidates if the operator wants to swap
+
+export interface SelectorOutcome {
+  slotId: string;
+
+  /** Soldiers picked for this slot. Ordered by score desc. May be
+   *  shorter than `required` — then alerts.length > 0. */
+  picked: PickedSoldier[];
+
+  /** 0-1 confidence in the picks. Computed as:
+   *    avg(picked.score) - avg(top-N alternates' scores), normalized.
+   *  High confidence (> 0.7) → clear winners. Low (< 0.3) → close race,
+   *  PC should review alternates. */
+  confidence: number;
+
+  /** True iff at least one pick required an override (hard filter
+   *  violation accepted, or score below acceptable threshold). When
+   *  true, the UI badges the slot as "ידני / כפוי". */
+  forced: boolean;
+
+  /** One- or two-sentence summary the operator reads first.
+   *  "3 חיילים מאוישים, אחד עם עייפות חורגת — צריך אישור".
+   *  "אין מועמדים זמינים, slot נשאר פתוח". */
+  reasoning: string;
+
+  /** Constraint violations made to reach this selection. Empty list
+   *  means a clean pick. */
+  violations: SelectorViolation[];
+
+  /** Runner-up candidates if the operator wants to second-guess.
+   *  Limited to top 5 to keep the UI lean. */
+  alternates: CandidateScore[];
+
+  /** Alerts the selector produced as a side effect (manpower-shortfall,
+   *  fatigue-violation, etc.). The Alerts pipeline picks these up. */
+  alerts: SelectorAlert[];
+
+  /** Plain-Hebrew sentences explaining WHY confidence dropped below its
+   *  base value. Empty when no decay was applied. Each entry maps to ONE
+   *  decay multiplier (forced fills, shortfall, override chain, critical
+   *  equipment). The UI surfaces these directly so confidence is never
+   *  a "magic number" — operators see the exact reasons.
+   *
+   *  Example:
+   *    ["שיבוץ אחד בכפייה (-50%)", "חסרים 2 שיבוצים (-60%)"]
+   */
+  decayReasons: string[];
+}
+
+export interface PickedSoldier {
+  soldierId: string;
+  /** The full score breakdown — UI shows tooltip with this. */
+  score: CandidateScore;
+  /** Set when this pick required override. Mandatory reason for audit. */
+  forcedReason?: string;
+}
+
+export interface SelectorViolation {
+  /** Which constraint was violated. */
+  code: HardFilterCode | 'fatigue-violation' | 'cohesion-broken' | 'qual-suboptimal';
+  /** Soldier the violation applies to. */
+  soldierId: string;
+  /** Severity of the violation:
+   *    'soft'     — score penalty, no operator confirmation needed
+   *    'override' — required operator confirmation (reason captured) */
+  severity: 'soft' | 'override';
+  /** Human-readable explanation. */
+  explain: string;
+}
+
+export interface SelectorAlert {
+  kind: 'manpower-shortfall' | 'fatigue-violation' | 'home-assignment'
+      | 'qual-mismatch' | 'cohesion-broken' | 'critical-equipment-missing';
+  severity: AlertSeverity;
+  /** Plain-text content for the alerts feed. */
+  message: string;
+  /** Affected entity for invalidation. */
+  affectedSoldierIds: string[];
+}
+
+// ─── Replacement — chaos-flow first-class entity ─────────────────────
+//
+// When a soldier is removed from a slot and another is put in their
+// place (sickness, no-show, recall, override), the system records BOTH:
+//
+//   1. A shallow flag on the MaterializedSlot itself (`replacementOf`)
+//      so the staffing UI can render "🔁 replaced" without a join.
+//
+//   2. A persistent Replacement entity (this one) capturing the full
+//      audit story — actor, reason, timestamp, optional chain.
+
+export interface Replacement {
+  id: string;
+  companyId: string;
+  /** The slot whose soldier was replaced. */
+  slotId: string;
+  /** Soldier who was removed from the slot. */
+  originalSoldierId: string;
+  /** Soldier who took the slot. May be undefined if the slot remains open. */
+  newSoldierId?: string;
+  /** Which user performed the replacement (PC/CC/Rasap). */
+  actorUserId: string;
+  actorName: string;
+  /** Free-text justification — required. */
+  reason: string;
+  /** When this replacement happened. */
+  occurredAt: string;
+  /** Pointer to a previous Replacement on the same slot if this is part
+   *  of a chain (slot replaced 3 times in 24h = signal of chaos). */
+  previousReplacementId?: string;
+}
+
+// ─── Checklist — readiness check (צל״ם) ──────────────────────────────
+//
+// A ChecklistRun is INSTANTIATED by CC/Deputy at any moment (general
+// readiness drill) OR pre-mission. It scopes a set of soldiers and a
+// template of items to verify. Per-soldier results live in ChecklistInstance.
+
+export interface ChecklistTemplate {
+  id: string;
+  companyId: string;
+  name: string;
+  /** Pre-defined items the checker steps through per soldier. */
+  items: ChecklistItem[];
+  /** Optional category — drives default sort and grouping in UI. */
+  category?: 'full' | 'ammunition' | 'comms' | 'medical' | 'custom';
+  createdAt: string;
+}
+
+export interface ChecklistItem {
+  /** Stable key — referenced in ChecklistInstance.items. */
+  key: string;
+  /** Display label (חולצה / קסדה / מחסניות / חבישה גוף). */
+  label: string;
+  /** When > 1, the item has a count (e.g. 3 mags); otherwise binary. */
+  expectedCount?: number;
+  /** Which equipment category this maps to — feeds gap creation. */
+  equipmentCategory?: SignedEquipmentCategory;
+  /** Severity tier mirrors EquipmentRequirementLevel — critical items
+   *  cause the soldier's instance to fail with high alert; soft items
+   *  contribute to score but not status. */
+  level: EquipmentRequirementLevel;
+}
+
+export type ChecklistRunScope =
+  | { kind: 'company' }
+  | { kind: 'platoon';  platoonId: string }
+  | { kind: 'squad';    squadId:   string }
+  | { kind: 'soldiers'; soldierIds: string[] };
+
+export type ChecklistRunStatus = 'open' | 'completed' | 'cancelled';
+
+export interface ChecklistRun {
+  id: string;
+  companyId: string;
+  templateId: string;
+  scope: ChecklistRunScope;
+  /** Optional binding to a mission — pre-mission checks reference the
+   *  mission so its readiness gate can resolve. */
+  missionId?: string;
+  /** Who initiated the run (CC or PC). */
+  initiatedByUserId: string;
+  initiatedByName: string;
+  /** When the check should be done by. UI surfaces a countdown. */
+  deadline?: string;
+  /** Note shown to the executors. */
+  notes?: string;
+  status: ChecklistRunStatus;
+  /** Resume state — the executor's partial progress, written on sheet
+   *  close (not on every tick). JSONB structure matches the in-app
+   *  partial form state. Loaded on next open. */
+  partialState?: ChecklistRunPartialState;
+  lastUpdatedAt?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+/** Persisted partial state for resume — opaque to the engine; the UI
+ *  is the only reader/writer. */
+export interface ChecklistRunPartialState {
+  /** soldier_id → per-item status map. Empty until the executor touches a card. */
+  byInstance: Record<string, {
+    items: Record<string, { present: boolean; actualCount?: number; notes?: string }>;
+    status: 'in-progress' | 'pending';
+  }>;
+}
+
+export type ChecklistInstanceStatus = 'pending' | 'in-progress' | 'passed' | 'failed';
+
+export interface ChecklistInstance {
+  id: string;
+  runId: string;
+  soldierId: string;
+  status: ChecklistInstanceStatus;
+  /** Who performed the check (typically a sergeant/PC). */
+  checkedByUserId?: string;
+  completedAt?: string;
+  items: ChecklistInstanceItem[];
+}
+
+export interface ChecklistInstanceItem {
+  /** Matches ChecklistItem.key. */
+  key: string;
+  present: boolean;
+  actualCount?: number;
+  /** Item-specific condition override (defaults from soldier's equipment). */
+  condition?: EquipmentCondition;
+  notes?: string;
+  /** When false + level=critical → instance auto-fails. */
+}
+
+// ─── Quiet mode — alerts hierarchy control ───────────────────────────
+//
+// Per-user preference that suppresses non-critical alerts in the hero
+// dashboard layer for a bounded window. Critical alerts always break
+// through. Never persists across the chosen window — explicit by design.
+
+export type QuietModeDuration = '30m' | '1h' | '2h' | '4h';
+
+export interface QuietModePreference {
+  duration: QuietModeDuration;
+  /** ISO timestamp the mode was activated. */
+  activatedAt: string;
+  /** ISO timestamp the mode will expire (computed from duration). */
+  expiresAt: string;
+}
+
+// ─── Focus mode — "what requires a DECISION right now" ────────────────
+//
+// Per Phase 6.0 review: Focus is NOT another alerts feed. An alert says
+// "this happened" — a FocusItem says "you need to decide something, and
+// here's the decision".
+//
+// Filtering rules:
+//   • Item must require a HUMAN judgment (engine cannot resolve alone)
+//   • Item must have a concrete deadline or operational impact within
+//     the next 24 hours (otherwise it belongs in the alerts feed)
+//   • Item must surface a SPECIFIC primary action — not just "view details"
+//
+// Display: max 5 items on the dashboard. Sort by `decisionRequiredBy`
+// ascending (soonest deadline first). Items past their deadline are
+// auto-promoted to the AlertsPage as critical.
+
+export type FocusItemKind =
+  | 'cover-leaving-platoon'      // "מחלקה X יוצאת לבית 14:00 — מי מכסה?"
+  | 'staff-mission-now'          // "משימה X מתחילה ב-22:00 — חסרים 2 שיבוצים"
+  | 'recall-non-compliant'       // "דני לוי לא חזר מהקפצה — מה ההמשך?"
+  | 'replace-vanished-soldier'   // "אבי לא הגיע למשמרת — מי מחליף?"
+  | 'approve-pending-leave'      // "3 בקשות יציאה ממתינות > 8 שעות"
+  | 'resolve-critical-gap'       // "חסר נשק לחייל ששובץ למחר 06:00"
+  | 'close-active-escalation';   // "הקפצה פעילה מאתמול — לסגור או לשמור?"
+
+export interface FocusItem {
+  /** Stable id derived from the underlying entity (e.g. `cover-{platoonId}-{dayIso}`)
+   *  so the UI can dedup across renders. */
+  id: string;
+  kind: FocusItemKind;
+
+  /** The DECISION the viewer needs to make, phrased as a question.
+   *  Example: "מי מכסה את שמירת השער ב-22:00?"
+   *  NOT a status: NOT "שמירת השער חסרה איוש". */
+  decisionPrompt: string;
+
+  /** Context — one sentence on why this needs a decision now.
+   *  Example: "מחלקה 2 בבית, שמירה קבועה ב-22:00, אין כיסוי מוגדר". */
+  context: string;
+
+  /** When the decision must be made by — drives sort order and
+   *  "overdue" promotion to alerts. */
+  decisionRequiredBy: string;
+
+  /** Severity of the impact if the decision isn't made in time. */
+  severity: AlertSeverity;
+
+  /** The primary action — opens the specific decision flow.
+   *  Example: { label: "הגדר כיסוי", href: "/coverage?day=2026-05-15" } */
+  primaryAction: FocusAction;
+
+  /** Optional secondary actions (defer, escalate, view details). */
+  secondaryActions?: FocusAction[];
+
+  /** Underlying source for invalidation when the entity changes. */
+  source:
+    | { kind: 'platoon-leave';  platoonId: string; dayIso: string }
+    | { kind: 'mission';        id: string }
+    | { kind: 'leave';          id: string }
+    | { kind: 'soldier-status'; soldierId: string }
+    | { kind: 'gap';            id: string }
+    | { kind: 'escalation';     id: string };
+}
+
+export interface FocusAction {
+  label: string;
+  /** Either a route to navigate to OR a recognized command keyword. */
+  href?: string;
+  /** Programmatic command when the action opens a Sheet/Modal in place
+   *  instead of navigating. Engine consumers route on this. */
+  command?: 'define-coverage' | 'open-staffing' | 'open-replace' | 'open-recall-followup'
+          | 'open-approve-leave' | 'open-resolve-gap' | 'open-close-escalation';
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  PHASE 6.0b — OFFLINE / SYNC INFRASTRUCTURE                              ║
+// ║                                                                          ║
+// ║  We don't build full offline NOW. We DO design every mutation, every     ║
+// ║  read, and every engine function to be offline-ready from day one.       ║
+// ║  This block defines the contract:                                        ║
+// ║                                                                          ║
+// ║    • Every mutation carries clientMutationId + clientCreatedAt           ║
+// ║      → makes server idempotent + traceable across retries                ║
+// ║    • A queue of pending mutations persists locally                       ║
+// ║    • Conflicts are captured as first-class records, never silently       ║
+// ║      overwritten                                                         ║
+// ║    • The UI consumes a ConnectionState type that informs banners,        ║
+// ║      "last synced" timestamps, and "stale data" warnings                 ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+/** Every write mutation in the system carries this envelope. The server
+ *  echoes `clientMutationId` so the client can mark the queue entry as
+ *  synced. Re-sending the same id is a no-op (idempotency). */
+export interface MutationEnvelope {
+  /** UUID generated on the client BEFORE the mutation leaves the device. */
+  clientMutationId: string;
+  /** ISO when the mutation was authored locally (used for ordering). */
+  clientCreatedAt:  string;
+  /** Acting user — recorded even if the user is offline. */
+  actorUserId:      string;
+  /** Set by the server after persistence; absent while pending. */
+  serverAcknowledgedAt?: string;
+}
+
+/** Per-mutation status in the local queue. */
+export type MutationStatus =
+  | 'pending'    // queued locally, not yet sent
+  | 'syncing'    // in flight to server
+  | 'synced'     // server acknowledged, can be GC'd
+  | 'failed'     // server rejected (RLS, validation) — user must resolve
+  | 'conflict';  // server has a newer version of the same entity
+
+/** Generic queue entry — `payload` carries the actual mutation body
+ *  shaped per `kind`. The application-layer dispatcher routes by kind. */
+export interface MutationQueueEntry {
+  envelope: MutationEnvelope;
+  kind: MutationKind;
+  /** The mutation body — exact shape varies by kind. Engine and sync
+   *  layers MUST validate before applying. */
+  payload: unknown;
+  status: MutationStatus;
+  /** Last error message when status === 'failed'. */
+  lastError?: string;
+  /** Retry counter — caps at some sane limit. */
+  attempts: number;
+}
+
+/** All mutation kinds in the system. New writes MUST register here so
+ *  the offline queue knows how to route them. */
+export type MutationKind =
+  | 'status-update'
+  | 'leave-request-submit'
+  | 'leave-request-review'
+  | 'mission-create'
+  | 'mission-update'
+  | 'mission-set-status'
+  | 'announcement-create'
+  | 'announcement-close'
+  | 'announcement-delete'
+  | 'equipment-sign-out'
+  | 'equipment-return'
+  | 'equipment-damage'
+  | 'gap-report'
+  | 'gap-status-update'
+  | 'alert-acknowledge'
+  | 'alert-resolve'
+  | 'checklist-run-create'
+  | 'checklist-instance-update'
+  | 'checklist-run-complete'
+  | 'logistics-rotation-create'
+  | 'logistics-rotation-set-status'
+  | 'replacement-create';
+
+/** When local and server diverge on the same entity, we capture the
+ *  conflict explicitly instead of silently overwriting. The UI surfaces
+ *  the conflict so the operator chooses a resolution. */
+export interface ConflictRecord {
+  id: string;
+  /** Which entity the conflict is about. */
+  entity: { kind: string; id: string };
+  /** Local version (what the user did offline). */
+  localVersion: {
+    actorUserId: string;
+    occurredAt: string;
+    snapshot: unknown;
+  };
+  /** Server version (what was already there when we synced). */
+  serverVersion: {
+    actorUserId: string;
+    occurredAt: string;
+    snapshot: unknown;
+  };
+  detectedAt: string;
+  /** How the user chose to resolve. `null` = not yet resolved. */
+  resolution: 'use-local' | 'use-server' | 'merge' | 'dismiss' | null;
+  resolvedAt?: string;
+  resolvedByUserId?: string;
+}
+
+/** Connection state for UI consumption. */
+export type ConnectionState =
+  | 'online'       // green dot, fresh data
+  | 'syncing'      // amber, pending mutations in flight
+  | 'offline'      // red, mutations queued locally
+  | 'stale';       // amber, online but last sync > N minutes ago
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  HUMAN PRIORITY PINNING (future-ready, scaffold only)                    ║
+// ║                                                                          ║
+// ║  A PC/CC marks a soldier as "high priority for this mission/slot" —     ║
+// ║  the engine applies a SOFT bonus to their score (does not break          ║
+// ║  hard filters). Pins are time-bounded; expired pins are ignored.        ║
+// ║                                                                          ║
+// ║  Phase 6.2.a-refine-2: type + scoring integration only. UI lands         ║
+// ║  in Phase 6.3+.                                                          ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type SoldierPriorityPinScope =
+  | { kind: 'mission'; missionId: string }
+  | { kind: 'slot';    slotId: string }
+  | { kind: 'global' };
+
+export type SoldierPriorityPinReason =
+  | 'training-opportunity'
+  | 'continuity-with-team'
+  | 'recovery-debt'
+  | 'commander-judgment'
+  | 'specific-qualification';
+
+export interface SoldierPriorityPin {
+  id: string;
+  companyId: string;
+  soldierId: string;
+  scope: SoldierPriorityPinScope;
+  reason: SoldierPriorityPinReason;
+  /** Free-text rationale shown alongside the candidate's score breakdown. */
+  note?: string;
+  /** PC/CC who pinned. */
+  pinnedByUserId: string;
+  pinnedByName: string;
+  /** Time-bounded. After this, the pin is ignored. */
+  expiresAt?: string;
+  createdAt: string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  EXPLAINABILITY HISTORY (future-ready, scaffold only)                    ║
+// ║                                                                          ║
+// ║  Every time the engine produces a SelectorOutcome (whether the operator ║
+// ║  accepted it or overrode), a snapshot is persisted. This enables:       ║
+// ║    • "why did the engine choose X for that slot 3 weeks ago?"           ║
+// ║    • detection of repeated wrong picks → tuning signal                   ║
+// ║    • compliance audit — "the engine was consulted before X was forced"   ║
+// ║                                                                          ║
+// ║  Phase 6.2.a-refine-2: type only. Persistence lands in Phase 6.2.b      ║
+// ║  alongside assignment writes.                                            ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export interface SelectorOutcomeRecord {
+  id: string;
+  companyId: string;
+  slotId: string;
+  missionId: string;
+  /** Snapshot of the outcome at decision time. */
+  outcome: SelectorOutcome;
+  /** Final picks the operator actually committed (may differ from
+   *  outcome.picked if they overrode). */
+  finalSoldierIds: string[];
+  /** Who made the final call. */
+  actorUserId: string;
+  actorRole: UserRole;
+  /** ISO timestamp the decision was made. */
+  decidedAt: string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  HUMAN OVERRIDE TELEMETRY                                                ║
+// ║                                                                          ║
+// ║  When a PC/CC rejects the engine's pick and chooses someone else, we    ║
+// ║  capture that decision. Not for AI today — for pattern analysis later.  ║
+// ║  If 70% of PCs always replace soldier X with Y, the engine's scoring    ║
+// ║  for that combination is probably wrong.                                 ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export interface EngineOverride {
+  id: string;
+  companyId: string;
+  /** Slot the override applied to. */
+  slotId: string;
+  /** Soldier the engine recommended. */
+  engineRecommendedSoldierId: string;
+  /** Engine's confidence in its recommendation (from SelectorOutcome). */
+  engineConfidence: number;
+  /** Soldier the operator chose instead. May be undefined if they
+   *  left the slot open after rejecting the recommendation. */
+  operatorChoseSoldierId?: string;
+  /** Free-text rationale — optional in v1, may become required later. */
+  rationale?: string;
+  /** Standard reason taxonomy — surfaces patterns. Optional. */
+  rationaleCode?:
+    | 'soldier-needs-rest'
+    | 'wrong-fit-for-task'
+    | 'training-opportunity'
+    | 'personal-circumstances'
+    | 'better-cohesion'
+    | 'commander-judgment';
+  actorUserId: string;
+  actorRole: UserRole;
+  occurredAt: string;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  OPERATIONAL MODE                                                        ║
+// ║                                                                          ║
+// ║  Concept stub — built later. The mode modulates fatigue thresholds,     ║
+// ║  fairness weights, and alert severities. Stored on Company so the       ║
+// ║  whole org runs in the same mode at a given moment.                      ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export type OperationalMode = 'normal' | 'elevated' | 'emergency';
+
+/** Per-mode modulator that the engine consults when resolving fatigue,
+ *  fairness penalties, and alert thresholds. Values are MULTIPLIERS on
+ *  the defaults. Default behavior in 'normal' is 1.0 across the board. */
+export interface OperationalModeProfile {
+  mode: OperationalMode;
+  /** Fatigue min-rest hours multiplier. emergency=0.5 means soldiers can
+   *  legitimately be assigned with half the usual rest gap. */
+  fatigueRestMultiplier: number;
+  /** Burden penalty multiplier. emergency=0.3 reduces fairness weight. */
+  burdenPenaltyMultiplier: number;
+  /** Alert severity escalation. emergency may upgrade warning→critical. */
+  severityEscalation: 'none' | 'warning-to-critical' | 'all-up-one';
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  ENGINE CONTEXT — pure-function input                                    ║
+// ║                                                                          ║
+// ║  Every engine function (hardFilters, scoring, selector, burden, focus)   ║
+// ║  takes an EngineContext snapshot. Functions are deterministic on the     ║
+// ║  same context — no DB, no React, no AppContext, no clock. The clock     ║
+// ║  is passed in as `computedAt`. The context can be:                       ║
+// ║                                                                          ║
+// ║    • built from React state for live computation                         ║
+// ║    • built from a persisted snapshot for replay/audit                    ║
+// ║    • built from server-side state for server-side runs                   ║
+// ║    • built from local cache when offline                                 ║
+// ║                                                                          ║
+// ║  This is the key separation that makes the engine portable.              ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+export interface EngineContext {
+  /** ISO timestamp of "now" for this evaluation. PASSED IN, never read
+   *  from Date.now() inside the engine. Allows replay/test. */
+  computedAt: string;
+
+  /** Company-level mode that modulates engine behavior. */
+  modeProfile: OperationalModeProfile;
+
+  // ── Entity snapshots — engine reads ONLY from these ───────────
+  soldiers:           Soldier[];
+  platoons:           Platoon[];
+  squads:             Squad[];
+  missions:           Mission[];
+  leaves:             Leave[];
+  dutyExclusions:     DutyExclusion[];
+  statusEvents:       SoldierStatusEvent[];
+  signedEquipment:    SignedEquipment[];
+  qualifications:     SoldierQualification[];
+  logisticsRotations: LogisticsRotation[];
+
+  // ── Resolved policy (engine doesn't traverse hierarchy itself) ─
+  fatiguePolicy:  FatiguePolicy;
+  burdenWeights:  BurdenWeights;
+
+  // ── Pre-computed burden per soldier — avoids re-computing each call ─
+  /** Map soldierId → SoldierBurden snapshot. The caller computes this
+   *  once per scheduling session and passes it in. */
+  burdens: Record<string, SoldierBurden>;
+
+  // ── State for the specific slot being evaluated (set per call) ─
+  /** Soldiers already picked for the slot in this scheduling pass.
+   *  Affects cohesion + duplicate-pick prevention. */
+  alreadyPickedForSlot?: string[];
+
+  /** Active priority pins applicable to the current evaluation. The
+   *  engine applies a +15 SOFT bonus to a candidate's score when the
+   *  pin's scope matches. Never breaks hard filters. */
+  priorityPins?: SoldierPriorityPin[];
+}
+

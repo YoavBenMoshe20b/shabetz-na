@@ -68,6 +68,7 @@ const AlertsPage         = lazy(() => import('./pages/AlertsPage'));
 const RasapPage              = lazy(() => import('./pages/RasapPage'));
 const EquipmentInventoryPage = lazy(() => import('./pages/EquipmentInventoryPage'));
 const LogisticsRotationsPage = lazy(() => import('./pages/LogisticsRotationsPage'));
+const EngineDebugPage        = lazy(() => import('./pages/EngineDebugPage'));
 
 // Calm Suspense fallback — single subtle skeleton so the transition
 // feels intentional rather than a flash of blank.
@@ -208,6 +209,10 @@ function AppRoutes() {
           <ProtectedRoute minRole="companyCommander" allowWhen={isRasap}>
             <LogisticsRotationsPage />
           </ProtectedRoute>
+        } />
+        {/* Engine debug — CC-only. Pre-production verification surface. */}
+        <Route path="/engine/debug" element={
+          <ProtectedRoute minRole="companyCommander"><EngineDebugPage /></ProtectedRoute>
         } />
         {/* Announcements: read open to everyone; create gated inside the page. */}
         <Route path="/announcements"  element={currentUser ? <AnnouncementsPage /> : auth} />
