@@ -58,7 +58,7 @@ export default function PlatoonCommanderDashboard() {
   const {
     soldiers, leaves, platoons, squads, currentUser, soldierStatusEvents,
     missions, dutyExclusions, equipmentGaps, assignments,
-    slotOperationalState,
+    slotOperationalState, platoonLeaveDays,
   } = useApp();
   const approvableRequests = useApprovableLeaveRequests();
   const myAlerts = useAlertsForCompany();
@@ -348,6 +348,74 @@ export default function PlatoonCommanderDashboard() {
         )}
 
         <AnnouncementsStrip isCommander={true} />
+
+        {/* יציאות מחלקה — upcoming home days for the PC's platoon.
+            Read-only on the dashboard; the CC drives the rotation from
+            /coverage/platoons. Auto-hides when there are zero upcoming
+            home days in the next 30. */}
+        {(() => {
+          if (!myPlatoon) return null;
+          const todayIso = new Date().toISOString().slice(0, 10);
+          const upcoming = platoonLeaveDays
+            .filter((d) => d.platoonId === myPlatoon.id && d.status === 'home' && d.dateIso >= todayIso)
+            .sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+          if (upcoming.length === 0) return null;
+          // Cluster consecutive days into stints.
+          const stints: Array<{ from: string; to: string }> = [];
+          for (const d of upcoming) {
+            const last = stints[stints.length - 1];
+            if (!last) { stints.push({ from: d.dateIso, to: d.dateIso }); continue; }
+            const nextDay = new Date(last.to); nextDay.setDate(nextDay.getDate() + 1);
+            if (nextDay.toISOString().slice(0, 10) === d.dateIso) {
+              last.to = d.dateIso;
+            } else {
+              stints.push({ from: d.dateIso, to: d.dateIso });
+            }
+          }
+          const fmt = (iso: string) => {
+            const dt = new Date(iso);
+            return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
+          };
+          const nextStint = stints[0];
+          const nextStintDays = (() => {
+            const from = new Date(nextStint.from);
+            const to = new Date(nextStint.to);
+            return Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1;
+          })();
+          const daysAway = Math.max(0, Math.round((new Date(nextStint.from).getTime() - new Date(todayIso).getTime()) / 86_400_000));
+          return (
+            <Section label="יציאות המחלקה">
+              <div className="bg-mil-card border border-mil-border rounded-2xl-soft shadow-card overflow-hidden">
+                <div className="bg-mil-info-bg px-5 py-4 border-b border-mil-info-border">
+                  <Hint className="block uppercase tracking-wide font-bold text-mil-info">הסבב הקרוב</Hint>
+                  <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+                    <Body className="font-bold text-base">
+                      {fmt(nextStint.from)}{nextStint.from !== nextStint.to && ` – ${fmt(nextStint.to)}`}
+                    </Body>
+                    <Hint className="text-mil-muted">· {nextStintDays} ימים · בעוד {daysAway} ימים</Hint>
+                  </div>
+                </div>
+                {stints.length > 1 && (
+                  <div className="px-5 py-3 divide-y divide-mil-border">
+                    {stints.slice(1).map((st) => (
+                      <div key={st.from} className="py-2 first:pt-0 last:pb-0 flex items-baseline gap-2">
+                        <Hint className="font-mono tabular-nums text-mil-muted">
+                          {fmt(st.from)}{st.from !== st.to && ` – ${fmt(st.to)}`}
+                        </Hint>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => navigate('/coverage/platoons')}
+                  className="w-full text-center bg-mil-bg-alt hover:bg-mil-card px-5 py-2.5 text-tiny font-semibold text-mil-muted transition-colors border-t border-mil-border"
+                >
+                  לוח יציאות פלוגתי ←
+                </button>
+              </div>
+            </Section>
+          );
+        })()}
 
         <Section label="השעות הקרובות">
           {events.length === 0 ? (

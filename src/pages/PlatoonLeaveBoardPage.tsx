@@ -50,7 +50,7 @@ export default function PlatoonLeaveBoardPage() {
     currentUser, currentRole, platoons, squads, soldiers,
     platoonLeaveDays, companyLeavePolicy, companyCoverageRules,
     setPlatoonLeaveDay, clearPlatoonLeaveDay, generatePlatoonRotation,
-    updateCompanyLeavePolicy, removeCoverageRule,
+    updateCompanyLeavePolicy, removeCoverageRule, upsertCoverageRule,
   } = useApp();
 
   const myCompanyId = currentUser?.companyId;
@@ -412,6 +412,12 @@ export default function PlatoonLeaveBoardPage() {
               </div>
             )}
           </div>
+          {editingRulesOpen && (
+            <CoverageRuleAddForm
+              platoons={platoonRows}
+              onAdd={(rule) => upsertCoverageRule(rule)}
+            />
+          )}
         </Section>
 
         {/* Footer link */}
@@ -427,6 +433,137 @@ export default function PlatoonLeaveBoardPage() {
 }
 
 // ─── Coverage rule row ──────────────────────────────────────────────
+
+// ─── Coverage rule ADD form ─────────────────────────────────────────
+
+type RuleKind = 'min-count-in-platoon' | 'min-with-functional-role';
+
+function CoverageRuleAddForm({
+  platoons, onAdd,
+}: {
+  platoons: Platoon[];
+  onAdd: (rule: CoverageRule) => void;
+}) {
+  const [kind, setKind] = useState<RuleKind>('min-count-in-platoon');
+  const [platoonId, setPlatoonId] = useState<string>(platoons[0]?.id ?? '');
+  const [functionalRole, setFunctionalRole] = useState<string>('driver');
+  const [minCount, setMinCount] = useState<number>(1);
+  const [label, setLabel] = useState<string>('');
+
+  const FUNCTIONAL_ROLE_OPTIONS = [
+    { id: 'driver',                 label: 'נהג' },
+    { id: 'mashak-kesher',          label: 'מש״ק קשר' },
+    { id: 'rasap',                  label: 'רס״פ' },
+    { id: 'srasap',                 label: 'סרס״פ' },
+    { id: 'shalish',                label: 'שליש' },
+    { id: 'equipment-lead-chapack', label: 'אחראי ציוד חפ״ק' },
+    { id: 'equipment-lead',         label: 'אחראי ציוד מפלג' },
+    { id: 'kitchen-lead',           label: 'אחראי מטבח' },
+    { id: 'water-lead',             label: 'אחראי מים' },
+    { id: 'comms-lead',             label: 'אחראי קשר' },
+    { id: 'drone-operator',         label: 'מפעיל רחפן' },
+  ];
+
+  const handleAdd = () => {
+    const id = `cr-${Date.now()}`;
+    if (kind === 'min-count-in-platoon') {
+      const p = platoons.find((x) => x.id === platoonId);
+      const finalLabel = label.trim() || `מינימום ${minCount} מ-${p?.name ?? 'מחלקה'}`;
+      onAdd({
+        id,
+        kind: 'min-count-in-platoon',
+        label: finalLabel,
+        platoonId,
+        min: minCount,
+      });
+    } else {
+      const role = FUNCTIONAL_ROLE_OPTIONS.find((r) => r.id === functionalRole);
+      const finalLabel = label.trim() || `מינימום ${minCount} × ${role?.label ?? functionalRole}`;
+      onAdd({
+        id,
+        kind: 'min-with-functional-role',
+        label: finalLabel,
+        functionalRole: functionalRole as CoverageRule extends { kind: 'min-with-functional-role'; functionalRole: infer T } ? T : never,
+        min: minCount,
+      });
+    }
+    setLabel('');
+    setMinCount(1);
+  };
+
+  return (
+    <div className="mt-3 bg-mil-bg-alt border border-mil-border rounded-xl-soft p-4 space-y-2.5">
+      <Hint className="block font-semibold text-mil-muted">+ חוק כיסוי חדש</Hint>
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setKind('min-count-in-platoon')}
+          className={`text-tiny font-semibold px-3 py-1.5 rounded-md border ${
+            kind === 'min-count-in-platoon'
+              ? 'bg-mil-olive text-white border-mil-olive'
+              : 'bg-mil-card text-mil-text border-mil-border'
+          }`}
+        >
+          מינימום במחלקה
+        </button>
+        <button
+          onClick={() => setKind('min-with-functional-role')}
+          className={`text-tiny font-semibold px-3 py-1.5 rounded-md border ${
+            kind === 'min-with-functional-role'
+              ? 'bg-mil-olive text-white border-mil-olive'
+              : 'bg-mil-card text-mil-text border-mil-border'
+          }`}
+        >
+          מינימום בעלי תפקיד
+        </button>
+      </div>
+
+      {kind === 'min-count-in-platoon' ? (
+        <select
+          value={platoonId}
+          onChange={(e) => setPlatoonId(e.target.value)}
+          className="w-full bg-mil-card border border-mil-border rounded-md px-3 py-2 text-sm text-mil-text"
+        >
+          {platoons.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      ) : (
+        <select
+          value={functionalRole}
+          onChange={(e) => setFunctionalRole(e.target.value)}
+          className="w-full bg-mil-card border border-mil-border rounded-md px-3 py-2 text-sm text-mil-text"
+        >
+          {FUNCTIONAL_ROLE_OPTIONS.map((r) => (
+            <option key={r.id} value={r.id}>{r.label}</option>
+          ))}
+        </select>
+      )}
+
+      <div className="flex items-center gap-2">
+        <Hint className="text-mil-muted">מינימום</Hint>
+        <input
+          type="number"
+          min={1}
+          value={minCount}
+          onChange={(e) => setMinCount(Math.max(1, parseInt(e.target.value || '1', 10)))}
+          className="w-20 bg-mil-card border border-mil-border rounded-md px-3 py-2 text-sm text-mil-text font-mono tabular-nums"
+          dir="ltr"
+        />
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="תווית (אופציונלי)"
+          className="flex-1 bg-mil-card border border-mil-border rounded-md px-3 py-2 text-sm text-mil-text"
+        />
+      </div>
+
+      <Button variant="primary" size="md" fullWidth onClick={handleAdd}>
+        הוסף חוק
+      </Button>
+    </div>
+  );
+}
 
 function CoverageRuleRow({
   rule, editing, onRemove, platoons,
