@@ -613,7 +613,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // The engine pipeline (slice E3+) will read from these directly. Mission
   // authoring (slice E2) will add a setMissions write path; leave-rotation
   // configuration (slice E5) will replace the readonly policy with a setter.
-  const [missions, setMissions] = usePersistedState<Mission[]>('missions', mockMissions, SEED_VERSION);
+  // Bump to v2: Phase 6.3.a/b added mi-gate-south (g2) and mi-readiness-east
+  // (g3). v1 localStorage wouldn't have them; v2 invalidates the old blob
+  // so the new seed wins.
+  const [missions, setMissions] = usePersistedState<Mission[]>('missions', mockMissions, 2);
 
   const addMission = (data: Omit<Mission, 'id' | 'createdAt'>): Mission => {
     const m: Mission = {
