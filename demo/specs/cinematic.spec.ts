@@ -194,7 +194,15 @@ test('cinematic — 5.3 Coverage rules list', async ({ page }, testInfo) => {
   await shoot(page, { id: 'scene5-coverage-rules', category: 'cinematic' }, testInfo);
 });
 
-// (5.4 PC platoon-leave widget — pending build. Skipped for now.)
+test('cinematic — 5.4 PC platoon-leave widget on dashboard', async ({ page }, testInfo) => {
+  await loadDemoState(page, 'leave-rotation-active');
+  await login(page, PERSONA.pcG1.phone);
+  await settle(page, 800);
+  // Scroll until the יציאות המחלקה section is in viewport.
+  await page.mouse.wheel(0, 700);
+  await settle(page, 400);
+  await shoot(page, { id: 'scene5-pc-leave-view', category: 'cinematic' }, testInfo);
+});
 
 // ─── Scene 6 · Soldier sees it ─────────────────────────────────────
 
