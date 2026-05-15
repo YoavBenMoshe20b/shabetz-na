@@ -25,14 +25,13 @@
 // flow (create-mission → SchedulePage modal). Old URLs redirect to /home.
 
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useApp, useOperationalEmergency } from './context/AppContext';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useApp } from './context/AppContext';
 import { AppProviders } from './providers/AppProviders';
 import { isShalish, isRasap } from './utils/permissions';
 import BottomNav from './components/BottomNav';
 import ProtectedRoute from './components/ProtectedRoute';
 import DelegationBanner from './components/DelegationBanner';
-import { EmergencyBanner } from './components/ui';
 
 // Eager — entry surfaces every authed user lands on
 import LoginPage          from './pages/LoginPage';
@@ -87,34 +86,26 @@ const FULL_SCREEN_PATHS = ['/login', '/start', '/create'];
 
 function AppRoutes() {
   const { currentUser } = useApp();
-  const navigate = useNavigate();
   const location = useLocation();
-  const emergency = useOperationalEmergency();
   const auth = <Navigate to="/login" replace />;
 
   const hasPlatoon       = !!currentUser && (!!currentUser.platoonId || !!currentUser.companyId);
   const isFullScreen   = FULL_SCREEN_PATHS.includes(location.pathname);
   const showNav        = currentUser && !isFullScreen;
-  const showEmergency  = !!emergency && !!currentUser && !isFullScreen;
 
   return (
     <>
-      {showEmergency && (
-        <EmergencyBanner
-          message={emergency!.message}
-          detail={emergency!.detail}
-          actionLabel={emergency!.actionLabel}
-          onAction={emergency!.actionHref ? () => navigate(emergency!.actionHref!) : undefined}
-        />
-      )}
-
-      {/* Phase 6.7 — REMOVED EscalationActiveBanner from the global
-          layout. Active escalations now surface via:
-            • the bell badge (AlertsButton) — count includes them
-            • /alerts page — full feed
+      {/* Phase 6.7 — REMOVED both EmergencyBanner AND EscalationActiveBanner
+          from the global layout. The EmergencyBanner was the pink/coral
+          sticky strip the user saw on every dashboard ("X לא מאוישת
+          במלואה" / "מתחת לסד״כ"). It's now suppressed; the same signals
+          surface through:
+            • bell badge (AlertsButton) — critical-count visible
+            • /alerts page — full feed with grouped warnings
             • FocusSection — when a decision is required
-          No top banner per operational UX principle: critical events
-          must NOT dominate every screen as a sticky strip. */}
+            • PC dashboard action-center tile — staffing pressure inline
+          Per operational UX principle: critical events MUST NOT dominate
+          every screen as a sticky strip. */}
 
       {currentUser && !isFullScreen && <DelegationBanner />}
 
