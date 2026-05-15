@@ -13,7 +13,7 @@ import type {
   SignedEquipment, SignedEquipmentStatus,
   EquipmentCondition, EquipmentLifecycleEvent,
   CommandDelegation, EquipmentGap, EquipmentGapKind, EquipmentGapStatus,
-  CommandAuthority, OperationalRole,
+  CommandAuthority, OperationalRole, FunctionalRole,
   MissionNote,
   OperationalOrder, OperationalOrderStatus,
   Announcement, AnnouncementStatus,
@@ -278,7 +278,7 @@ interface AppContextType {
   updateSoldierOperationalRoles: (soldierId: string, roles: OperationalRole[]) => void;
   /** Set the soldier's functional-role flags (kitchen-lead, water-lead,
    *  equipment-lead-chapack, etc.). Used by CHAPAK / MAFLAG admin UI. */
-  updateSoldierFunctionalRoles:  (soldierId: string, roles: string[]) => void;
+  updateSoldierFunctionalRoles:  (soldierId: string, roles: FunctionalRole[]) => void;
 
   // ── Temporary command delegation ────────────────────────────────────
   commandDelegations:   CommandDelegation[];
@@ -1004,7 +1004,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // water-lead, equipment-lead-chapack, driver, srasap, etc.). Free-form
   // string flags so command can introduce new responsibilities without
   // schema changes.
-  const updateSoldierFunctionalRoles = (soldierId: string, roles: string[]) => {
+  const updateSoldierFunctionalRoles = (soldierId: string, roles: FunctionalRole[]) => {
     setAllSoldiers((prev) => prev.map((s) => s.id === soldierId
       ? { ...s, functionalRoles: roles }
       : s

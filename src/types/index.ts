@@ -67,9 +67,18 @@ export interface Delegation {
 // the product surfaces live here — there are no generic "manager" /
 // "admin" / "מנהל" / "בעלים" concepts.
 export type OperationalRole =
-  | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'מ״כ'
-  | 'חובש' | 'נגביסט' | 'קלע' | 'מאגיסט' | 'רחפן'
-  | 'רס״פ' | 'שליש' | 'מש״ק קשר';
+  // Command
+  | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'קשר סמל' | 'מ״כ'
+  // Specialists — combat
+  | 'חובש' | 'נגביסט' | 'נגביסט חוד' | 'קלע' | 'קלע חוד'
+  | 'מאגיסט' | 'מטוליסט' | 'רובאי' | 'רחפן'
+  // Logistics + admin (מפלג / חפ״ק / מטה פלוגתי)
+  | 'רס״פ' | 'סרס״פ' | 'שליש' | 'מש״ק קשר'
+  // Functional responsibilities visible on the soldier — distinct from
+  // FunctionalRole flags (which are machine codes). These are the
+  // human-readable role labels that appear next to a soldier's name.
+  | 'אחראי ציוד חפ״ק' | 'אחראי ציוד' | 'אחראי מטבח' | 'אחראי מים'
+  | 'אחראי ניקיון' | 'נהג';
 
 // @deprecated — sub-unit structure is now per-platoon and free-form via SubUnit.
 // Kept as a `string` alias so legacy annotations still compile during migration.
@@ -242,11 +251,26 @@ export interface SoldierStatusEvent {
 // Functional roles — additive tags carried alongside the base UserRole.
 // Each tag carries a default permission bundle (see permissions.ts).
 export type FunctionalRole =
+  // Original tags
   | 'rasap'              // רס״פ — logistics chief
   | 'shalish'            // שליש — admin officer
   | 'mashak-kesher'      // מש״ק קשר — comms NCO
   | 'chapack-member'     // חפ״ק member
-  | 'logistics-assistant';
+  | 'logistics-assistant'
+  // Phase 6.3 — CHAPAK / MAFLAG configurable responsibilities. Catalog
+  // lives in PlatoonStructurePage; operators assign/reassign via chip
+  // editor. Each flag is a free-form responsibility carried alongside
+  // (not replacing) the soldier's base UserRole.
+  | 'srasap'                   // סרס״פ
+  | 'equipment-lead-chapack'   // אחראי ציוד חפ״ק
+  | 'equipment-lead'           // אחראי ציוד (מפלג)
+  | 'comms-lead'               // אחראי קשר
+  | 'drone-operator'           // מפעיל רחפן
+  | 'driver'                   // נהג
+  | 'ops-clerk'                // מ״ק חפ״ק
+  | 'kitchen-lead'             // אחראי מטבח
+  | 'water-lead'               // אחראי מים
+  | 'cleaning-lead';           // אחראי ניקיון
 
 // ─── Leaves / יציאות ─────────────────────────────────────────────────────────
 

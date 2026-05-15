@@ -17,11 +17,11 @@ import Header from '../components/Header';
 import {
   Eyebrow, Section, PageMain, PageTitle, Body, Muted, Hint,
 } from '../components/ui';
-import type { Soldier, Platoon } from '../types';
+import type { Soldier, Platoon, FunctionalRole } from '../types';
 
-// Catalog of functional roles per platoon kind. New flags can be added
-// here without schema changes — soldier.functionalRoles is string[].
-const FUNCTIONAL_ROLE_CATALOG: Record<string, { id: string; label: string; desc?: string }[]> = {
+// Catalog of functional roles per platoon kind. New flags must first be
+// added to the FunctionalRole union in types/index.ts.
+const FUNCTIONAL_ROLE_CATALOG: Record<string, { id: FunctionalRole; label: string; desc?: string }[]> = {
   'forward-command': [
     { id: 'equipment-lead-chapack', label: 'אחראי ציוד חפ״ק', desc: 'אליו מוגשים חוסרי ציוד של החפ״ק' },
     { id: 'comms-lead',             label: 'אחראי קשר',       desc: 'תפעול קשר חפ״ק שוטף' },
@@ -138,16 +138,16 @@ function MemberRow({
 }: {
   soldier: Soldier;
   platoon: Platoon;
-  catalog: { id: string; label: string; desc?: string }[];
+  catalog: { id: FunctionalRole; label: string; desc?: string }[];
   canEdit: boolean;
-  onChange: (roles: string[]) => void;
+  onChange: (roles: FunctionalRole[]) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const current = soldier.functionalRoles ?? [];
+  const current: FunctionalRole[] = soldier.functionalRoles ?? [];
   void platoon;
 
-  const toggle = (id: string) => {
-    const next = current.includes(id)
+  const toggle = (id: FunctionalRole) => {
+    const next: FunctionalRole[] = current.includes(id)
       ? current.filter((r) => r !== id)
       : [...current, id];
     onChange(next);
