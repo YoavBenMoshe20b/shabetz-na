@@ -1,6 +1,6 @@
 # Final Export Package — "הפלוגה שלי" Operational Demo Film
 
-Everything you need to assemble the 1:45 cinematic in HeyGen + ElevenLabs.
+Everything you need to assemble the 1:45 cinematic. **Primary editor: Kapwing.** Secondary path: HeyGen.
 
 **Bundle was generated:** by `demo/build-export-package.sh` from the live production capture at `https://shabetz-na.vercel.app/`. Re-run to refresh.
 
@@ -12,30 +12,26 @@ demo-export/
 ├── 01-shot-order.md             ← every shot with timing, VO, source asset
 ├── 02-narration.txt             ← single Hebrew script for ElevenLabs (one shot)
 ├── 03-narration-by-scene/       ← scene-split scripts (preferred for VO sync)
-│   ├── scene1.txt
-│   ├── scene2.txt
-│   ├── scene3.txt
-│   ├── scene4.txt
-│   ├── scene5.txt
-│   ├── scene6.txt
+│   ├── scene1.txt … scene6.txt
 │   └── closing.txt
 ├── 04-subtitles.srt             ← burn-in / overlay subtitle file
 ├── 05-music-direction.md        ← tone + LUFS + recommended search terms
-├── 06-heygen-workflow.md        ← step-by-step assembly guide
+├── 06-heygen-workflow.md        ← HeyGen path (fallback)
+├── 07-kapwing-assembly.md       ← ★ PRIMARY ★ — execute top-to-bottom
 └── assets/
     ├── mobile/                  ← 21 PNGs for 9:16 frames
     ├── desktop/                 ← 21 PNGs for 16:9 inserts
     └── external/                ← list of 4 frames YOU need to source
 ```
 
-## The 30-second version
+## The 30-second version (Kapwing path — recommended)
 
-1. Open `01-shot-order.md` — that's the master cut sheet.
-2. Send `02-narration.txt` to **ElevenLabs** (or `03-narration-by-scene/` if you want per-scene WAVs).
-3. Load each shot's PNG into **HeyGen** as a scene-image, sync to the VO from step 2.
-4. Apply music per `05-music-direction.md` (single ambient bed, -22 LUFS under VO).
-5. Drop `04-subtitles.srt` over the cut.
-6. Export 1080×1920 (9:16) for Reels / Stories. Optional second pass: 1920×1080 for the desktop crop.
+1. Open `07-kapwing-assembly.md` — execute top to bottom. No judgment calls.
+2. Send `02-narration.txt` (or per-scene `03-narration-by-scene/`) to **ElevenLabs**.
+3. In Kapwing: upload `assets/mobile/*.png`, import `04-subtitles.srt`, drop the VO + music per the assembly doc.
+4. Export 1080×1920 — done.
+
+If you'd rather use HeyGen, see `06-heygen-workflow.md` (same idea, different tool).
 
 ## Two render targets
 
