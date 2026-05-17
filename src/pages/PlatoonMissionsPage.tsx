@@ -22,6 +22,7 @@ import SquadDistributionSheet, {
   filterPoolByDistribution, type SquadDistributionMode,
 } from '../components/SquadDistributionSheet';
 import OperationalTimelineStrip from '../components/OperationalTimelineStrip';
+import MissionTemplateLibrarySheet from '../components/MissionTemplateLibrarySheet';
 import {
   deriveTimelineEvents, selectTimelineFor,
 } from '../utils/operationalTimeline';
@@ -41,7 +42,11 @@ export default function PlatoonMissionsPage() {
     assignments, setSlotAssignment, recordSelectorOutcome,
     announcements, addAnnouncement, selectorOutcomes,
     slotOperationalState, platoonLeaveDays,
+    qualifications, equipmentItems, addMission,
+    missionTemplates, templateFamilies,
+    toggleMissionTemplateFavorite, hideMissionTemplate, incrementTemplateUsage,
   } = useApp();
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const myPlatoon = useMemo(
     () =>
@@ -225,9 +230,9 @@ export default function PlatoonMissionsPage() {
       <PageMain>
         <header>
           <Eyebrow>{myPlatoon.unitName ?? ''}</Eyebrow>
-          <PageTitle className="mt-1">המשימות שלי</PageTitle>
+          <PageTitle className="mt-1">{myPlatoon.name}</PageTitle>
           <Muted className="mt-1 text-tiny leading-relaxed">
-            {myPlatoon.name} · {candidatePool.length} חיילים · {platoonMissions.length} משימות פעילות
+            {candidatePool.length} חיילים · {platoonMissions.length} משימות פעילות
           </Muted>
         </header>
 
@@ -307,13 +312,24 @@ export default function PlatoonMissionsPage() {
           </Section>
         )}
 
-        {/* Primary CTA — open a new platoon mission. */}
-        <button
-          onClick={() => navigate('/platoon/missions/new')}
-          className="w-full bg-mil-olive hover:bg-mil-olive-light text-white px-5 py-3.5 rounded-xl-soft font-bold text-base transition-colors shadow-card"
-        >
-          + משימה חדשה למחלקה
-        </button>
+        {/* Primary CTA pair — Template Library is the primary entry,
+            consistent with CC's /missions + /schedule action rows.
+            "התחל מ-0" routes to the legacy PC quick-flow for the rare
+            case the operator wants the hardcoded chips (PC-only). */}
+        <div className="space-y-2">
+          <button
+            onClick={() => setLibraryOpen(true)}
+            className="w-full bg-mil-olive hover:bg-mil-olive-light text-white px-5 py-3.5 rounded-xl-soft font-bold text-base transition-colors shadow-card"
+          >
+            + בחר מתבנית
+          </button>
+          <button
+            onClick={() => navigate('/platoon/missions/new')}
+            className="w-full bg-mil-card border border-mil-border hover:border-mil-olive text-mil-muted hover:text-mil-text px-5 py-3 rounded-xl-soft font-semibold text-sm transition-colors"
+          >
+            התחל מ-0
+          </button>
+        </div>
 
         {/* Footer link to the weekly grid view */}
         <button
@@ -323,6 +339,39 @@ export default function PlatoonMissionsPage() {
           תצוגת שבצ״ק שבועית ←
         </button>
       </PageMain>
+
+      {libraryOpen && myPlatoon && (
+        <MissionTemplateLibrarySheet
+          open
+          onClose={() => setLibraryOpen(false)}
+          templates={missionTemplates.filter((t) => t.companyId === myPlatoon.companyId)}
+          families={templateFamilies.filter((f) => f.companyId === myPlatoon.companyId)}
+          qualifications={qualifications}
+          equipmentItems={equipmentItems}
+          platoons={platoons.filter((p) => p.id === myPlatoon.id)}
+          platoonLeaveDays={platoonLeaveDays}
+          defaultPlatoonIds={[myPlatoon.id]}
+          onCreate={(payload, fromTemplateId) => {
+            if (!currentUser) return undefined;
+            const created = addMission({
+              ...payload,
+              companyId: myPlatoon.companyId,
+              createdByUserId: currentUser.id,
+              // PC creates always target their own platoon — no
+              // ambiguity, no need to route through /assign for
+              // platoon selection. Conflict resolution still runs if
+              // the operator opens /assign manually.
+              assignedPlatoonIds: [myPlatoon.id],
+            });
+            incrementTemplateUsage(fromTemplateId);
+            setLibraryOpen(false);
+            navigate(`/mission/${created.id}`);
+            return created.id;
+          }}
+          onToggleFavorite={toggleMissionTemplateFavorite}
+          onHide={hideMissionTemplate}
+        />
+      )}
 
       {pendingSlot && myPlatoon && (
         <SquadDistributionSheet

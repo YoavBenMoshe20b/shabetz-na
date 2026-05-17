@@ -28,7 +28,9 @@ import {
   Body, Muted, Hint, Sheet, Toast,
 } from '../../components/ui';
 import { hhmm, formatRelative } from './_shared/timeFormat';
-import type { Soldier, SoldierStatus, Leave } from '../../types';
+import type {
+  Soldier, SoldierStatus, Leave, Mission, ReadinessResponseTeam,
+} from '../../types';
 
 // ─── SoldierDashboard page ──────────────────────────────────────────────
 
@@ -123,6 +125,47 @@ export default function SoldierDashboard() {
     [mySlots],
   );
 
+  // Polish pass — readiness on the soldier dashboard. When the soldier
+  // is currently assigned to (or about to start) a readiness mission,
+  // we surface rally point + their team's instructions inline. Without
+  // this, the soldier had to tap into the mission detail page to know
+  // "where do I go" — that's mission-detail UX, not operational state.
+  const myReadinessNow = useMemo(() => {
+    if (!myProfile) return null;
+    // Pick the EARLIEST active-or-imminent readiness slot the soldier
+    // is on. "imminent" = starts within 12h.
+    const nowMs = now.getTime();
+    const horizon = nowMs + 12 * 3600_000;
+    const candidate = mySlots
+      .filter((s) => {
+        const startMs = Date.parse(s.start);
+        const endMs = Date.parse(s.end);
+        if (startMs > horizon) return false;
+        if (endMs <= nowMs) return false;
+        const m = missions.find((mm) => mm.id === s.missionId);
+        return m?.archetypeKind === 'readiness';
+      })
+      .sort((a, b) => a.start.localeCompare(b.start))[0];
+    if (!candidate) return null;
+    const mission = missions.find((m) => m.id === candidate.missionId);
+    if (!mission) return null;
+    // Resolve the soldier's team (if responseTeams set).
+    const team = (mission.responseTeams ?? []).find((t) => {
+      if (t.selectionMode === 'soldiers') return t.soldierIds?.includes(myProfile.id);
+      if (t.selectionMode === 'squad')    return t.squadId === myProfile.squadId;
+      if (t.selectionMode === 'role')
+        return t.operationalRole && myProfile.operationalRoles.includes(t.operationalRole);
+      return false;
+    });
+    const startMs = Date.parse(candidate.start);
+    const minsTo = Math.max(0, Math.round((startMs - nowMs) / 60_000));
+    return {
+      mission, slot: candidate, team,
+      minsTo,
+      isActive: startMs <= nowMs,
+    };
+  }, [myProfile, mySlots, missions, now]);
+
   // Phase 7.3 — soldier-scoped operational timeline. Soldier sees ONLY
   // events that name them (next-shift, shift-end, readiness-on for
   // their slots). No platoon noise, no company noise. Limit 4.
@@ -197,6 +240,20 @@ export default function SoldierDashboard() {
             onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.slot.id, minutesBefore: mins, enabled: true })}
             onOpenStatusUpdate={() => setStatusUpdateOpen(true)}
             onOpenMission={(missionId) => navigate(`/mission/${missionId}`)}
+          />
+        )}
+
+        {/* Polish pass — readiness operational state. When the soldier
+            is on (or imminent) a readiness mission, surface rally point
+            + their team's instructions INLINE so they don't have to
+            navigate to "mission detail" just to know where to go. */}
+        {myReadinessNow && (
+          <MyReadinessCard
+            mission={myReadinessNow.mission}
+            team={myReadinessNow.team}
+            minsTo={myReadinessNow.minsTo}
+            isActive={myReadinessNow.isActive}
+            onOpenMission={() => navigate(`/mission/${myReadinessNow.mission.id}`)}
           />
         )}
 
@@ -699,4 +756,90 @@ function findDaysToNextLeave(soldier: Soldier, leaves: Leave[], now: Date): numb
     );
   if (upcoming.length === 0) return null;
   return daysBetweenIso(now, `${upcoming[0].startDate}T${upcoming[0].startTime || '00:00'}`);
+}
+
+// ─── MyReadinessCard ────────────────────────────────────────────────
+//
+// Compact, in-place readiness operational state. Shows:
+//   • the mission name + activation status (active / starting in X)
+//   • the soldier's RALLY POINT — the answer to "where do I go"
+//   • their team membership (if mission has split teams)
+//   • response instructions inline
+//
+// Reads as an OPERATIONAL READOUT (top-of-card eyebrow says "כוננות
+// פעילה" / "כוננות נכנסת"), not a navigation entry. The "פתח משימה ←"
+// link is a secondary affordance.
+
+function MyReadinessCard({
+  mission, team, minsTo, isActive, onOpenMission,
+}: {
+  mission: Mission;
+  team: ReadinessResponseTeam | undefined;
+  minsTo: number;
+  isActive: boolean;
+  onOpenMission: () => void;
+}) {
+  const rally = team?.rallyPoint || mission.rallyPoint;
+  const instructions = team?.instructions || mission.responseInstructions;
+
+  return (
+    <section
+      className={`rounded-2xl-soft border shadow-card overflow-hidden ${
+        isActive
+          ? 'bg-mil-alert-bg border-mil-alert'
+          : 'bg-mil-warn-bg border-mil-warn'
+      }`}
+    >
+      <div className="px-5 py-4 space-y-3">
+
+        <div className="flex items-baseline gap-2">
+          <span className={`text-xxs font-bold uppercase tracking-wide ${
+            isActive ? 'text-mil-alert' : 'text-mil-warn'
+          }`}>
+            🛡 {isActive ? 'כוננות פעילה' : 'כוננות נכנסת'}
+          </span>
+          {!isActive && minsTo > 0 && (
+            <Hint className="text-tiny tabular-nums font-bold">
+              · בעוד {minsTo < 60 ? `${minsTo} דק׳` : `${Math.round(minsTo / 60)} שעות`}
+            </Hint>
+          )}
+          <button
+            onClick={onOpenMission}
+            className="mr-auto text-tiny font-semibold text-mil-muted hover:text-mil-text"
+          >
+            פתח משימה ←
+          </button>
+        </div>
+
+        <div>
+          <Body className="font-bold text-base">{mission.name}</Body>
+          {team && (
+            <Hint className="text-tiny mt-0.5">
+              הצוות שלך: <span className="font-bold text-mil-text">{team.name}</span>
+            </Hint>
+          )}
+        </div>
+
+        {rally && (
+          <div className="bg-mil-card/60 rounded-xl-soft px-3.5 py-2.5 border border-current/20">
+            <Hint className="block tracking-wide mb-0.5">נקודת ריכוז</Hint>
+            <Body className="font-bold text-mil-text text-base leading-snug">{rally}</Body>
+          </div>
+        )}
+
+        {instructions && (
+          <div>
+            <Hint className="block tracking-wide mb-1">הוראות תגובה</Hint>
+            <Muted className="text-tiny leading-snug whitespace-pre-line text-mil-text">
+              {instructions}
+            </Muted>
+          </div>
+        )}
+
+        {!rally && !instructions && (
+          <Muted className="text-tiny">חסרים פרטי תגובה — בקש מהמ״כ להשלים.</Muted>
+        )}
+      </div>
+    </section>
+  );
 }
