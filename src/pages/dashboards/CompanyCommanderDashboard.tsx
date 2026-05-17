@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   useApp, useAlertsForCompany, useMyCompany, useMyPlatoons,
 } from '../../context/AppContext';
-import { canDeclareEscalation, canViewReport1 } from '../../utils/permissions';
+import { canViewReport1 } from '../../utils/permissions';
 import { buildPlatoonTimeline } from '../../utils/timeline';
 import { materializeWeek } from '../../utils/materialize';
 import Header from '../../components/Header';
@@ -24,7 +24,9 @@ import {
 } from '../../components/ui';
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import FocusSection from '../../components/FocusSection';
-import EscalationSheet from '../../components/EscalationSheet';
+// EscalationSheet import removed — escalation now lives ONLY in the
+// global floating EmergencyFab mounted in App.tsx. The dashboard no
+// longer renders a separate "פעולת חירום" card.
 import AlertsButton from '../../components/AlertsButton';
 import PersonalActionsFab from '../../components/PersonalActionsFab';
 import { Kpi } from './_shared/Kpi';
@@ -183,10 +185,10 @@ export default function CompanyCommanderDashboard() {
   }), [now, materializedSlots, leaves, soldiers, allAlerts, soldierStatusEvents]);
 
   const [showActivity, setShowActivity] = useState(false);
-  const [escalationOpen, setEscalationOpen] = useState(false);
+  // escalationOpen state removed — global FAB handles the flow now.
   const openAlertCount = overrideAlerts.filter((a) => a.companyId === myCompany?.id && a.status === 'open').length;
 
-  const canEsc = !!currentUser && canDeclareEscalation(currentUser, delegations);
+  // canEsc removed — global FAB self-gates on canDeclareEscalation.
   const canRpt = !!currentUser && canViewReport1(currentUser, delegations);
 
   return (
@@ -255,29 +257,9 @@ export default function CompanyCommanderDashboard() {
             NO top-of-page critical banner — per operational UX principle. */}
         <FocusSection />
 
-        {/* Escalation CTA — surfaces FIRST after hero so the operator's
-            most critical lever is one tap away. */}
-        {canEsc && (
-          <Section label="פעולת חירום">
-            <button
-              onClick={() => setEscalationOpen(true)}
-              className="w-full text-right bg-mil-alert-bg border border-mil-alert-border rounded-xl-soft shadow-card hover:shadow-card-hover transition-all duration-200 ease-out-soft px-5 py-4 flex items-center gap-3.5"
-            >
-              <span className="w-9 h-9 rounded-xl-soft bg-mil-alert text-white flex items-center justify-center flex-shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2 L22 20 H2 Z" />
-                  <path d="M12 9 v5" />
-                  <circle cx="12" cy="17.5" r="0.5" fill="currentColor" />
-                </svg>
-              </span>
-              <div className="flex-1 min-w-0">
-                <Body className="font-semibold leading-tight text-mil-alert">הקפצה</Body>
-                <Hint className="block mt-0.5 text-mil-alert/80">פתיחת אירוע מבצעי לקהל יעד</Hint>
-              </div>
-              <span className="text-mil-alert">←</span>
-            </button>
-          </Section>
-        )}
+        {/* Escalation CTA removed — replaced by the global floating
+            EmergencyFab in App.tsx so the operator always has access
+            from EVERY screen, not just /home. */}
 
         <Section label="מחלקות">
           <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
@@ -354,10 +336,6 @@ export default function CompanyCommanderDashboard() {
         </Section>
 
       </PageMain>
-
-      {escalationOpen && (
-        <EscalationSheet open onClose={() => setEscalationOpen(false)} />
-      )}
 
       {/* Personal capability layer — every role, including CC, gets the
           personal toolbox: profile, equipment, status, leave request. */}

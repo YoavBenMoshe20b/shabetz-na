@@ -113,6 +113,23 @@ interface MaterializeInput {
     soldierId: string;
     status: 'home' | 'in-base';
   }>;
+
+  /** Phase 7.3 — Emergency state.
+   *
+   *  When an EscalationEvent is active for the company, "הקפצה" means
+   *  every soldier who would normally be home is treated as in-base
+   *  until the event closes. The materializer respects this by:
+   *    1. NOT filtering home-platoon soldiers from the eligible pool
+   *       on dates affected by the active emergency.
+   *    2. NOT applying soldier-level 'home' overrides during the
+   *       emergency window.
+   *  Operator override paths still work; this just removes the leave-
+   *  board barrier that was hiding those soldiers from auto-pick.
+   *
+   *  The caller (useEngineContext) passes a single boolean derived
+   *  from activeEscalationsForViewer().length > 0 — the engine doesn't
+   *  need the per-event details for eligibility decisions. */
+  emergencyActive?: boolean;
 }
 
 export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
@@ -210,9 +227,13 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
 
         // Operational Leave — drop soldiers whose platoon is `home` on
         // the slot's date, unless a per-soldier override says in-base.
+        // EMERGENCY OVERRIDE (Phase 7.3): when an emergency is active,
+        // "הקפצה" semantics force every home soldier back to base. We
+        // BYPASS the home-platoon filter and the soldier-level home
+        // override entirely for the duration of the emergency.
         const dateIsoForSlot = isoDate(day);
         const ownerHome = platoonLeaveBy.get(`${dateIsoForSlot}::${ownerPlatoonId ?? ''}`);
-        const platoonIsHome = ownerHome?.status === 'home';
+        const platoonIsHome = ownerHome?.status === 'home' && !input.emergencyActive;
 
         const eligible = ownerPool.filter((s) => {
           if (!isAvailable(s, w.start, input.leaves, input.dutyExclusions)) return false;
@@ -221,9 +242,11 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
             const override = soldierOverrideBy.get(`${dateIsoForSlot}::${s.id}`);
             if (override?.status !== 'in-base') return false;
           }
-          // Per-soldier home override even if platoon is in-base.
-          const sOverride = soldierOverrideBy.get(`${dateIsoForSlot}::${s.id}`);
-          if (sOverride?.status === 'home') return false;
+          // Per-soldier home override — also bypassed during emergency.
+          if (!input.emergencyActive) {
+            const sOverride = soldierOverrideBy.get(`${dateIsoForSlot}::${s.id}`);
+            if (sOverride?.status === 'home') return false;
+          }
           return true;
         });
 

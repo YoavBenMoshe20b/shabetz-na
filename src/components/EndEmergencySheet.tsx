@@ -22,6 +22,7 @@
 //   These remain explicit operator actions on the existing surfaces.
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Sheet, Body, Hint, Muted, Button } from './ui';
 
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export default function EndEmergencySheet({ open, escalationId, onClose }: Props) {
+  const navigate = useNavigate();
   const {
     currentUser, escalationEvents, closeEscalation, addAnnouncement,
   } = useApp();
@@ -69,6 +71,15 @@ export default function EndEmergencySheet({ open, escalationId, onClose }: Props
       });
     }
     onClose();
+    // After emergency closes the previous platoon rotation may no
+    // longer be fair: home soldiers were called back, others were
+    // worn down. We route the operator straight to the leave-planning
+    // wizard so they can re-plan with awareness of the disruption.
+    // 'full' means "back to the previous schedule as-is" — no replan
+    // needed; the other modes warrant the wizard.
+    if (returnToNormal !== 'full') {
+      navigate('/coverage/planning');
+    }
   };
 
   return (
@@ -130,13 +141,13 @@ export default function EndEmergencySheet({ open, escalationId, onClose }: Props
           <Body className="text-sm">פרסם הודעה לפלוגה שהאירוע נסגר</Body>
         </label>
 
-        {/* HONEST disclosure of what the close action does NOT do. */}
+        {/* HONEST disclosure of what the close action does + does NOT do. */}
         <div className="bg-mil-info-bg border border-mil-info-border rounded-xl-soft px-4 py-3">
           <Hint className="block uppercase tracking-wide font-bold text-mil-info mb-1.5">
             לתשומת לבך
           </Hint>
           <Muted className="text-tiny leading-snug">
-            סגירת האירוע מתעדת את המידע למעלה ביומן + פרסום הודעה. <strong>החזרה לסידור הקודם, איוש מחדש, ועדכון יציאות פלוגתיות נעשים ידנית</strong> מהמסכים הרלוונטיים. הערות תיעוד אלה ישמשו לתחקיר אך אינן מבצעות שינויים אוטומטיים בשבצ״ק.
+            עם סגירת האירוע: <strong>הסתיים מצב ״כל הפלוגה בבסיס״</strong> — היציאות הפלוגתיות חוזרות לתוקפן. <strong>״חזרה חלקית״ או ״סידור חדש״ יפתחו את אשף תכנון יציאות פלוגתיות</strong> כדי לאזן מחדש לפי מי שהוקפץ ומי שנשחק. <strong>החזרה לסידור הקודם (״מלאה״) מחזירה את הסבב כפי שהיה</strong> — בלי שינויים אוטומטיים בשבצ״ק.
           </Muted>
         </div>
 

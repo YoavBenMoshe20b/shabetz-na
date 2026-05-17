@@ -213,7 +213,7 @@ export default function DeclareEmergencySheet({ open, onClose }: Props) {
         </div>
 
         <Muted className="text-tiny leading-snug pt-2 border-t border-mil-border">
-          המערכת תפרסם הודעת הקפצה לקהל היעד ותסמן את החברה במצב אירוע. סגירת האירוע נעשית מהכפתור הצף האדום.
+          <strong>תוצאה מיידית:</strong> כל מי שבבית מסומן זמנית כבבסיס. היציאות הפלוגתיות מוקפאות, איוש משימות פתוח לכלל הפלוגה. הודעת הקפצה נשלחת לקהל היעד. סגירת האירוע נעשית מהכפתור הצף האדום ותפתח אשף לאיזון מחדש של היציאות.
         </Muted>
       </div>
     </Sheet>

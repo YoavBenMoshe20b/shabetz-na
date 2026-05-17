@@ -54,6 +54,15 @@ export function useEngineContext(options: UseEngineContextOptions = {}): EngineC
     return d;
   }, [computedAt]);
 
+  // Phase 7.3 — derive "is the company in emergency" once per render so
+  // the materializer (below) and any other consumer can branch on it.
+  const emergencyActive = useMemo(
+    () => app.escalationEvents?.some(
+      (e) => e.status === 'active' && (!myCompany || e.companyId === myCompany.id),
+    ) ?? false,
+    [app.escalationEvents, myCompany],
+  );
+
   const allSlots = useMemo(
     () => materializeWeek({
       missions: app.missions,
@@ -68,8 +77,9 @@ export function useEngineContext(options: UseEngineContextOptions = {}): EngineC
       slotOperationalState: app.slotOperationalState,
       platoonLeaveDays: app.platoonLeaveDays,
       soldierLeaveOverrides: app.soldierLeaveOverrides,
+      emergencyActive,
     }),
-    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments, app.slotOperationalState, app.platoonLeaveDays, app.soldierLeaveOverrides],
+    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments, app.slotOperationalState, app.platoonLeaveDays, app.soldierLeaveOverrides, emergencyActive],
   );
 
   // Precompute burden per soldier. The context carries these so the
@@ -151,11 +161,22 @@ export function useEngineContext(options: UseEngineContextOptions = {}): EngineC
  *  candidate slots for a mission) don't re-materialize. */
 export function useMaterializedWeek(asOfIso?: string) {
   const app = useApp();
+  const myCompany = useMyCompany();
   const todayStart = useMemo(() => {
     const d = asOfIso ? new Date(asOfIso) : new Date();
     d.setHours(0, 0, 0, 0);
     return d;
   }, [asOfIso]);
+
+  // Same emergency derivation as the engine context hook, so direct
+  // callers of this hook (e.g. dashboards that bypass useEngineContext)
+  // also get the correct eligibility view during an active emergency.
+  const emergencyActive = useMemo(
+    () => app.escalationEvents?.some(
+      (e) => e.status === 'active' && (!myCompany || e.companyId === myCompany.id),
+    ) ?? false,
+    [app.escalationEvents, myCompany],
+  );
 
   return useMemo(
     () => materializeWeek({
@@ -171,7 +192,8 @@ export function useMaterializedWeek(asOfIso?: string) {
       slotOperationalState: app.slotOperationalState,
       platoonLeaveDays: app.platoonLeaveDays,
       soldierLeaveOverrides: app.soldierLeaveOverrides,
+      emergencyActive,
     }),
-    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments, app.slotOperationalState, app.platoonLeaveDays, app.soldierLeaveOverrides],
+    [app.missions, app.platoons, app.squads, app.soldiers, app.leaves, app.dutyExclusions, todayStart, app.assignments, app.slotOperationalState, app.platoonLeaveDays, app.soldierLeaveOverrides, emergencyActive],
   );
 }

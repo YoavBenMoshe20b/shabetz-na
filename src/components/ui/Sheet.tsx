@@ -1,9 +1,22 @@
 // Sheet — the canonical modal/dialog surface.
 //
-// Premium light language: a soft frosted backdrop, a clean white sheet
-// with a strong long-cast shadow, and a sticky header that reads as part
-// of the surface (not a coloured strip). On mobile the sheet slides up
-// from the bottom; on tablet+ it centres as a dialog.
+// Premium light language: soft frosted backdrop, clean white sheet,
+// sticky header that reads as part of the surface. On mobile the sheet
+// occupies most of the screen and slides up from the bottom; on tablet+
+// it centres as a dialog sized to content.
+//
+// LAYOUT FIX (2026-05): the previous version used `flex items-end` +
+// `maxHeight: 100%` on the inner sheet. Because the inner had no
+// explicit height, `flex-1` on the body collapsed to 0 — only the
+// sticky header rendered. The CommandMenu showed "תפריט" with no items
+// underneath.
+// New layout:
+//   • On MOBILE the inner sheet uses `h-full` to stretch to the
+//     outer's full available height (viewport minus safe-area padding).
+//     The body has real height to grow into; `flex-1 min-h-0` lets it
+//     scroll internally.
+//   • On TABLET+ the inner uses `h-auto + max-h-[88vh]` so the dialog
+//     fits its content but never exceeds the viewport.
 
 import type { ReactNode } from 'react';
 
@@ -24,13 +37,10 @@ export function Sheet({
   const maxW = size === 'lg' ? 'max-w-2xl' : 'max-w-md';
   return (
     <div
-      // Top-safe-area padding so iOS notch / dynamic island doesn't clip
-      // the sheet header. 100dvh respects URL-bar collapse on mobile so
-      // the sheet body never gets pushed off-screen when the browser
-      // chrome shrinks. z-50 keeps us above the sticky page header
-      // (which is z-30).
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-mil-text/20 backdrop-blur-glass-strong animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-mil-text/30 backdrop-blur-glass-strong animate-fade-in"
       style={{
+        // Top/bottom padding: keep the sheet off the iOS notch and the
+        // home indicator. 12px minimum on devices without safe-area.
         paddingTop: 'max(env(safe-area-inset-top), 12px)',
         paddingBottom: 'max(env(safe-area-inset-bottom), 12px)',
       }}
@@ -39,6 +49,8 @@ export function Sheet({
       aria-label={title}
       dir="rtl"
     >
+      {/* Backdrop — full-screen invisible button. Tapping outside the
+          sheet calls onClose. */}
       <button
         onClick={onClose}
         className="absolute inset-0 cursor-default"
@@ -47,11 +59,17 @@ export function Sheet({
       />
 
       <div
-        className={`relative w-full ${maxW} bg-mil-card border border-mil-border rounded-t-2xl-soft sm:rounded-2xl-soft shadow-pop flex flex-col sm:mx-4 overflow-hidden animate-sheet-in`}
-        style={{ maxHeight: '100%' }}
+        className={`
+          relative w-full ${maxW}
+          h-full sm:h-auto sm:max-h-[88vh]
+          bg-mil-card border border-mil-border
+          rounded-t-2xl-soft sm:rounded-2xl-soft shadow-pop
+          flex flex-col sm:mx-4 overflow-hidden animate-sheet-in
+        `}
       >
-        {/* Sticky sheet header — refined, not a coloured strip */}
-        <header className="sticky top-0 z-10 bg-mil-card/95 backdrop-blur-glass border-b border-mil-border px-5 py-4 flex items-center gap-3">
+        {/* Sticky header — refined, not a coloured strip. shrink-0
+            prevents the header from collapsing when content is short. */}
+        <header className="shrink-0 sticky top-0 z-10 bg-mil-card/95 backdrop-blur-glass border-b border-mil-border px-5 py-4 flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-bold text-mil-text leading-tight truncate tracking-tightish">
               {title}
@@ -74,7 +92,10 @@ export function Sheet({
           </button>
         </header>
 
-        <div className="overflow-y-auto flex-1">
+        {/* Body — scrollable, takes remaining height. min-h-0 lets it
+            actually shrink below its content's intrinsic size and
+            engage the overflow scroller. */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {children}
         </div>
       </div>
