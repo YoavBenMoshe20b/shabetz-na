@@ -15,7 +15,7 @@
 import { useNavigate } from 'react-router-dom';
 import type { MockUser, UserRole } from '../types';
 import { isCompanyLeadership, isPlatoonLeadership, isRasap, isShalish } from '../utils/permissions';
-import { Sheet, Body, Hint, Muted } from './ui';
+import { Body, Hint, Muted } from './ui';
 
 interface CommandMenuProps {
   open: boolean;
@@ -195,46 +195,103 @@ export default function CommandMenu({ open, onClose, user, currentRole, onLogout
   const { primary, commander, personal } = buildItems(user, currentRole);
   const go = (href: string) => { onClose(); navigate(href); };
 
+  // Dedicated drawer layout (not via Sheet primitive). Sheet centres
+  // its inner card which is right for confirm/edit modals but reads
+  // as "broken floating panel" for a menu. Menus belong on the side.
+  //
+  // Layout: full-viewport overlay + a side panel pinned to the
+  // physical right edge (which is the visual end of the page in RTL,
+  // matching the hamburger button's position in the header).
+  //
+  // Mobile (≤ sm): panel takes full width up to 360px so it reads as
+  // a full-height side drawer over the page.
+  // Tablet+ : panel takes a fixed 360px width.
+  // Both: full viewport height (100dvh), internally scrollable.
   return (
-    <Sheet open onClose={onClose} title="תפריט" subtitle={user.name}>
-      <div className="px-5 py-4 space-y-5">
-
-        {primary.length > 0 && (
-          <Group label="פעולות מרכזיות">
-            {primary.map((it) => <Row key={it.href} item={it} onClick={() => go(it.href)} />)}
-          </Group>
-        )}
-
-        {commander.length > 0 && (
-          <Group label="ניהול וסמכויות">
-            {commander.map((it) => <Row key={it.href} item={it} onClick={() => go(it.href)} />)}
-          </Group>
-        )}
-
-        <Group label="אישי">
-          {personal.map((it) => <Row key={it.href} item={it} onClick={() => go(it.href)} />)}
-        </Group>
-
-        <div className="pt-2 border-t border-mil-border space-y-2">
-          <button
-            onClick={() => { onClose(); onLogout(); }}
-            className="w-full text-right text-tiny font-semibold text-mil-alert hover:bg-mil-alert-bg rounded-lg px-3 py-2.5 transition-colors"
-          >
-            יציאה מהמערכת
-          </button>
-          {/* Thumb-reach close button — bottom of the sheet content so
-              the operator can dismiss without stretching to the small
-              × in the sticky header. The backdrop already closes on
-              tap; this is the discoverable affordance. */}
+    <div
+      className="fixed inset-0 z-50 bg-mil-text/40 backdrop-blur-glass animate-fade-in"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="תפריט"
+      dir="rtl"
+    >
+      <aside
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: 'min(360px, 90vw)' }}
+        className="
+          fixed top-0 right-0
+          h-[100dvh] max-h-[100dvh]
+          bg-mil-card border-l border-mil-border shadow-pop
+          flex flex-col overflow-hidden
+          animate-sheet-in
+        "
+      >
+        {/* Header — sticky so the close × is always reachable. The
+            outer container's safe-area is handled by inset env values
+            applied INSIDE this aside (not on the overlay) so the panel
+            actually fills the screen edge-to-edge. */}
+        <header
+          className="shrink-0 border-b border-mil-border bg-mil-card/95 backdrop-blur-glass flex items-center gap-3 px-5 py-4"
+          style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
+        >
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold text-mil-text leading-tight truncate tracking-tightish">
+              תפריט
+            </h2>
+            <p className="text-tiny text-mil-muted leading-snug mt-0.5 truncate">
+              {user.name}
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="w-full text-center text-sm font-bold text-mil-muted hover:text-mil-text bg-mil-bg-alt hover:bg-mil-card-hover rounded-xl-soft px-3 py-3 transition-colors border border-mil-border"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-mil-muted hover:text-mil-text hover:bg-mil-bg-alt transition-colors"
+            aria-label="סגור תפריט"
           >
-            סגור תפריט
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 3 L11 11 M11 3 L3 11" />
+            </svg>
           </button>
+        </header>
+
+        {/* Scrollable body */}
+        <div
+          className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-5"
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          {primary.length > 0 && (
+            <Group label="פעולות מרכזיות">
+              {primary.map((it) => <Row key={it.href} item={it} onClick={() => go(it.href)} />)}
+            </Group>
+          )}
+
+          {commander.length > 0 && (
+            <Group label="ניהול וסמכויות">
+              {commander.map((it) => <Row key={it.href} item={it} onClick={() => go(it.href)} />)}
+            </Group>
+          )}
+
+          <Group label="אישי">
+            {personal.map((it) => <Row key={it.href} item={it} onClick={() => go(it.href)} />)}
+          </Group>
+
+          <div className="pt-2 border-t border-mil-border space-y-2">
+            <button
+              onClick={() => { onClose(); onLogout(); }}
+              className="w-full text-right text-tiny font-semibold text-mil-alert hover:bg-mil-alert-bg rounded-lg px-3 py-2.5 transition-colors"
+            >
+              יציאה מהמערכת
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full text-center text-sm font-bold text-mil-muted hover:text-mil-text bg-mil-bg-alt hover:bg-mil-card-hover rounded-xl-soft px-3 py-3 transition-colors border border-mil-border"
+            >
+              סגור תפריט
+            </button>
+          </div>
         </div>
-      </div>
-    </Sheet>
+      </aside>
+    </div>
   );
 }
 
