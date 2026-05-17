@@ -18,6 +18,9 @@ import { useApp } from '../context/AppContext';
 import { isPlatoonLeadership, isRasap } from '../utils/permissions';
 import Header from '../components/Header';
 import StaffingSheet from '../components/StaffingSheet';
+import SquadDistributionSheet, {
+  filterPoolByDistribution, type SquadDistributionMode,
+} from '../components/SquadDistributionSheet';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import type { Mission, Soldier, Platoon } from '../types';
 import {
@@ -118,7 +121,36 @@ export default function PlatoonMissionsPage() {
     && (lastPublishAt === null || lastAssignmentChange > lastPublishAt);
 
   const [staffingSlot, setStaffingSlot] = useState<MaterializedSlot | null>(null);
+  // Phase 7.3 — squad-distribution prompt state. The choice is per
+  // mission and lives for the page lifetime; if the PC navigates away
+  // and back, they pick again (intentional — fresh session, fresh
+  // operational decision).
+  const [pendingSlot, setPendingSlot] = useState<MaterializedSlot | null>(null);
+  const [distributionByMission, setDistributionByMission] = useState<
+    Record<string, SquadDistributionMode>
+  >({});
   const [toast, setToast] = useState<string>('');
+
+  const myPlatoonSquads = useMemo(
+    () => squads.filter((sq) => sq.platoonId === myPlatoon?.id),
+    [squads, myPlatoon],
+  );
+
+  const handleOpenStaffSlot = (slot: MaterializedSlot) => {
+    const already = distributionByMission[slot.missionId];
+    if (already) {
+      setStaffingSlot(slot);
+    } else {
+      setPendingSlot(slot);
+    }
+  };
+
+  const handleDistributionPicked = (mode: SquadDistributionMode) => {
+    if (!pendingSlot) return;
+    setDistributionByMission((prev) => ({ ...prev, [pendingSlot.missionId]: mode }));
+    setStaffingSlot(pendingSlot);
+    setPendingSlot(null);
+  };
 
   const candidatePool = useMemo(() => {
     if (!myPlatoon) return [];
@@ -231,7 +263,7 @@ export default function PlatoonMissionsPage() {
                   soldiers={soldiers}
                   platoon={myPlatoon}
                   onOpen={() => navigate(`/mission/${row.mission.id}`)}
-                  onStaffSlot={(slot) => setStaffingSlot(slot)}
+                  onStaffSlot={(slot) => handleOpenStaffSlot(slot)}
                   onOpenWeek={() => navigate('/platoon')}
                 />
               ))}
@@ -256,12 +288,28 @@ export default function PlatoonMissionsPage() {
         </button>
       </PageMain>
 
+      {pendingSlot && myPlatoon && (
+        <SquadDistributionSheet
+          open
+          onClose={() => setPendingSlot(null)}
+          missionName={
+            missions.find((m) => m.id === pendingSlot.missionId)?.name ?? 'משימה'
+          }
+          squads={myPlatoonSquads}
+          platoonSoldiers={candidatePool}
+          onChoose={handleDistributionPicked}
+        />
+      )}
+
       {staffingSlot && (
         <StaffingSheet
           open
           onClose={() => setStaffingSlot(null)}
           slot={staffingSlot}
-          candidatePool={candidatePool}
+          candidatePool={filterPoolByDistribution(
+            candidatePool,
+            distributionByMission[staffingSlot.missionId],
+          )}
           onAssign={(soldierIds, outcome, forcedReason) => {
             const mission = missions.find((m) => m.id === staffingSlot.missionId);
             if (mission && currentUser) {
