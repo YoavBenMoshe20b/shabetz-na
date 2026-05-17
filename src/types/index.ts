@@ -1185,6 +1185,61 @@ export interface Mission {
    *  can. Surfaced in the StaffingSheet as a locked indicator on the
    *  duration controls. Default: false. */
   shiftDurationLocked?: boolean;
+
+  // ── Phase 7.3 — Archetype layer ──────────────────────────────────
+  //
+  // The archetype is the BEHAVIORAL classification (static-guard,
+  // patrol, readiness, one-time-op, custom). It drives wizard step
+  // visibility, materializer logic, and which optional surfaces (rally
+  // point, route, response instructions) appear on the mission detail.
+  // Missions without archetypeKind are treated as 'custom' at read
+  // time — legacy missions keep working unchanged.
+
+  /** Which archetype this mission belongs to. Optional for backward
+   *  compatibility — readers MUST default to 'custom' when absent. */
+  archetypeKind?: MissionArchetypeKind;
+
+  /** Day/night shape — different shift durations / manpower / fatigue
+   *  by period. Only meaningful for archetypes with supportsDayNight. */
+  dayNightProfile?: DayNightProfile;
+
+  /** When true (default), the PC may adjust some mission fields during
+   *  staffing inside their platoon. When false, only the CC can. */
+  allowPCOverride?: boolean;
+
+  /** Rally point address / coordinates — readiness archetype only. */
+  rallyPoint?: string;
+
+  /** Route or sector description — patrol archetype only. */
+  routeDescription?: string;
+
+  /** Whether the mission optionally pairs with a vehicle. */
+  hasVehicle?: boolean;
+
+  /** Free-text response instructions shown to soldiers on event
+   *  activation — readiness archetype only. */
+  responseInstructions?: string;
+}
+
+// ─── Phase 7.3 — Archetype + day/night types (re-exported aliases) ──
+// The canonical definitions live in `src/utils/missionArchetypes.ts`.
+// We re-declare the shapes here to avoid a types→utils circular import.
+
+export type MissionArchetypeKind =
+  | 'static-guard'
+  | 'patrol'
+  | 'readiness'
+  | 'one-time-op'
+  | 'custom';
+
+export interface DayNightProfile {
+  dayStartTime: string;
+  nightStartTime: string;
+  dayShiftDurationMinutes?: number;
+  nightShiftDurationMinutes?: number;
+  dayMinCount?: number;
+  nightMinCount?: number;
+  fatigueDiffersByPeriod?: boolean;
 }
 
 /**

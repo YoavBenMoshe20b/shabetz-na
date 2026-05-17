@@ -1,9 +1,15 @@
-// Mission authoring wizard — 6 steps, fact-based.
+// Mission authoring wizard — archetype-driven.
 //
-// One code path, one shape per step. Templates pre-fill the draft on
-// Step 1 without changing the wizard's structure. Each step asks ONE
-// operational question (Step 4 is the explicit command/participation
-// stack the engine spec demands).
+// Phase 7.3: Step 1 is now the ARCHETYPE picker. The archetype defines
+// the mission's BEHAVIOR (static guard / patrol / readiness / one-time
+// op / custom) and the system uses that to:
+//   • hide questions the archetype already answers (e.g. don't ask
+//     "what do they do" for a static guard);
+//   • pre-fill defaults the operator would otherwise type;
+//   • shape the materializer's later staffing/overlap/fatigue logic.
+//
+// Only the 'custom' archetype shows every step. The others reduce the
+// wizard to the operational questions that genuinely matter.
 //
 // State lives in component state + sessionStorage so a refresh doesn't
 // lose progress. Cleared on publish.
@@ -12,7 +18,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Navigate, useSearchParams } from 'react-router-dom';
 import { useApp, useMyCompany, useMyPlatoons } from '../context/AppContext';
 import { getMissionCreateScope, canCreateMission, isCompanyLeadership } from '../utils/permissions';
-import { MISSION_TEMPLATES, type MissionTemplate } from '../utils/missionTemplates';
+import {
+  MISSION_ARCHETYPE_LIST, MISSION_ARCHETYPES, visibleWizardSteps,
+} from '../utils/missionArchetypes';
 import { buildMissionSummary, rankLabel, intensityLabel } from '../utils/missionSummary';
 import Header from '../components/Header';
 import {
@@ -23,12 +31,15 @@ import type {
   MissionRotation, MissionFatigueProfile, MissionIntensity, CommandRank,
   RankPolicy, RotationPeriod, QualificationRequirement, EquipmentRequirement,
   MissionCycleProfile, MissionOverlapPolicy, MissionLogisticsAlert,
+  MissionArchetypeKind, DayNightProfile,
 } from '../types';
 
 // ─── Wizard draft ────────────────────────────────────────────────────────────
 
 interface WizardDraft {
-  templateId?:        string;
+  /** Phase 7.3 — selected archetype (the wizard's primary classifier).
+   *  Required for a publishable mission; until set, only Step 1 renders. */
+  archetypeKind?:     MissionArchetypeKind;
   name:               string;
   description:        string;
   assignedPlatoonIds: string[];
@@ -50,6 +61,14 @@ interface WizardDraft {
   /** Optional company-level operational notes — published as a single
    *  MissionNote with scope='company' alongside the mission. */
   companyNotes?:      string;
+  // ── Phase 7.3 — archetype-derived fields ──────────────────────────
+  dayNightProfile?:   DayNightProfile;
+  allowPCOverride?:   boolean;
+  shiftDurationLocked?: boolean;
+  rallyPoint?:        string;
+  routeDescription?:  string;
+  hasVehicle?:        boolean;
+  responseInstructions?: string;
 }
 
 const EMPTY_DRAFT: WizardDraft = {
@@ -92,20 +111,28 @@ export default function MissionWizardPage() {
     // canonical mission, not a stale wizard session.
     if (editingMission) {
       return {
-        name:               editingMission.name,
-        description:        editingMission.description ?? '',
-        assignedPlatoonIds: editingMission.assignedPlatoonIds,
-        orderId:            editingMission.orderId,
-        timeModel:          editingMission.timeModel,
-        manpower:           editingMission.manpower,
-        command:            editingMission.command,
-        rotation:           editingMission.rotation,
-        fatigue:            editingMission.fatigue,
-        cycleProfile:       editingMission.cycleProfile,
-        overlapPolicy:      editingMission.overlapPolicy,
-        qualifications:     editingMission.qualifications,
-        equipment:          editingMission.equipment,
-        logisticsAlerts:    editingMission.logisticsAlerts ?? [],
+        archetypeKind:        editingMission.archetypeKind ?? 'custom',
+        name:                 editingMission.name,
+        description:          editingMission.description ?? '',
+        assignedPlatoonIds:   editingMission.assignedPlatoonIds,
+        orderId:              editingMission.orderId,
+        timeModel:            editingMission.timeModel,
+        manpower:             editingMission.manpower,
+        command:              editingMission.command,
+        rotation:             editingMission.rotation,
+        fatigue:              editingMission.fatigue,
+        cycleProfile:         editingMission.cycleProfile,
+        overlapPolicy:        editingMission.overlapPolicy,
+        qualifications:       editingMission.qualifications,
+        equipment:            editingMission.equipment,
+        logisticsAlerts:      editingMission.logisticsAlerts ?? [],
+        dayNightProfile:      editingMission.dayNightProfile,
+        allowPCOverride:      editingMission.allowPCOverride,
+        shiftDurationLocked:  editingMission.shiftDurationLocked,
+        rallyPoint:           editingMission.rallyPoint,
+        routeDescription:     editingMission.routeDescription,
+        hasVehicle:           editingMission.hasVehicle,
+        responseInstructions: editingMission.responseInstructions,
       };
     }
     try {
@@ -127,16 +154,47 @@ export default function MissionWizardPage() {
 
   const patch = (p: Partial<WizardDraft>) => setDraft((d) => ({ ...d, ...p }));
 
-  const next = () => setStep((s) => Math.min(6, s + 1) as WizardStep);
+  /** Apply an archetype: pre-fill operational defaults but preserve any
+   *  already-typed identity (name / platoons / order). */
+  const applyArchetype = (kind: MissionArchetypeKind) => {
+    const arch = MISSION_ARCHETYPES[kind];
+    setDraft((d) => ({
+      ...d,
+      ...arch.defaultDraft,
+      archetypeKind: kind,
+      // identity / platoon / order pinned through
+      name:               d.name,
+      description:        d.description,
+      assignedPlatoonIds: d.assignedPlatoonIds,
+      orderId:            d.orderId,
+      qualifications:     d.qualifications,
+      equipment:          d.equipment,
+      logisticsAlerts:    d.logisticsAlerts,
+    }));
+  };
+
+  // The wizard advances through visible steps only — the archetype's
+  // hiddenSteps drop out of the sequence automatically.
+  const visibleSteps = useMemo(
+    () => visibleWizardSteps(draft.archetypeKind),
+    [draft.archetypeKind],
+  );
+  const currentStepIdx = Math.max(0, visibleSteps.indexOf(step));
+
+  const next = () => {
+    const nextStep = visibleSteps[currentStepIdx + 1];
+    if (nextStep) setStep(nextStep);
+  };
   const back = () => {
-    if (step === 1) {
+    if (currentStepIdx <= 0) {
       if (confirm('לבטל את המשימה החדשה?')) {
         sessionStorage.removeItem(SESSION_KEY);
         navigate('/missions');
       }
-    } else {
-      setStep((s) => Math.max(1, s - 1) as WizardStep);
+      return;
     }
+    const prev = visibleSteps[currentStepIdx - 1];
+    if (prev) setStep(prev);
   };
 
   const stepValid = isStepValid(draft, step);
@@ -185,6 +243,14 @@ export default function MissionWizardPage() {
         qualifications:     draft.qualifications,
         equipment:          draft.equipment,
         logisticsAlerts:    draft.logisticsAlerts.length > 0 ? draft.logisticsAlerts : undefined,
+        archetypeKind:        draft.archetypeKind,
+        dayNightProfile:      draft.dayNightProfile,
+        allowPCOverride:      draft.allowPCOverride,
+        shiftDurationLocked:  draft.shiftDurationLocked,
+        rallyPoint:           draft.rallyPoint,
+        routeDescription:     draft.routeDescription,
+        hasVehicle:           draft.hasVehicle,
+        responseInstructions: draft.responseInstructions,
         ...(intent === 'draft' ? { status: 'draft' as const } : {}),
       });
       navigate(`/mission/${editingMission.id}`);
@@ -219,6 +285,15 @@ export default function MissionWizardPage() {
       squadPolicy:        { mode: 'mix' },
       requiresDailyConfirmation: false,
       status,
+      // Phase 7.3 archetype layer.
+      archetypeKind:        draft.archetypeKind ?? 'custom',
+      dayNightProfile:      draft.dayNightProfile,
+      allowPCOverride:      draft.allowPCOverride,
+      shiftDurationLocked:  draft.shiftDurationLocked,
+      rallyPoint:           draft.rallyPoint,
+      routeDescription:     draft.routeDescription,
+      hasVehicle:           draft.hasVehicle,
+      responseInstructions: draft.responseInstructions,
     });
     if (draft.companyNotes && draft.companyNotes.trim()) {
       addMissionNote({
@@ -243,19 +318,19 @@ export default function MissionWizardPage() {
     <div className="min-h-screen bg-mil-bg flex flex-col" dir="rtl">
       <Header title={isEditing ? 'עריכת משימה' : 'משימה חדשה'} />
 
-      {/* Progress + back row */}
+      {/* Progress + back row — counts only steps visible for this archetype. */}
       <div className="px-5 pt-4 pb-2 max-w-xl mx-auto w-full">
         <div className="flex items-center gap-3">
           <button
             onClick={back}
             className="text-mil-muted hover:text-mil-text text-sm font-semibold"
           >
-            {step === 1 ? 'ביטול' : '→ חזור'}
+            {currentStepIdx === 0 ? 'ביטול' : '→ חזור'}
           </button>
           <div className="flex-1">
-            <ProgressBar step={step} total={6} />
+            <ProgressBar step={currentStepIdx + 1} total={visibleSteps.length} />
           </div>
-          <Hint className="tabular-nums">{step}/6</Hint>
+          <Hint className="tabular-nums">{currentStepIdx + 1}/{visibleSteps.length}</Hint>
         </div>
       </div>
 
@@ -263,15 +338,7 @@ export default function MissionWizardPage() {
         {step === 1 && (
           <Step1Identity
             draft={draft} patch={patch} myPlatoons={platoonsPickable}
-            onApplyTemplate={(t) => patch({
-              ...t.draft,
-              templateId:         t.id,
-              name:               draft.name,                   // preserve already-typed name
-              description:        draft.description,
-              assignedPlatoonIds: draft.assignedPlatoonIds,
-              qualifications:     draft.qualifications,
-              equipment:          draft.equipment,
-            })}
+            onPickArchetype={applyArchetype}
           />
         )}
         {step === 2 && <Step2Character draft={draft} patch={patch} />}
@@ -291,7 +358,7 @@ export default function MissionWizardPage() {
         )}
       </main>
 
-      {step < 6 && (
+      {step !== 6 && (
         <div className="fixed bottom-0 inset-x-0 bg-mil-bg/95 backdrop-blur border-t border-mil-border z-20 safe-area-bottom">
           <div className="px-5 py-3 max-w-xl mx-auto">
             <Button
@@ -313,85 +380,157 @@ export default function MissionWizardPage() {
   );
 }
 
-// ─── Step 1 — Identity & scope + quick-start chips ─────────────────────────
+// ─── Step 1 — Identity + ARCHETYPE pick ────────────────────────────────────
+//
+// Phase 7.3: this is the wizard's most important decision. The
+// archetype defines the mission's behavior and tells the wizard which
+// subsequent questions to ask. Until the operator picks one, nothing
+// else is editable — name and platoons appear only after the choice.
 
 function Step1Identity({
-  draft, patch, myPlatoons, onApplyTemplate,
+  draft, patch, myPlatoons, onPickArchetype,
 }: {
   draft: WizardDraft;
   patch: (p: Partial<WizardDraft>) => void;
   myPlatoons: ReturnType<typeof useMyPlatoons>;
-  onApplyTemplate: (t: MissionTemplate) => void;
+  onPickArchetype: (k: MissionArchetypeKind) => void;
 }) {
+  const archetype = draft.archetypeKind
+    ? MISSION_ARCHETYPES[draft.archetypeKind]
+    : undefined;
+
   return (
     <div className="space-y-6">
-      <QuestionHeader title="איך נקרא המבצע ומי מבצע אותו?" />
+      <QuestionHeader
+        title="איזה סוג משימה זו?"
+        subtitle="הסוג מגדיר את ההתנהגות — מה לא נשאל הלאה."
+      />
 
-      <div>
-        <Hint className="mb-1.5 block tracking-wide">שם המשימה</Hint>
-        <input
-          type="text"
-          value={draft.name}
-          onChange={(e) => patch({ name: e.target.value })}
-          placeholder="לדוגמה: שמירה בשער צפון"
-          className={inputCls}
-          autoFocus
-        />
+      {/* ── Archetype picker ───────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {MISSION_ARCHETYPE_LIST.map((a) => {
+          const active = a.kind === draft.archetypeKind;
+          return (
+            <button
+              key={a.kind}
+              onClick={() => onPickArchetype(a.kind)}
+              className={`text-right rounded-xl-soft border px-4 py-3.5 transition-colors ${
+                active
+                  ? 'bg-mil-olive-bg border-mil-olive ring-2 ring-mil-olive/30'
+                  : 'bg-mil-card border-mil-border hover:border-mil-olive'
+              }`}
+            >
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg leading-none" aria-hidden>{a.icon}</span>
+                <Body className="font-semibold">{a.label}</Body>
+              </div>
+              <Hint className="block mt-1.5 leading-snug text-tiny">{a.hint}</Hint>
+            </button>
+          );
+        })}
       </div>
 
-      <div>
-        <Hint className="mb-2 block tracking-wide">מחלקות באחריות</Hint>
-        <div className="flex flex-wrap gap-2">
-          {myPlatoons.map((p) => {
-            const on = draft.assignedPlatoonIds.includes(p.id);
-            return (
-              <button
-                key={p.id}
-                onClick={() => patch({
-                  assignedPlatoonIds: on
-                    ? draft.assignedPlatoonIds.filter((x) => x !== p.id)
-                    : [...draft.assignedPlatoonIds, p.id],
-                })}
-                className={chipCls(on)}
-              >
-                {p.name}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {!draft.templateId && (
-        <div>
-          <Hint className="mb-2 block tracking-wide">התחל מתבנית (אופציונלי)</Hint>
-          <div className="grid grid-cols-2 gap-2">
-            {MISSION_TEMPLATES.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => onApplyTemplate(t)}
-                className="text-right bg-mil-card border border-mil-border rounded-xl px-3 py-3 hover:border-mil-olive transition-colors"
-              >
-                <Body className="font-semibold">{t.name}</Body>
-                <Hint className="block mt-1 leading-snug">{t.hint}</Hint>
-              </button>
-            ))}
-          </div>
+      {/* Behavior summary — surfaces what the archetype already knows
+          so the operator sees WHY later questions will be shorter. */}
+      {archetype && (
+        <div className="bg-mil-olive-bg/40 border border-mil-olive/30 rounded-xl-soft px-4 py-3">
+          <Body className="font-semibold text-mil-olive-dim">
+            {archetype.icon} {archetype.label}
+          </Body>
+          <Muted className="mt-1 text-tiny leading-snug">
+            {archetype.kind === 'custom'
+              ? 'תופיע שאלון מלא — אין הנחות מראש.'
+              : `המערכת תדלג על ${archetype.hiddenSteps.length} שלבים — מה שכבר ידוע לתבנית לא יישאל.`}
+          </Muted>
+          <ul className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-tiny text-mil-text">
+            {archetype.supportsDayNight             && <li>• יום / לילה</li>}
+            {archetype.supportsRoute                && <li>• מסלול / סקטור</li>}
+            {archetype.supportsVehicle              && <li>• רכב אופציונלי</li>}
+            {archetype.supportsRallyPoint           && <li>• נקודת ריכוז</li>}
+            {archetype.supportsResponseInstructions && <li>• הוראות תגובה</li>}
+            {archetype.isMovementBased              && <li>• מבוסס תנועה</li>}
+            {archetype.isEventDriven                && <li>• מבוסס אירוע</li>}
+            {archetype.supportsScheduledPublish     && <li>• פרסום שבועי</li>}
+          </ul>
         </div>
       )}
 
-      {draft.templateId && (
-        <div className="bg-mil-olive-bg/40 border border-mil-olive/30 rounded-xl px-4 py-3">
-          <Body className="font-semibold text-mil-olive-dim">
-            תבנית: {MISSION_TEMPLATES.find((t) => t.id === draft.templateId)?.name}
-          </Body>
-          <Muted className="mt-1">השדות הוגדרו מראש לפי התבנית. תוכל לשנות בכל שלב.</Muted>
-          <button
-            onClick={() => patch({ templateId: undefined })}
-            className="mt-2 text-tiny text-mil-muted hover:text-mil-text font-semibold"
-          >
-            הסר תבנית
-          </button>
-        </div>
+      {/* ── Identity fields (gated by archetype pick) ───────────────── */}
+      {archetype && (
+        <>
+          <div>
+            <Hint className="mb-1.5 block tracking-wide">שם המשימה</Hint>
+            <input
+              type="text"
+              value={draft.name}
+              onChange={(e) => patch({ name: e.target.value })}
+              placeholder="לדוגמה: שמירה בשער צפון"
+              className={inputCls}
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <Hint className="mb-2 block tracking-wide">מחלקות באחריות</Hint>
+            <div className="flex flex-wrap gap-2">
+              {myPlatoons.map((p) => {
+                const on = draft.assignedPlatoonIds.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => patch({
+                      assignedPlatoonIds: on
+                        ? draft.assignedPlatoonIds.filter((x) => x !== p.id)
+                        : [...draft.assignedPlatoonIds, p.id],
+                    })}
+                    className={chipCls(on)}
+                  >
+                    {p.name}
+                  </button>
+                );
+              })}
+            </div>
+            <Muted className="mt-2 text-tiny">השיוך הסופי נקבע במסך השיוך אחרי יצירת המשימה.</Muted>
+          </div>
+
+          {/* Archetype-specific lightweight fields. */}
+          {archetype.supportsRallyPoint && (
+            <div>
+              <Hint className="mb-1.5 block tracking-wide">נקודת ריכוז</Hint>
+              <input
+                type="text"
+                value={draft.rallyPoint ?? ''}
+                onChange={(e) => patch({ rallyPoint: e.target.value })}
+                placeholder="לדוגמה: רחבת מטה הפלוגה"
+                className={inputCls}
+              />
+            </div>
+          )}
+          {archetype.supportsRoute && (
+            <div>
+              <Hint className="mb-1.5 block tracking-wide">מסלול / סקטור</Hint>
+              <input
+                type="text"
+                value={draft.routeDescription ?? ''}
+                onChange={(e) => patch({ routeDescription: e.target.value })}
+                placeholder="לדוגמה: ציר מערב — נצפ״ה 4"
+                className={inputCls}
+              />
+            </div>
+          )}
+          {archetype.supportsResponseInstructions && (
+            <div>
+              <Hint className="mb-1.5 block tracking-wide">הוראות תגובה בעת אירוע</Hint>
+              <textarea
+                value={draft.responseInstructions ?? ''}
+                onChange={(e) => patch({ responseInstructions: e.target.value })}
+                placeholder="מה לעשות מרגע ההפעלה? לאן להגיע, מה לקחת, למי להתייצב…"
+                className={`${inputCls} resize-none`}
+                rows={3}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1271,7 +1410,10 @@ function Step6Review({
 
 function isStepValid(d: WizardDraft, step: WizardStep): boolean {
   switch (step) {
-    case 1: return d.name.trim().length > 0 && d.assignedPlatoonIds.length > 0;
+    case 1:
+      return !!d.archetypeKind
+        && d.name.trim().length > 0
+        && d.assignedPlatoonIds.length > 0;
     case 2: return !!d.fatigue;
     case 3: return !!d.timeModel && !!d.manpower;
     case 4: {
@@ -1290,7 +1432,8 @@ function isStepValid(d: WizardDraft, step: WizardStep): boolean {
 function stepValidHint(d: WizardDraft, step: WizardStep): string {
   switch (step) {
     case 1:
-      if (!d.name.trim())                  return 'הזן שם למשימה';
+      if (!d.archetypeKind)                  return 'בחר סוג משימה';
+      if (!d.name.trim())                    return 'הזן שם למשימה';
       if (d.assignedPlatoonIds.length === 0) return 'בחר לפחות מחלקה אחת';
       return '';
     case 2: return 'בחר את אופי המשימה';
