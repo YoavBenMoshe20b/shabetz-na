@@ -36,9 +36,21 @@ export function Section({ label, action, children, className = '' }: SectionProp
 
 // Page-level main container. 32 px between sections gives operational
 // breathing room — the deliberate "new topic" beat the user feels.
+//
+// §17 — bottom padding bumped from pb-32 (8rem) to pb-44 (11rem) so
+// content always clears the BottomNav (z-30, ~70px tall + 16px from
+// bottom + iOS safe-area) AND the EmergencyFab (h-14 = 56px, sitting
+// at calc(7rem + safe-area-inset-bottom)). Without enough padding the
+// last card of a long page sat under the nav.
+//
+// Plus an explicit safe-area-inset-bottom calc on the actual padding-
+// bottom for iOS notch handling.
 export function PageMain({ children }: { children: ReactNode }) {
   return (
-    <main className="px-5 py-6 pb-32 max-w-xl mx-auto space-y-8">
+    <main
+      className="px-5 py-6 max-w-xl mx-auto space-y-8"
+      style={{ paddingBottom: 'calc(11rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       {children}
     </main>
   );
