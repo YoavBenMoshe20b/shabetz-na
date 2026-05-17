@@ -148,6 +148,7 @@ function buildItems(user: MockUser, role: UserRole): {
   }
   if (pc || cc || shalish || rasap) {
     primary.push({ label: 'דוח 1',       hint: 'תמונת מצב מבצעית',     href: '/report1',  icon: 'report' });
+    primary.push({ label: 'סד״כ ודוחות', hint: 'סד״כ · ציוד · מידות · גילאים', href: '/reports/summary', icon: 'report' });
   }
   if (pc || cc) {
     primary.push({ label: 'התראות',      hint: 'אירועים פתוחים',        href: '/alerts',   icon: 'bell' });

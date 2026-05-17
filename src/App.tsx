@@ -74,6 +74,7 @@ const AlertsPage         = lazy(() => import('./pages/AlertsPage'));
 const RasapPage              = lazy(() => import('./pages/RasapPage'));
 const EquipmentInventoryPage = lazy(() => import('./pages/EquipmentInventoryPage'));
 const PkalimPage             = lazy(() => import('./pages/PkalimPage'));
+const OperationalSummaryPage = lazy(() => import('./pages/OperationalSummaryPage'));
 const LogisticsRotationsPage = lazy(() => import('./pages/LogisticsRotationsPage'));
 const EngineDebugPage        = lazy(() => import('./pages/EngineDebugPage'));
 
@@ -234,6 +235,14 @@ function AppRoutes() {
         <Route path="/pkalim"                element={
           <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}>
             <PkalimPage />
+          </ProtectedRoute>
+        } />
+        {/* §18 — operational summary (סד״כ + ציוד + מידות + גילאים).
+            Open to platoon-commander+ and to functional-role grants
+            (שליש / רס״פ) who routinely brief sd״k upward. */}
+        <Route path="/reports/summary"       element={
+          <ProtectedRoute minRole="platoonCommander" allowWhen={(u) => isShalish(u) || isRasap(u)}>
+            <OperationalSummaryPage />
           </ProtectedRoute>
         } />
         <Route path="/rasap/rotations"       element={
