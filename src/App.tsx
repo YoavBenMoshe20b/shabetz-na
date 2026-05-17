@@ -73,6 +73,7 @@ const AlertsPage         = lazy(() => import('./pages/AlertsPage'));
 // Round 6 — Rasap / logistics module
 const RasapPage              = lazy(() => import('./pages/RasapPage'));
 const EquipmentInventoryPage = lazy(() => import('./pages/EquipmentInventoryPage'));
+const PkalimPage             = lazy(() => import('./pages/PkalimPage'));
 const LogisticsRotationsPage = lazy(() => import('./pages/LogisticsRotationsPage'));
 const EngineDebugPage        = lazy(() => import('./pages/EngineDebugPage'));
 
@@ -226,6 +227,13 @@ function AppRoutes() {
         <Route path="/equipment/inventory"   element={
           <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}>
             <EquipmentInventoryPage />
+          </ProtectedRoute>
+        } />
+        {/* §19-§21 — PKAL catalogue + gap analysis. Open to commanders
+            and to Rasap (logistics owns the kit-vs-actual gap). */}
+        <Route path="/pkalim"                element={
+          <ProtectedRoute minRole="platoonCommander" allowWhen={isRasap}>
+            <PkalimPage />
           </ProtectedRoute>
         } />
         <Route path="/rasap/rotations"       element={

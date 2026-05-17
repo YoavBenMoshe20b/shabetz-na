@@ -179,6 +179,7 @@ function buildItems(user: MockUser, role: UserRole): {
     commander.push(
       { label: 'לוגיסטיקה ורס״פ', hint: 'מלאי, החתמות, בלאי',             href: '/rasap',                icon: 'rasap' },
       { label: 'מלאי ציוד',        hint: 'קטלוג, ייבוא, כמויות',          href: '/equipment/inventory',   icon: 'inventory' },
+      { label: 'פק״לים',           hint: 'ערכות תפקיד + מכסות פערים',      href: '/pkalim',                icon: 'inventory' },
       { label: 'סבבים לוגיסטיים',  hint: 'מטבח, ניקיון, מכולה, מים',     href: '/rasap/rotations',       icon: 'rasap' },
     );
   }

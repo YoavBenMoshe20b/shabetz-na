@@ -12,6 +12,7 @@ import type {
   PlatoonLeaveDay, PlatoonLeaveDayStatus, CompanyLeavePolicy, CompanyCoverageRuleSet, CoverageRule, SoldierLeaveOverride,
   CompanyBlockedDate,
   Qualification, EquipmentItem, SoldierQualification,
+  Pkal, PkalItem, PkalQuota,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment, SignedEquipmentStatus,
@@ -32,8 +33,10 @@ import type { MissionTemplate, TemplateFamily } from '../utils/missionTemplates'
 
 // Seed version — bump when mockData shape changes in a way that should
 // invalidate everyone's localStorage. Old blobs at older versions are
-// ignored and the fresh seed wins. v1 = Phase 6.3.b initial persistence.
-const SEED_VERSION = 1;
+// ignored and the fresh seed wins.
+//   v1 = Phase 6.3.b initial persistence.
+//   v2 = Phase 7.5 Slice 9 — PKALs + PKAL quotas added.
+const SEED_VERSION = 2;
 import * as missionsApi      from '../api/missions';
 import * as announcementsApi from '../api/announcements';
 import * as equipmentApi     from '../api/equipment';
@@ -47,6 +50,7 @@ import {
   mockSoldierStatusEvents, mockDelegations,
   mockCalendarEvents,
   mockMissions, mockAssignments, mockSlotOperationalState, mockQualifications, mockEquipmentItems, mockSoldierQualifications,
+  mockPkalim, mockPkalQuotas,
   mockChecklistTemplates, mockChecklistRuns, mockChecklistInstances,
   mockPlatoonLeaveDays, mockCompanyLeavePolicy, mockCompanyCoverageRules, mockSoldierLeaveOverrides,
   mockLeaveRotationPolicy, mockLeaveBlocks,
@@ -287,6 +291,20 @@ interface AppContextType {
   soldierQualifications:  SoldierQualification[];
   leaveRotationPolicy:    LeaveRotationPolicy | null;
   leaveBlocks:            LeaveBlock[];
+
+  // ── PKAL (פק״ל) — load-out bundles + per-unit quotas ───────────────
+  // §19-§21. Foundation: read-only data + a small write surface to
+  // add/edit/remove PKALs and quotas. Soldier ↔ PKAL holding lives on
+  // Soldier.operationalRoles (a soldier in role X holds PKAL X). A
+  // future slice will introduce explicit holding records if the
+  // mapping needs to diverge from role.
+  pkalim:        Pkal[];
+  pkalQuotas:    PkalQuota[];
+  addPkal:       (data: { name: string; role?: OperationalRole; qualificationId?: string; description?: string; items?: PkalItem[] }) => Pkal;
+  updatePkal:    (id: string, patch: Partial<Omit<Pkal, 'id' | 'companyId' | 'createdAt' | 'createdBy'>>) => void;
+  deletePkal:    (id: string) => void;
+  upsertPkalQuota: (data: { pkalId: string; scope: PkalQuota['scope']; required: number }) => void;
+  removePkalQuota: (id: string) => void;
 
   // ── Leave/coverage engine foundation (slice L1 — read-only) ──────────
   // Write actions (L2 policy editor, L3 coverage modal, L4 exclusion
@@ -1307,6 +1325,87 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { id };
   };
   const [soldierQualifications] = useState<SoldierQualification[]>(mockSoldierQualifications);
+
+  // §19-§21 — PKALs + quotas. Persisted so operator edits survive
+  // reloads. Bumping SEED_VERSION above ensures the v1 blob is
+  // discarded so the new PKAL seed is visible.
+  const [pkalim, setPkalim] = usePersistedState<Pkal[]>('pkalim', mockPkalim, SEED_VERSION);
+  const [pkalQuotas, setPkalQuotas] = usePersistedState<PkalQuota[]>('pkalQuotas', mockPkalQuotas, SEED_VERSION);
+
+  const addPkal = (data: {
+    name: string;
+    role?: OperationalRole;
+    qualificationId?: string;
+    description?: string;
+    items?: PkalItem[];
+  }): Pkal => {
+    const now = new Date().toISOString();
+    const pkal: Pkal = {
+      id:              newId('pkal'),
+      companyId:       currentUser?.companyId ?? '',
+      name:            data.name,
+      role:            data.role,
+      qualificationId: data.qualificationId,
+      description:     data.description,
+      items:           data.items ?? [],
+      createdBy:       currentUser?.id ?? '',
+      createdAt:       now,
+      updatedAt:       now,
+    };
+    setPkalim((prev) => [...prev, pkal]);
+    return pkal;
+  };
+
+  const updatePkal = (id: string, patch: Partial<Omit<Pkal, 'id' | 'companyId' | 'createdAt' | 'createdBy'>>) => {
+    setPkalim((prev) => prev.map((p) =>
+      p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p
+    ));
+  };
+
+  const deletePkal = (id: string) => {
+    setPkalim((prev) => prev.filter((p) => p.id !== id));
+    // Quotas referencing the deleted PKAL are no longer meaningful.
+    setPkalQuotas((prev) => prev.filter((q) => q.pkalId !== id));
+  };
+
+  // Upsert by (pkalId, scope) — a unit/scope can have at most one quota
+  // per PKAL. If `required` is 0 we remove the quota entirely instead of
+  // persisting a useless zero row.
+  const upsertPkalQuota = (data: { pkalId: string; scope: PkalQuota['scope']; required: number }) => {
+    const scopeKey = (s: PkalQuota['scope']) =>
+      s.kind === 'company' ? 'company' :
+      s.kind === 'platoon' ? `p:${s.platoonId}` :
+      `s:${s.squadId}`;
+    const targetKey = scopeKey(data.scope);
+
+    setPkalQuotas((prev) => {
+      const existing = prev.find((q) => q.pkalId === data.pkalId && scopeKey(q.scope) === targetKey);
+      const now = new Date().toISOString();
+      if (data.required <= 0) {
+        return existing ? prev.filter((q) => q.id !== existing.id) : prev;
+      }
+      if (existing) {
+        return prev.map((q) => q.id === existing.id
+          ? { ...q, required: data.required, updatedAt: now }
+          : q
+        );
+      }
+      return [...prev, {
+        id:        newId('pq'),
+        companyId: currentUser?.companyId ?? '',
+        pkalId:    data.pkalId,
+        scope:     data.scope,
+        required:  data.required,
+        createdAt: now,
+        updatedAt: now,
+      }];
+    });
+  };
+
+  const removePkalQuota = (id: string) => {
+    setPkalQuotas((prev) => prev.filter((q) => q.id !== id));
+  };
+
   const [leaveRotationPolicy]   = useState<LeaveRotationPolicy | null>(mockLeaveRotationPolicy);
   const [leaveBlocks]           = useState<LeaveBlock[]>(mockLeaveBlocks);
 
@@ -2391,6 +2490,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,
+      pkalim, pkalQuotas,
+      addPkal, updatePkal, deletePkal, upsertPkalQuota, removePkalQuota,
       leaveRotationPolicy, leaveBlocks,
       coverageEvents, dutyExclusions, leaveRotationPlans,
       signedEquipment, equipmentLifecycle,

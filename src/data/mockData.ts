@@ -5,6 +5,7 @@ import type {
   SoldierStatusEvent, Delegation,
   CalendarEvent,
   Mission, Qualification, EquipmentItem, SoldierQualification, Assignment, SlotOperationalState,
+  Pkal, PkalQuota,
   ChecklistTemplate, ChecklistRun, ChecklistInstance,
   PlatoonLeaveDay, CompanyLeavePolicy, CompanyCoverageRuleSet, SoldierLeaveOverride,
   CompanyBlockedDate,
@@ -1174,6 +1175,160 @@ export const mockEquipmentItems: EquipmentItem[] = [
   { id: 'eq-ladder',    companyId: 'co1', name: 'סולם',          category: 'ציוד פריצה', isConsumable: false, unitCount: 3 },
   { id: 'eq-drone-mvk', companyId: 'co1', name: 'רחפן מאוויק 3', category: 'תקשורת',     isConsumable: false, unitCount: 2 },
   { id: 'eq-radio-cmd', companyId: 'co1', name: 'מכשיר קשר מ״מ',  category: 'תקשורת',     isConsumable: false, unitCount: 6 },
+];
+
+// §20 — default seeded PKALs. These mirror the canonical company kit
+// roster: each command position + the core specialist roles. The kits
+// are intentionally sparse — operators add items as the company's gear
+// gets catalogued. Names are stable so screens / quotas / reports can
+// reference them by id.
+export const mockPkalim: Pkal[] = [
+  {
+    id:        'pkal-mafaz',
+    companyId: 'co1',
+    name:      'פק״ל מ״פ',
+    role:      'מ״פ',
+    description: 'ערכת מפקד פלוגה — קשר, מפה, תיק פיקוד',
+    items: [
+      { id: 'pi-mafaz-1', equipmentItemId: 'eq-radio-cmd', itemName: 'מכשיר קשר מ״פ', quantity: 1 },
+      { id: 'pi-mafaz-2', itemName: 'מפה אופרטיבית',           quantity: 1 },
+      { id: 'pi-mafaz-3', itemName: 'תיק פיקוד',               quantity: 1 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+  {
+    id:        'pkal-mm',
+    companyId: 'co1',
+    name:      'פק״ל מ״מ',
+    role:      'מ״מ',
+    description: 'ערכת מפקד מחלקה — קשר, מפה, פנקס',
+    items: [
+      { id: 'pi-mm-1', equipmentItemId: 'eq-radio-cmd', itemName: 'מכשיר קשר מ״מ', quantity: 1 },
+      { id: 'pi-mm-2', itemName: 'מפה',                      quantity: 1 },
+      { id: 'pi-mm-3', itemName: 'פנקס מפקד',                 quantity: 1 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+  {
+    id:        'pkal-samal',
+    companyId: 'co1',
+    name:      'פק״ל סמל',
+    role:      'סמל',
+    description: 'ערכת סמל מחלקה — לוגיסטיקה + קשר',
+    items: [
+      { id: 'pi-samal-1', equipmentItemId: 'eq-radio-cmd', itemName: 'מכשיר קשר', quantity: 1 },
+      { id: 'pi-samal-2', itemName: 'פנקס סמל',               quantity: 1 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+  {
+    id:        'pkal-mk',
+    companyId: 'co1',
+    name:      'פק״ל מ״כ',
+    role:      'מ״כ',
+    description: 'ערכת מפקד כיתה',
+    items: [
+      { id: 'pi-mk-1', itemName: 'מכשיר קשר רשת מחלקה', quantity: 1 },
+      { id: 'pi-mk-2', itemName: 'פנקס מ״כ',             quantity: 1 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+  {
+    id:               'pkal-chovesh',
+    companyId:        'co1',
+    name:             'פק״ל חובש',
+    role:             'חובש',
+    qualificationId:  'q-tactical-medic',
+    description: 'תיק חובש קרבי — תרופות + ציוד החייאה',
+    items: [
+      { id: 'pi-ch-1', itemName: 'תיק חובש מלא', quantity: 1 },
+      { id: 'pi-ch-2', itemName: 'חוסם עורקים',   quantity: 4 },
+      { id: 'pi-ch-3', itemName: 'נר',            quantity: 2 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+  {
+    id:        'pkal-kasher-mm',
+    companyId: 'co1',
+    name:      'פק״ל קשר מ״מ',
+    role:      'קשר מ״מ',
+    items: [
+      { id: 'pi-km-1', equipmentItemId: 'eq-radio-cmd', itemName: 'מכשיר קשר רשת מ״מ', quantity: 1 },
+      { id: 'pi-km-2', itemName: 'סוללה רזרבית',       quantity: 2 },
+      { id: 'pi-km-3', itemName: 'אנטנה ארוכה',         quantity: 1 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+  {
+    id:               'pkal-drone',
+    companyId:        'co1',
+    name:             'פק״ל רחפן',
+    role:             'רחפן',
+    qualificationId:  'q-drone-op',
+    items: [
+      { id: 'pi-dr-1', equipmentItemId: 'eq-drone-mvk', itemName: 'רחפן מאוויק 3', quantity: 1 },
+      { id: 'pi-dr-2', itemName: 'סוללה רזרבית רחפן',      quantity: 2 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+  {
+    id:        'pkal-negbist',
+    companyId: 'co1',
+    name:      'פק״ל נגביסט',
+    role:      'נגביסט',
+    items: [
+      { id: 'pi-ng-1', itemName: 'נגב',         quantity: 1 },
+      { id: 'pi-ng-2', itemName: 'מחסניות נגב',  quantity: 5 },
+    ],
+    createdBy: 'u-cc',
+    createdAt: SEED_CREATED,
+    updatedAt: SEED_CREATED,
+  },
+];
+
+// §21 — example quotas. The CC requires one מ״מ-PKAL holder per platoon,
+// one חובש-PKAL per platoon, and at least three at company level. Demo
+// numbers are intentionally tight so the gap analysis lights up.
+export const mockPkalQuotas: PkalQuota[] = [
+  {
+    id: 'pq-mm-p1',  companyId: 'co1', pkalId: 'pkal-mm',
+    scope: { kind: 'platoon', platoonId: 'p1' }, required: 1,
+    createdAt: SEED_CREATED, updatedAt: SEED_CREATED,
+  },
+  {
+    id: 'pq-mm-p2',  companyId: 'co1', pkalId: 'pkal-mm',
+    scope: { kind: 'platoon', platoonId: 'p2' }, required: 1,
+    createdAt: SEED_CREATED, updatedAt: SEED_CREATED,
+  },
+  {
+    id: 'pq-mm-p3',  companyId: 'co1', pkalId: 'pkal-mm',
+    scope: { kind: 'platoon', platoonId: 'p3' }, required: 1,
+    createdAt: SEED_CREATED, updatedAt: SEED_CREATED,
+  },
+  {
+    id: 'pq-ch-co',  companyId: 'co1', pkalId: 'pkal-chovesh',
+    scope: { kind: 'company' }, required: 3,
+    createdAt: SEED_CREATED, updatedAt: SEED_CREATED,
+  },
+  {
+    id: 'pq-kasher-co', companyId: 'co1', pkalId: 'pkal-kasher-mm',
+    scope: { kind: 'company' }, required: 3,
+    createdAt: SEED_CREATED, updatedAt: SEED_CREATED,
+  },
 ];
 
 // Soldier ↔ Qualification links. Two soldiers carry quals for demo realism.

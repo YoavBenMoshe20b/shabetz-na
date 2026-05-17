@@ -922,6 +922,70 @@ export interface SoldierQualification {
   expiresAt?: string;                    // ISO; missions exclude soldier past this
 }
 
+// ─── PKAL (פק״ל) — named load-out bundles ──────────────────────────────────
+//
+// §19 — A PKAL is a named equipment kit tied (typically) to an operational
+// role. "פק״ל מ״מ" is the gear a platoon commander carries; "פק״ל חובש"
+// is the medic's kit; "פק״ל ר״צ" is the radio/comms operator's loadout.
+//
+// PKALs are data, not enums. The company commander defines them. The
+// engine reads them as a vocabulary: "this mission needs the מ״מ PKAL
+// present", or "this platoon must field at least N soldiers holding the
+// חובש PKAL" (the latter being a quota — see PkalQuota below).
+//
+// We intentionally keep PkalItem free of stock-management semantics. The
+// company-wide inventory lives in EquipmentItem; here we only specify
+// "what's in the bundle, conceptually." The signing-out flow continues
+// to be the source of truth for who actually carries what.
+
+export interface Pkal {
+  id: string;
+  companyId: string;
+  name: string;                          // "פק״ל מ״מ"
+  /** Operational role this PKAL is associated with. Optional — some
+   *  PKALs span multiple roles (e.g. a generic "כיתת חי״ר" bundle). */
+  role?: OperationalRole;
+  /** Qualification required to hold this PKAL. Optional. */
+  qualificationId?: string;
+  description?: string;
+  items: PkalItem[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PkalItem {
+  id: string;
+  /** When set, links to a row in the company EquipmentItem catalog. When
+   *  unset, the entry is free-text — useful for PKALs defined before the
+   *  catalogue is fully populated. */
+  equipmentItemId?: string;
+  /** Display name. Required even when equipmentItemId is set so deleting
+   *  the catalog row doesn't blank the PKAL line. */
+  itemName: string;
+  quantity: number;
+  /** Optional notes — e.g. "מטענים פיקוד בלבד", "סוללה רזרבית". */
+  notes?: string;
+}
+
+// §21 — Required count of soldiers holding a given PKAL within a scope.
+// Gaps surface on the company-readiness report and as alerts.
+export interface PkalQuota {
+  id: string;
+  companyId: string;
+  pkalId: string;
+  /** Where the quota applies: whole company, a specific platoon, or a
+   *  specific squad. Multiple quotas for the same PKAL at different
+   *  scopes are allowed (e.g. "company total = 6" AND "each platoon = 2"). */
+  scope:
+    | { kind: 'company' }
+    | { kind: 'platoon'; platoonId: string }
+    | { kind: 'squad';   squadId:   string };
+  required: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Engine: mission policy primitives ──────────────────────────────────────
 //
 // A Mission is composed of policy objects rather than fields. Each policy
