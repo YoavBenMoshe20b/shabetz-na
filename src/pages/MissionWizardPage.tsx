@@ -603,6 +603,12 @@ function Step2Character({ draft, patch }: { draft: WizardDraft; patch: (p: Parti
 // ─── Step 3 — Timing + manpower (fact-based) ───────────────────────────────
 
 function Step3Timing({ draft, patch }: { draft: WizardDraft; patch: (p: Partial<WizardDraft>) => void }) {
+  // Readiness-specific UI (on-call time model + standby minutes row)
+  // only appears for the 'readiness' archetype. Static guard / patrol /
+  // one-time-op / custom never show readiness/on-call fields by
+  // default — readiness is a SEPARATE operational layer that can be
+  // ADDED to a guard mission, not a baked-in option.
+  const isReadiness = draft.archetypeKind === 'readiness';
   return (
     <div className="space-y-7">
       <QuestionHeader title="מתי זה רץ וכמה חיילים בכל משמרת?" />
@@ -626,12 +632,14 @@ function Step3Timing({ draft, patch }: { draft: WizardDraft; patch: (p: Partial<
               windows: [{ startTime: '06:00', endTime: '22:00', shiftDurationMinutes: 120, recurring: 'every-day' }],
             }})}
           />
-          <TimeKindCard
-            label="רק כשמופעלת"
-            hint="כוננות / on-call"
-            on={draft.timeModel?.kind === 'on-demand'}
-            onClick={() => patch({ timeModel: { kind: 'on-demand' } })}
-          />
+          {isReadiness && (
+            <TimeKindCard
+              label="רק כשמופעלת"
+              hint="כוננות / on-call"
+              on={draft.timeModel?.kind === 'on-demand'}
+              onClick={() => patch({ timeModel: { kind: 'on-demand' } })}
+            />
+          )}
           <TimeKindCard
             label="תאריך אחד"
             hint="חד-פעמי"
@@ -705,19 +713,27 @@ function Step3Timing({ draft, patch }: { draft: WizardDraft; patch: (p: Partial<
               } })}
               min={30} max={720}
             />
-            <RangeRow
-              label="מתוכה כוננות"
-              value={draft.cycleProfile?.standbyMinutes ?? 0}
-              onChange={(v) => patch({ cycleProfile: {
-                guardMinutes: draft.cycleProfile?.guardMinutes ?? 120,
-                restMinutes:  draft.cycleProfile?.restMinutes  ?? 240,
-                standbyMinutes: v,
-              } })}
-              min={0} max={720}
-            />
-            <Hint className="text-mil-muted block">
-              בכוננות החייל עוד לא ישן — ניתן לשבץ אותו למשימות פאסיביות נוספות.
-            </Hint>
+            {/* "מתוכה כוננות" + the standby explainer only render for
+                the readiness archetype. A static guard's 24/7 cycle is
+                guard ↔ rest; readiness/on-call is a separate layer
+                that may be added to a guard mission later. */}
+            {isReadiness && (
+              <>
+                <RangeRow
+                  label="מתוכה כוננות"
+                  value={draft.cycleProfile?.standbyMinutes ?? 0}
+                  onChange={(v) => patch({ cycleProfile: {
+                    guardMinutes: draft.cycleProfile?.guardMinutes ?? 120,
+                    restMinutes:  draft.cycleProfile?.restMinutes  ?? 240,
+                    standbyMinutes: v,
+                  } })}
+                  min={0} max={720}
+                />
+                <Hint className="text-mil-muted block">
+                  בכוננות החייל עוד לא ישן — ניתן לשבץ אותו למשימות פאסיביות נוספות.
+                </Hint>
+              </>
+            )}
           </div>
         )}
       </div>
