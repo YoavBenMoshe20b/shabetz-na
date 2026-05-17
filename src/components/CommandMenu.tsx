@@ -138,7 +138,7 @@ function buildItems(user: MockUser, role: UserRole): {
   const personal: MenuItem[] = [
     { label: 'פרופיל אישי',  hint: 'פרטים, מידות, כשירויות', href: '/profile',   icon: 'user' },
     { label: 'ציוד אישי',    hint: 'הציוד החתום עליי',        href: '/equipment', icon: 'bag' },
-    { label: 'לוח שנה',      hint: 'אירועים, יציאות, משימות',  href: '/calendar',  icon: 'calendar' },
+    { label: 'לו״ז',          hint: 'יומן · אירועים · יציאות · משימות', href: '/calendar', icon: 'calendar' },
   ];
 
   // Operational surfaces — what does the role need to act on?

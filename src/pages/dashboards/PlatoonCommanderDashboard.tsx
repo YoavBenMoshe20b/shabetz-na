@@ -232,7 +232,7 @@ export default function PlatoonCommanderDashboard() {
           if (myPlatoonSlots.length === 0) {
             return (
               <section className="bg-mil-card border border-mil-border rounded-2xl-soft px-5 py-5">
-                <Hint className="block uppercase tracking-wide font-semibold text-mil-muted">לוח שיבוץ</Hint>
+                <Hint className="block uppercase tracking-wide font-semibold text-mil-muted">לו״ז שיבוץ</Hint>
                 <Body className="mt-1 font-semibold text-base">אין משימות פעילות השבוע</Body>
                 <Muted className="mt-1 text-tiny leading-snug">כשמ״פ יוריד משימות למחלקה, הן יופיעו כאן.</Muted>
               </section>
@@ -241,7 +241,7 @@ export default function PlatoonCommanderDashboard() {
           if (understaffed.length === 0) {
             return (
               <section className="bg-mil-success-bg border border-mil-success-border rounded-2xl-soft px-5 py-5">
-                <Hint className="block uppercase tracking-wide font-semibold text-mil-success">לוח שיבוץ</Hint>
+                <Hint className="block uppercase tracking-wide font-semibold text-mil-success">לו״ז שיבוץ</Hint>
                 <div className="mt-1 flex items-baseline gap-2 flex-wrap">
                   <Body className="font-bold text-lg">הכל מאוייש</Body>
                   <Muted className="text-tiny">{myPlatoonSlots.length} משבצות השבוע</Muted>
@@ -410,7 +410,7 @@ export default function PlatoonCommanderDashboard() {
                   onClick={() => navigate('/coverage/platoons')}
                   className="w-full text-center bg-mil-bg-alt hover:bg-mil-card px-5 py-2.5 text-tiny font-semibold text-mil-muted transition-colors border-t border-mil-border"
                 >
-                  לוח יציאות פלוגתי ←
+                  לו״ז יציאות פלוגתי ←
                 </button>
               </div>
             </Section>

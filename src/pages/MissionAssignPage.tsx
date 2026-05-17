@@ -7,7 +7,7 @@
 //   • החלף ב־<platoon>
 //   • השאר בבסיס למשימה (sets PlatoonLeaveDay.status = 'in-base')
 //   • יציאה חלקית     (sets PlatoonLeaveDay.status = 'partial')
-//   • פתח לוח יציאות פלוגתי
+//   • פתח לו״ז יציאות פלוגתי
 //   • אפשר בכל זאת   (explicit override, logged)
 //
 // The flow logic lives in src/utils/conflictResolution.ts — pure,
@@ -363,7 +363,7 @@ function labelFor(kind: ConflictResolution['kind'] | undefined): string {
     case 'reassign-swap-platoon': return 'הוחלפה מחלקה';
     case 'override-keep-in-base': return 'נשארת בבסיס';
     case 'override-partial':      return 'יציאה חלקית';
-    case 'open-leave-board':      return 'נפתח לוח יציאות';
+    case 'open-leave-board':      return 'נפתח לו״ז יציאות';
     case 'allow-anyway':          return 'אושר עם אזהרה';
     case 'shift-window-shorter':  return 'הזזה';
     default:                      return '';

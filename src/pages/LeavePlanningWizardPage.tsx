@@ -107,7 +107,7 @@ export default function LeavePlanningWizardPage() {
           <Eyebrow>{myCompany.unitName ?? ''} · {myCompany.name}</Eyebrow>
           <PageTitle className="mt-1.5">תכנון יציאות פלוגתיות</PageTitle>
           <Muted className="mt-1.5 text-tiny">
-            תהליך צעד-אחר-צעד להגדרת חסימות, גופים, מדיניות סבב והמלצות מערכת. הלוח עצמו נערך ידנית ב-״לוח יציאות פלוגתיות״.
+            תהליך צעד-אחר-צעד להגדרת חסימות, גופים, מדיניות סבב והמלצות מערכת. הלוח עצמו נערך ידנית ב-״לו״ז יציאות פלוגתיות״.
           </Muted>
         </header>
 
@@ -546,13 +546,13 @@ function Step4Review({
           <ul className="space-y-1 text-tiny text-mil-text leading-snug list-disc pr-5">
             <li>המדיניות תיכנס לתוקף מיד.</li>
             <li>הלוח הפלוגתי עצמו ייערך ידנית — המערכת לא יוצרת לוח אוטומטי כרגע.</li>
-            <li>החסימות יופיעו ב-״לוח יציאות פלוגתי״ ויקובלו ברקע ע״י הלוח.</li>
+            <li>החסימות יופיעו ב-״לו״ז יציאות פלוגתי״ ויקובלו ברקע ע״י הלוח.</li>
           </ul>
           <button
             onClick={onOpenBoard}
             className="mt-2 text-tiny font-bold text-mil-info hover:underline"
           >
-            פתח לוח יציאות פלוגתי →
+            פתח לו״ז יציאות פלוגתי →
           </button>
         </div>
       </Section>

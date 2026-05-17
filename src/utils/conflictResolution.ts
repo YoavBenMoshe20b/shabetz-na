@@ -207,7 +207,7 @@ export function resolutionsForPlatoonLeave(args: {
   //    window, change other platoons' days, etc.).
   out.push({
     kind: 'open-leave-board',
-    label: 'פתח לוח יציאות פלוגתי',
+    label: 'פתח לו״ז יציאות פלוגתי',
     hint: 'לערוך חופשי את התכנון',
     severity: 'navigate',
     icon: '🗓',

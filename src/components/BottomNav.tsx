@@ -63,7 +63,7 @@ const ICON: Record<string, React.ReactNode> = {
 
 const SOLDIER_ITEMS: NavItem[] = [
   { to: '/home',     label: 'בית',    icon: ICON.home },
-  { to: '/calendar', label: 'לוח',    icon: ICON.calendar },
+  { to: '/calendar', label: 'לו״ז',   icon: ICON.calendar },
   { to: '/profile',  label: 'פרופיל', icon: ICON.user },
 ];
 
@@ -71,7 +71,7 @@ const SOLDIER_ITEMS: NavItem[] = [
 // scheduling and roster — operational state report scoped by viewer.
 const COMMANDER_ITEMS: NavItem[] = [
   { to: '/home',     label: 'בית',    icon: ICON.home },
-  { to: '/calendar', label: 'לוח',    icon: ICON.calendar },
+  { to: '/calendar', label: 'לו״ז',   icon: ICON.calendar },
   { to: '/schedule', label: 'משימות',  icon: ICON.grid },
   { to: '/report1',  label: 'דוח 1',  icon: ICON.report1 },
   { to: '/soldiers', label: 'חיילים', icon: ICON.users },
@@ -87,7 +87,7 @@ const RASAP_ICON = (
 
 const RASAP_ITEMS: NavItem[] = [
   { to: '/home',                 label: 'בית',     icon: ICON.home },
-  { to: '/calendar',             label: 'לוח',     icon: ICON.calendar },
+  { to: '/calendar',             label: 'לו״ז',    icon: ICON.calendar },
   { to: '/rasap',                label: 'רס״פ',    icon: RASAP_ICON },
   { to: '/equipment/inventory',  label: 'מלאי',    icon: ICON.grid },
   { to: '/profile',              label: 'פרופיל',  icon: ICON.user },

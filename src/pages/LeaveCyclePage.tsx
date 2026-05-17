@@ -172,7 +172,7 @@ export default function LeaveCyclePage() {
                       פרסם סבב
                     </Button>
                     <Hint className="block mt-1.5 text-mil-muted">
-                      פרסום הופך את הסבב לגלוי לחיילים בעמוד הבית ובלוח השנה.
+                      פרסום הופך את הסבב לגלוי לחיילים בעמוד הבית ובלו״ז השנה.
                     </Hint>
                   </div>
                 )}

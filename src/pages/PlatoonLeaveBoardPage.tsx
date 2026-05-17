@@ -371,7 +371,7 @@ export default function PlatoonLeaveBoardPage() {
           <Eyebrow>ניהול תפעולי</Eyebrow>
           <PageTitle className="mt-1">יציאות הפלוגה</PageTitle>
           <Muted className="mt-1 text-tiny leading-relaxed">
-            לוח 30 ימים קדימה. תא <strong>סגול</strong> = המחלקה בבית באותו יום. כשמחלקה בבית — המערכת לא תשבץ אותה למשימות (אלא אם תעשה override מודע).
+            לו״ז 30 ימים קדימה. תא <strong>סגול</strong> = המחלקה בבית באותו יום. כשמחלקה בבית — המערכת לא תשבץ אותה למשימות (אלא אם תעשה override מודע).
           </Muted>
           <button
             onClick={() => navigate('/coverage/planning')}

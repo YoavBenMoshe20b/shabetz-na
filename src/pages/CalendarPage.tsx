@@ -67,7 +67,7 @@ export default function CalendarPage() {
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
-      <Header title="לוח" />
+      <Header title="לו״ז" />
       <PageMain>
 
         {/* ── Tabs — segmented control ────────────────────────────── */}

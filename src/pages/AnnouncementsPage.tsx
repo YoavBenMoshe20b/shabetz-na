@@ -189,7 +189,7 @@ function AnnouncementCard({
         {a.showOnCalendar && (
           <>
             <span className="text-mil-ghost">·</span>
-            <span>בלוח השנה</span>
+            <span>בלו״ז השנה</span>
           </>
         )}
       </div>
@@ -352,7 +352,7 @@ function AnnouncementSheet({
         {/* Toggles */}
         <div className="space-y-2 bg-mil-bg-alt/60 border border-mil-border rounded-xl-soft p-3.5">
           <Toggle
-            label="הצג בלוח השנה"
+            label="הצג בלו״ז השנה"
             hint="ההודעה תופיע גם בתצוגת היומן של כל מי שב-קהל היעד."
             value={showOnCalendar}
             onChange={setShowOnCalendar}
