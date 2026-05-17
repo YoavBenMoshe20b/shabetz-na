@@ -44,11 +44,32 @@ function weekdayShort(iso: string): string {
   return days[new Date(iso).getDay()];
 }
 
+// Blocked-date kind visuals — used in column headers + tooltips.
+const BLOCKED_KIND_ICON: Record<import('../types').CompanyBlockedDateKind, string> = {
+  'line-up':    '🎯',
+  'line-down':  '🏁',
+  'credit':     '🏖',
+  'drill':      '🎖',
+  'inspection': '🔍',
+  'op-event':   '🚨',
+  'other':      '📌',
+};
+const BLOCKED_KIND_LABEL: Record<import('../types').CompanyBlockedDateKind, string> = {
+  'line-up':    'עליה לקו',
+  'line-down':  'ירידה מהקו',
+  'credit':     'זיכוי בסיס',
+  'drill':      'תרגיל',
+  'inspection': 'ביקורת',
+  'op-event':   'אירוע מבצעי',
+  'other':      'אחר',
+};
+
 export default function PlatoonLeaveBoardPage() {
   const navigate = useNavigate();
   const {
     currentUser, currentRole, platoons, squads, soldiers,
     platoonLeaveDays, companyLeavePolicy, companyCoverageRules,
+    companyBlockedDates,
     setPlatoonLeaveDay, clearPlatoonLeaveDay, generatePlatoonRotation,
     updateCompanyLeavePolicy, removeCoverageRule, upsertCoverageRule,
   } = useApp();
@@ -225,6 +246,89 @@ export default function PlatoonLeaveBoardPage() {
       .map(([iso, count]) => ({ iso, count }));
   }, [coverageWarnings]);
 
+  // ── Visual overlay indexes (Phase 7.3 control-center upgrade) ────
+  // Blocked dates → per-date lookup so column headers can tint + show
+  // the kind glyph. Per-day-per-platoon transition markers so cells
+  // at the start/end of a home stint show ↗ entering or ↙ leaving.
+  // Cell-level coverage warning lookup so the offending CELL itself
+  // shows the warning ring, not just a worst-day list above the grid.
+
+  const blockedByDate = useMemo(() => {
+    const m = new Map<string, typeof companyBlockedDates[number]>();
+    for (const d of companyBlockedDates.filter((b) => b.companyId === myCompanyId)) {
+      m.set(d.dateIso, d);
+    }
+    return m;
+  }, [companyBlockedDates, myCompanyId]);
+
+  const todayIso = startOfTodayIso();
+
+  const warningsByDay = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const w of coverageWarnings) m.set(w.iso, (m.get(w.iso) ?? 0) + 1);
+    return m;
+  }, [coverageWarnings]);
+
+  // Operational recommendations — derived from current state. Each is
+  // a short Hebrew note the operator should see at the top of the
+  // board. Pure, no engine call.
+  const recommendations = useMemo(() => {
+    const out: Array<{ tone: 'good' | 'info' | 'warn'; text: string }> = [];
+    // Capacity breach summary
+    const breaches = perDayStats.filter((d) => d.breachesConcurrentCap);
+    if (breaches.length > 0) {
+      out.push({
+        tone: 'warn',
+        text: `${breaches.length} ימים עם יותר מ-${companyLeavePolicy.maxPlatoonsHome} מחלקות בבית בו זמנית — שקול לפצל את הסבב.`,
+      });
+    }
+    // Coverage rule heatmap
+    const totalRuleBreaks = coverageWarnings.length;
+    if (totalRuleBreaks > 0) {
+      out.push({
+        tone: 'warn',
+        text: `${totalRuleBreaks} הפרות חוקי כיסוי לאורך החודש — בדוק את הימים המסומנים בלוח.`,
+      });
+    }
+    // Fairness — most-home platoon vs least-home
+    const homeCount = new Map<string, number>();
+    for (const p of combatRows) homeCount.set(p.id, 0);
+    for (const d of platoonLeaveDays) {
+      if (d.status === 'home' && d.dateIso >= todayIso && homeCount.has(d.platoonId)) {
+        homeCount.set(d.platoonId, (homeCount.get(d.platoonId) ?? 0) + 1);
+      }
+    }
+    const counts = Array.from(homeCount.entries());
+    if (counts.length >= 2) {
+      counts.sort((a, b) => b[1] - a[1]);
+      const top = counts[0], bottom = counts[counts.length - 1];
+      const spread = top[1] - bottom[1];
+      if (spread >= 4) {
+        const topName = combatRows.find((p) => p.id === top[0])?.name ?? top[0];
+        const botName = combatRows.find((p) => p.id === bottom[0])?.name ?? bottom[0];
+        out.push({
+          tone: 'info',
+          text: `איזון: ${topName} בבית ${top[1]} ימים, ${botName} רק ${bottom[1]}. שקול להחליף כמה תאריכים.`,
+        });
+      } else if (spread <= 1 && top[1] > 0) {
+        out.push({ tone: 'good', text: 'הסבב מאוזן בין המחלקות החודש.' });
+      }
+    }
+    // Blocked dates summary
+    const futureBlocked = Array.from(blockedByDate.values())
+      .filter((b) => b.dateIso >= todayIso);
+    if (futureBlocked.length > 0) {
+      out.push({
+        tone: 'info',
+        text: `${futureBlocked.length} תאריכים חסומים מסומנים בלוח (עליה לקו, תרגיל, אירוע מבצעי...).`,
+      });
+    }
+    if (out.length === 0) {
+      out.push({ tone: 'good', text: 'הלוח נראה תקין. אין הפרות חוקים, סבב מאוזן.' });
+    }
+    return out;
+  }, [perDayStats, coverageWarnings, combatRows, platoonLeaveDays, todayIso, companyLeavePolicy.maxPlatoonsHome, blockedByDate]);
+
   const [editingRulesOpen, setEditingRulesOpen] = useState(false);
 
   // ── Route gate ──────────────────────────────────────────────────
@@ -358,8 +462,61 @@ export default function PlatoonLeaveBoardPage() {
           </Section>
         )}
 
-        {/* Combat platoons grid */}
+        {/* Recommendations + state summary — Phase 7.3 visual layer.
+            Shows operator-facing notes derived from the current state
+            before they look at the grid. Tonal, scannable. */}
+        <Section label="המלצות מערכת">
+          <div className="space-y-1.5">
+            {recommendations.map((r, i) => (
+              <div
+                key={i}
+                className={`rounded-xl-soft px-3.5 py-2 text-tiny leading-snug border ${
+                  r.tone === 'warn'
+                    ? 'bg-mil-warn-bg border-mil-warn text-mil-warn'
+                    : r.tone === 'good'
+                      ? 'bg-mil-success-bg border-mil-success-border text-mil-success'
+                      : 'bg-mil-info-bg border-mil-info-border text-mil-info'
+                }`}
+              >
+                <span className="font-bold uppercase tracking-wide ml-1.5">
+                  {r.tone === 'warn' ? 'שים לב' : r.tone === 'good' ? 'תקין' : 'הערה'}
+                </span>
+                {r.text}
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* Combat platoons grid — visual control board.
+            Column header tints + glyphs for blocked dates and the
+            "today" marker. Per-cell visuals show: home/base state +
+            transition arrow (↗ first home day, ↙ last home day) +
+            coverage warning ring when this day breaks a rule. */}
         <Section label="לוח מחלקות קרביות">
+          {/* Mini-legend */}
+          <div className="flex items-baseline gap-3 mb-2 text-tiny text-mil-muted flex-wrap">
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="w-3 h-3 rounded bg-mil-olive inline-block" />
+              בבית
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="w-3 h-3 rounded bg-mil-bg-alt border border-mil-border inline-block" />
+              בבסיס
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="text-mil-warn text-xs">⚠</span>
+              חוק כיסוי שבור
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="text-mil-info text-xs">🎯</span>
+              תאריך חסום
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="text-mil-success text-xs">↗ / ↙</span>
+              יוצא / חוזר
+            </span>
+          </div>
+
           <div className="bg-mil-card border border-mil-border rounded-xl-soft overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-tiny tabular-nums" dir="rtl">
@@ -368,12 +525,31 @@ export default function PlatoonLeaveBoardPage() {
                     <th className="px-3 py-2 text-right font-semibold text-mil-muted whitespace-nowrap sticky right-0 bg-mil-bg-alt">
                       מחלקה
                     </th>
-                    {days.map((iso) => (
-                      <th key={iso} className="px-1 py-2 font-mono text-mil-muted min-w-[36px]">
-                        <div className="text-xxs">{weekdayShort(iso)}</div>
-                        <div>{shortDate(iso).slice(0, 5)}</div>
-                      </th>
-                    ))}
+                    {days.map((iso) => {
+                      const isToday = iso === todayIso;
+                      const isSat = new Date(iso).getDay() === 6;
+                      const blocked = blockedByDate.get(iso);
+                      const dayWarnCount = warningsByDay.get(iso) ?? 0;
+                      const tone =
+                        blocked ? 'bg-mil-info-bg text-mil-info border-l border-mil-info-border'
+                        : isToday ? 'bg-mil-olive-bg text-mil-olive-dim ring-1 ring-mil-olive ring-inset'
+                        : isSat   ? 'bg-mil-card-warm text-mil-muted'
+                        : 'text-mil-muted';
+                      return (
+                        <th
+                          key={iso}
+                          className={`px-1 py-2 font-mono min-w-[36px] ${tone}`}
+                          title={blocked ? `${BLOCKED_KIND_LABEL[blocked.kind]} · ${blocked.reason ?? ''}` : isToday ? 'היום' : ''}
+                        >
+                          <div className="text-xxs flex items-baseline justify-center gap-0.5">
+                            {weekdayShort(iso)}
+                            {blocked && <span className="text-[10px]">{BLOCKED_KIND_ICON[blocked.kind]}</span>}
+                            {!blocked && dayWarnCount > 0 && <span className="text-mil-warn">⚠</span>}
+                          </div>
+                          <div>{shortDate(iso).slice(0, 5)}</div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -382,24 +558,66 @@ export default function PlatoonLeaveBoardPage() {
                       <td className="px-3 py-2 font-semibold text-mil-text whitespace-nowrap sticky right-0 bg-mil-card">
                         {p.name}
                       </td>
-                      {days.map((iso) => {
+                      {days.map((iso, idx) => {
                         const status = leaveByKey.get(`${iso}::${p.id}`);
                         const isHome = status === 'home';
+                        const blocked = blockedByDate.get(iso);
+
+                        // Transition markers: ↗ for first day of a home
+                        // stint (yesterday was NOT home), ↙ for the
+                        // last day (tomorrow is NOT home).
+                        const prevIso = idx > 0 ? days[idx - 1] : null;
+                        const nextIso = idx < days.length - 1 ? days[idx + 1] : null;
+                        const prevHome = prevIso ? leaveByKey.get(`${prevIso}::${p.id}`) === 'home' : false;
+                        const nextHome = nextIso ? leaveByKey.get(`${nextIso}::${p.id}`) === 'home' : false;
+                        const isEnteringHome = isHome && !prevHome;
+                        const isLeavingHome  = isHome && !nextHome;
+
+                        // A cell with at least one rule-warning shows
+                        // a soft warning ring. Today's column adds an
+                        // additional olive ring outside.
+                        const dayWarnCount = warningsByDay.get(iso) ?? 0;
+                        const blockedOverride = blocked?.requireAllInBase && isHome;
+
                         return (
                           <td
                             key={iso}
-                            className="px-1 py-1 text-center"
+                            className={`px-1 py-1 text-center relative ${
+                              iso === todayIso ? 'bg-mil-olive-bg/30' :
+                              new Date(iso).getDay() === 6 ? 'bg-mil-card-warm/40' :
+                              ''
+                            }`}
                           >
                             <button
                               onClick={() => handleToggleCell(iso, p.id)}
-                              className={`w-7 h-7 rounded-md text-xxs font-bold transition-all ${
+                              className={`relative w-7 h-7 rounded-md text-xxs font-bold transition-all ${
                                 isHome
-                                  ? 'bg-mil-olive text-white shadow-card'
+                                  ? blockedOverride
+                                    ? 'bg-mil-alert text-white shadow-card'
+                                    : 'bg-mil-olive text-white shadow-card'
                                   : 'bg-mil-bg-alt text-mil-muted hover:bg-mil-card-warm'
-                              }`}
-                              title={`${p.name} · ${shortDate(iso)} · ${isHome ? 'בבית' : 'בבסיס'}`}
+                              } ${dayWarnCount > 0 ? 'ring-2 ring-mil-warn/60' : ''}`}
+                              title={[
+                                `${p.name} · ${shortDate(iso)}`,
+                                isHome ? 'בבית' : 'בבסיס',
+                                blocked ? `[חסום: ${BLOCKED_KIND_LABEL[blocked.kind]}]` : null,
+                                blockedOverride ? '⚠ סתירה: יום חסום + מחלקה בבית' : null,
+                                dayWarnCount > 0 ? `${dayWarnCount} חוקי כיסוי שבורים` : null,
+                              ].filter(Boolean).join(' · ')}
                             >
                               {isHome ? 'ב' : '·'}
+                              {isEnteringHome && (
+                                <span
+                                  className="absolute -top-1 -left-1 text-[9px] text-mil-success font-extrabold pointer-events-none"
+                                  aria-hidden
+                                >↗</span>
+                              )}
+                              {isLeavingHome && (
+                                <span
+                                  className="absolute -bottom-1 -right-1 text-[9px] text-mil-info font-extrabold pointer-events-none"
+                                  aria-hidden
+                                >↙</span>
+                              )}
                             </button>
                           </td>
                         );
