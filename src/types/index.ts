@@ -1541,6 +1541,35 @@ export type CoverageRule =
       kind: 'mutual-exclusion';
       label: string;
       soldierIds: string[];
+    }
+  // Phase 7.3 — command coverage. "At least min soldiers carrying ANY
+  // of these operational roles" (OR semantics, distinct from
+  // min-with-operational-role which is per-role).
+  // Example: "תמיד 1 מ-{מ״מ, סמל, מ״כ} בבסיס".
+  | {
+      id: string;
+      kind: 'command-coverage';
+      label: string;
+      /** OR set — soldier matches if ANY of these roles appears in
+       *  their operationalRoles. */
+      anyOfRoles: OperationalRole[];
+      min: number;
+      scopePlatoonId?: string;
+    }
+  // Phase 7.3 — personal-leave buffer. Reserve slack for individual
+  // leave requests so the platoon-level rotation doesn't consume the
+  // entire leave allowance.
+  // Approximation: the evaluator compares in-base count vs the
+  // configured target. A real implementation would also subtract
+  // mission staffing demand — that's a follow-up.
+  | {
+      id: string;
+      kind: 'personal-leave-buffer';
+      label: string;
+      /** Buffer target. When asPercent is true, treated as 0..100. */
+      min: number;
+      asPercent: boolean;
+      scopePlatoonId?: string;
     };
 
 export interface CompanyCoverageRuleSet {

@@ -163,11 +163,57 @@ export default function PlatoonLeaveBoardPage() {
               detail: `${matches.length}/${r.min}`,
             });
           }
+        } else if (r.kind === 'command-coverage') {
+          // OR-of-roles: a soldier counts if ANY of their operational
+          // roles appears in the rule's anyOfRoles set.
+          const scoped = r.scopePlatoonId
+            ? inBaseSoldiers.filter((s) => {
+                const squad = squads.find((sq) => sq.id === s.squadId);
+                return squad?.platoonId === r.scopePlatoonId;
+              })
+            : inBaseSoldiers;
+          const matches = scoped.filter((s) =>
+            (s.operationalRoles ?? []).some((role) => r.anyOfRoles.includes(role)),
+          );
+          if (matches.length < r.min) {
+            out.push({
+              iso,
+              ruleLabel: r.label,
+              detail: `${matches.length}/${r.min}`,
+            });
+          }
+        } else if (r.kind === 'personal-leave-buffer') {
+          // Approximation: free buffer = in-base count in scope.
+          // Mission demand is NOT yet subtracted — the rule represents
+          // the operator's intent and warns when in-base count drops
+          // below the configured buffer target. A future slice can
+          // refine this once the leave board reads materializer demand.
+          const scopeSize = r.scopePlatoonId
+            ? (platoonSoldiers.get(r.scopePlatoonId)?.length ?? 0)
+            : Array.from(platoonSoldiers.values()).reduce((sum, list) => sum + list.length, 0);
+          const scoped = r.scopePlatoonId
+            ? inBaseSoldiers.filter((s) => {
+                const squad = squads.find((sq) => sq.id === s.squadId);
+                return squad?.platoonId === r.scopePlatoonId;
+              })
+            : inBaseSoldiers;
+          const target = r.asPercent
+            ? Math.round((r.min / 100) * scopeSize)
+            : r.min;
+          if (scoped.length < target) {
+            out.push({
+              iso,
+              ruleLabel: r.label,
+              detail: r.asPercent
+                ? `${scoped.length}/${target} (${r.min}%)`
+                : `${scoped.length}/${target}`,
+            });
+          }
         }
       }
     }
     return out;
-  }, [days, perDayStats, companyCoverageRules.rules, platoonSoldiers]);
+  }, [days, perDayStats, companyCoverageRules.rules, platoonSoldiers, squads]);
 
   // Worst-hit days (most warnings) — first 5
   const topWarningDays = useMemo(() => {
@@ -436,7 +482,18 @@ export default function PlatoonLeaveBoardPage() {
 
 // ─── Coverage rule ADD form ─────────────────────────────────────────
 
-type RuleKind = 'min-count-in-platoon' | 'min-with-functional-role';
+type RuleKind =
+  | 'min-count-in-platoon'
+  | 'min-with-functional-role'
+  | 'command-coverage'
+  | 'personal-leave-buffer';
+
+// Command-coverage role presets — operator can pick any subset.
+// Default "command" set covers the canonical OR rule: at any time at
+// least one of {מ״מ, סמל, מ״כ} must be in base.
+const COMMAND_ROLE_OPTIONS: import('../types').OperationalRole[] = [
+  'מ״מ', 'סמל', 'מ״כ', 'סמ״פ', 'מ״פ',
+];
 
 function CoverageRuleAddForm({
   platoons, onAdd,
@@ -449,6 +506,9 @@ function CoverageRuleAddForm({
   const [functionalRole, setFunctionalRole] = useState<string>('driver');
   const [minCount, setMinCount] = useState<number>(1);
   const [label, setLabel] = useState<string>('');
+  const [commandRoles, setCommandRoles] = useState<import('../types').OperationalRole[]>(['מ״מ', 'סמל', 'מ״כ']);
+  const [bufferAsPercent, setBufferAsPercent] = useState<boolean>(false);
+  const [bufferScope, setBufferScope] = useState<string>('');  // '' = company-wide
 
   const FUNCTIONAL_ROLE_OPTIONS = [
     { id: 'driver',                 label: 'נהג' },
@@ -464,6 +524,12 @@ function CoverageRuleAddForm({
     { id: 'drone-operator',         label: 'מפעיל רחפן' },
   ];
 
+  const toggleCommandRole = (role: import('../types').OperationalRole) => {
+    setCommandRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
+    );
+  };
+
   const handleAdd = () => {
     const id = `cr-${Date.now()}`;
     if (kind === 'min-count-in-platoon') {
@@ -476,7 +542,7 @@ function CoverageRuleAddForm({
         platoonId,
         min: minCount,
       });
-    } else {
+    } else if (kind === 'min-with-functional-role') {
       const role = FUNCTIONAL_ROLE_OPTIONS.find((r) => r.id === functionalRole);
       const finalLabel = label.trim() || `מינימום ${minCount} × ${role?.label ?? functionalRole}`;
       onAdd({
@@ -486,6 +552,32 @@ function CoverageRuleAddForm({
         functionalRole: functionalRole as CoverageRule extends { kind: 'min-with-functional-role'; functionalRole: infer T } ? T : never,
         min: minCount,
       });
+    } else if (kind === 'command-coverage') {
+      if (commandRoles.length === 0) return;
+      const finalLabel = label.trim()
+        || `${minCount} מ-${commandRoles.join(' / ')}`;
+      onAdd({
+        id,
+        kind: 'command-coverage',
+        label: finalLabel,
+        anyOfRoles: commandRoles,
+        min: minCount,
+      });
+    } else if (kind === 'personal-leave-buffer') {
+      const scope = bufferScope || undefined;
+      const scopeName = scope ? platoons.find((p) => p.id === scope)?.name : 'הפלוגה';
+      const finalLabel = label.trim()
+        || (bufferAsPercent
+            ? `מרווח יציאות אישיות ב-${scopeName}: ${minCount}%`
+            : `מרווח יציאות אישיות ב-${scopeName}: ${minCount} חיילים`);
+      onAdd({
+        id,
+        kind: 'personal-leave-buffer',
+        label: finalLabel,
+        min: minCount,
+        asPercent: bufferAsPercent,
+        scopePlatoonId: scope,
+      });
     }
     setLabel('');
     setMinCount(1);
@@ -494,30 +586,22 @@ function CoverageRuleAddForm({
   return (
     <div className="mt-3 bg-mil-bg-alt border border-mil-border rounded-xl-soft p-4 space-y-2.5">
       <Hint className="block font-semibold text-mil-muted">+ חוק כיסוי חדש</Hint>
-      <div className="flex gap-2 flex-wrap">
-        <button
-          onClick={() => setKind('min-count-in-platoon')}
-          className={`text-tiny font-semibold px-3 py-1.5 rounded-md border ${
-            kind === 'min-count-in-platoon'
-              ? 'bg-mil-olive text-white border-mil-olive'
-              : 'bg-mil-card text-mil-text border-mil-border'
-          }`}
-        >
+      <div className="flex gap-1.5 flex-wrap">
+        <KindChip active={kind === 'min-count-in-platoon'} onClick={() => setKind('min-count-in-platoon')}>
           מינימום במחלקה
-        </button>
-        <button
-          onClick={() => setKind('min-with-functional-role')}
-          className={`text-tiny font-semibold px-3 py-1.5 rounded-md border ${
-            kind === 'min-with-functional-role'
-              ? 'bg-mil-olive text-white border-mil-olive'
-              : 'bg-mil-card text-mil-text border-mil-border'
-          }`}
-        >
-          מינימום בעלי תפקיד
-        </button>
+        </KindChip>
+        <KindChip active={kind === 'min-with-functional-role'} onClick={() => setKind('min-with-functional-role')}>
+          תפקיד
+        </KindChip>
+        <KindChip active={kind === 'command-coverage'} onClick={() => setKind('command-coverage')}>
+          פיקוד בבסיס
+        </KindChip>
+        <KindChip active={kind === 'personal-leave-buffer'} onClick={() => setKind('personal-leave-buffer')}>
+          מרווח אישי
+        </KindChip>
       </div>
 
-      {kind === 'min-count-in-platoon' ? (
+      {kind === 'min-count-in-platoon' && (
         <select
           value={platoonId}
           onChange={(e) => setPlatoonId(e.target.value)}
@@ -527,7 +611,9 @@ function CoverageRuleAddForm({
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
-      ) : (
+      )}
+
+      {kind === 'min-with-functional-role' && (
         <select
           value={functionalRole}
           onChange={(e) => setFunctionalRole(e.target.value)}
@@ -539,16 +625,76 @@ function CoverageRuleAddForm({
         </select>
       )}
 
+      {kind === 'command-coverage' && (
+        <div>
+          <Hint className="block mb-1.5 text-mil-muted">
+            מינימום אחד מבעלי תפקיד הפיקוד הבאים יהיה בבסיס בכל רגע
+          </Hint>
+          <div className="flex flex-wrap gap-1.5">
+            {COMMAND_ROLE_OPTIONS.map((role) => {
+              const on = commandRoles.includes(role);
+              return (
+                <button
+                  key={role}
+                  onClick={() => toggleCommandRole(role)}
+                  className={`px-2.5 py-1 rounded-md text-tiny font-bold transition-colors ${
+                    on
+                      ? 'bg-mil-olive text-white'
+                      : 'bg-mil-card border border-mil-border text-mil-muted hover:border-mil-olive'
+                  }`}
+                >
+                  {role}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {kind === 'personal-leave-buffer' && (
+        <div className="space-y-2">
+          <div>
+            <Hint className="block mb-1.5 text-mil-muted">תחום</Hint>
+            <select
+              value={bufferScope}
+              onChange={(e) => setBufferScope(e.target.value)}
+              className="w-full bg-mil-card border border-mil-border rounded-md px-3 py-2 text-sm text-mil-text"
+            >
+              <option value="">כל הפלוגה</option>
+              {platoons.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-1.5">
+            <KindChip active={!bufferAsPercent} onClick={() => setBufferAsPercent(false)}>
+              ערך מוחלט
+            </KindChip>
+            <KindChip active={bufferAsPercent} onClick={() => setBufferAsPercent(true)}>
+              אחוז
+            </KindChip>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
-        <Hint className="text-mil-muted">מינימום</Hint>
+        <Hint className="text-mil-muted">
+          {kind === 'personal-leave-buffer'
+            ? (bufferAsPercent ? 'אחוז' : 'מינימום')
+            : 'מינימום'}
+        </Hint>
         <input
           type="number"
           min={1}
+          max={kind === 'personal-leave-buffer' && bufferAsPercent ? 100 : undefined}
           value={minCount}
           onChange={(e) => setMinCount(Math.max(1, parseInt(e.target.value || '1', 10)))}
           className="w-20 bg-mil-card border border-mil-border rounded-md px-3 py-2 text-sm text-mil-text font-mono tabular-nums"
           dir="ltr"
         />
+        {kind === 'personal-leave-buffer' && bufferAsPercent && (
+          <span className="text-mil-muted text-sm">%</span>
+        )}
         <input
           type="text"
           value={label}
@@ -561,7 +707,35 @@ function CoverageRuleAddForm({
       <Button variant="primary" size="md" fullWidth onClick={handleAdd}>
         הוסף חוק
       </Button>
+
+      {kind === 'personal-leave-buffer' && (
+        <Muted className="text-tiny leading-snug">
+          הערה: כרגע הבדיקה משווה רק את ספירת החיילים בבסיס מול היעד.
+          דרישת איוש משימות פעילות לא נכללת עדיין בחישוב — תיווסף בעדכון עתידי.
+        </Muted>
+      )}
     </div>
+  );
+}
+
+function KindChip({
+  active, onClick, children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-tiny font-semibold px-3 py-1.5 rounded-md border transition-colors ${
+        active
+          ? 'bg-mil-olive text-white border-mil-olive'
+          : 'bg-mil-card text-mil-text border-mil-border hover:border-mil-olive'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -589,6 +763,20 @@ function CoverageRuleRow({
     }
     if (rule.kind === 'mutual-exclusion') {
       return `${rule.soldierIds.length} חיילים · לא ביחד בבית`;
+    }
+    if (rule.kind === 'command-coverage') {
+      const scope = rule.scopePlatoonId
+        ? ` ב-${platoons.find((p) => p.id === rule.scopePlatoonId)?.name}`
+        : '';
+      return `מינימום ${rule.min} מ-{${rule.anyOfRoles.join(' / ')}}${scope}`;
+    }
+    if (rule.kind === 'personal-leave-buffer') {
+      const scope = rule.scopePlatoonId
+        ? platoons.find((p) => p.id === rule.scopePlatoonId)?.name ?? rule.scopePlatoonId
+        : 'הפלוגה';
+      return rule.asPercent
+        ? `מרווח יציאות אישיות ב-${scope}: ${rule.min}%`
+        : `מרווח יציאות אישיות ב-${scope}: ${rule.min} חיילים`;
     }
     return '';
   })();
