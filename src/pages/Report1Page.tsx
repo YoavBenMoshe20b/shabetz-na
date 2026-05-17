@@ -294,7 +294,10 @@ export default function Report1Page() {
           </div>
         </Section>
 
-        {/* Roster table */}
+        {/* §16 — דוח 1 always renders BY PLATOON. Rows within a platoon
+            are sorted A-Z. The CC sees the company broken down per
+            platoon (then squad-aware via filter chips). A flat A-Z
+            list across platoons would be a phonebook, not דוח 1. */}
         <Section label={`חיילים · ${rows.length}`}>
           {rows.length === 0 ? (
             <EmptyState
@@ -302,11 +305,49 @@ export default function Report1Page() {
               hint="נקה את הפילטרים או חפש בשם אחר"
             />
           ) : (
-            <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
-              {rows.map((row) => (
-                <Report1Row key={row.soldier.id} row={row} now={now} />
-              ))}
-            </div>
+            (() => {
+              // Group rows by platoon. Platoon order follows scopedPlatoons
+              // (combat first, then forward-command / logistics / hq).
+              const byPlatoon = new Map<string, typeof rows>();
+              const noPlatoon: typeof rows = [];
+              for (const r of rows) {
+                if (!r.platoon) { noPlatoon.push(r); continue; }
+                const list = byPlatoon.get(r.platoon.id) ?? [];
+                list.push(r);
+                byPlatoon.set(r.platoon.id, list);
+              }
+              const orderedPlatoons = scopedPlatoons.filter((p) => byPlatoon.has(p.id));
+              return (
+                <div className="space-y-4">
+                  {orderedPlatoons.map((p) => {
+                    const list = byPlatoon.get(p.id) ?? [];
+                    return (
+                      <div key={p.id}>
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <Hint className="font-bold uppercase tracking-wide text-mil-muted">{p.name}</Hint>
+                          <Hint className="text-mil-ghost tabular-nums">· {list.length} חיילים</Hint>
+                        </div>
+                        <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
+                          {list.map((row) => (
+                            <Report1Row key={row.soldier.id} row={row} now={now} />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {noPlatoon.length > 0 && (
+                    <div>
+                      <Hint className="font-bold uppercase tracking-wide text-mil-muted mb-2 block">ללא מחלקה</Hint>
+                      <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
+                        {noPlatoon.map((row) => (
+                          <Report1Row key={row.soldier.id} row={row} now={now} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           )}
         </Section>
 

@@ -329,6 +329,40 @@ export default function PlatoonLeaveBoardPage() {
     return out;
   }, [perDayStats, coverageWarnings, combatRows, platoonLeaveDays, todayIso, companyLeavePolicy.maxPlatoonsHome, blockedByDate]);
 
+  // §6 — Per-platoon leave summary across the 30-day window: how many
+  // days each platoon was in-base vs home, and crucially WHICH of the
+  // home days fell on Friday/Saturday. Operationally the value of home
+  // time depends a lot on whether it includes a weekend.
+  //
+  // Uses the same `days` window as the grid + the same leaveByKey
+  // lookup. Pure derivation, no engine call.
+  const leaveSummaryByPlatoon = useMemo(() => {
+    return combatRows.map((p) => {
+      let baseDays = 0;
+      let homeDays = 0;
+      let homeWeekendDays = 0;
+      for (const iso of days) {
+        const status = leaveByKey.get(`${iso}::${p.id}`);
+        const isHome = status === 'home';
+        if (isHome) {
+          homeDays++;
+          const dow = new Date(iso).getDay();      // 0=Sun, 5=Fri, 6=Sat
+          if (dow === 5 || dow === 6) homeWeekendDays++;
+        } else {
+          baseDays++;
+        }
+      }
+      return { platoon: p, baseDays, homeDays, homeWeekendDays };
+    });
+  }, [combatRows, days, leaveByKey]);
+  const companyLeaveTotals = useMemo(() => {
+    let base = 0, home = 0, weekend = 0;
+    for (const r of leaveSummaryByPlatoon) {
+      base += r.baseDays; home += r.homeDays; weekend += r.homeWeekendDays;
+    }
+    return { base, home, weekend };
+  }, [leaveSummaryByPlatoon]);
+
   const [editingRulesOpen, setEditingRulesOpen] = useState(false);
 
   // ── Route gate ──────────────────────────────────────────────────
@@ -461,6 +495,43 @@ export default function PlatoonLeaveBoardPage() {
             </div>
           </Section>
         )}
+
+        {/* §6 — Per-platoon leave summary. Days in base / at home /
+            of which weekend (Friday-Saturday). Quality of home time
+            depends a LOT on whether it includes a weekend. */}
+        <Section label="סיכום יציאות לפי מחלקה · 30 ימים">
+          <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card overflow-hidden">
+            <div className="grid grid-cols-4 gap-x-2 px-4 py-2.5 bg-mil-bg-alt border-b border-mil-border text-tiny font-bold text-mil-muted">
+              <span>מחלקה</span>
+              <span className="text-center tabular-nums">בבסיס</span>
+              <span className="text-center tabular-nums">בבית</span>
+              <span className="text-center tabular-nums">שישי / שבת</span>
+            </div>
+            {leaveSummaryByPlatoon.map((r) => (
+              <div key={r.platoon.id} className="grid grid-cols-4 gap-x-2 px-4 py-2.5 border-b border-mil-border last:border-0">
+                <Body className="font-semibold">{r.platoon.name}</Body>
+                <span className="text-center tabular-nums font-bold text-mil-text">{r.baseDays}</span>
+                <span className="text-center tabular-nums font-bold text-mil-olive">{r.homeDays}</span>
+                <span className={`text-center tabular-nums font-bold ${
+                  r.homeWeekendDays >= 4 ? 'text-mil-success' :
+                  r.homeWeekendDays === 0 && r.homeDays > 0 ? 'text-mil-warn' :
+                  'text-mil-text'
+                }`}>
+                  {r.homeWeekendDays}
+                </span>
+              </div>
+            ))}
+            <div className="grid grid-cols-4 gap-x-2 px-4 py-3 bg-mil-bg-alt border-t border-mil-border">
+              <Body className="font-bold">סיכום פלוגתי</Body>
+              <span className="text-center tabular-nums font-extrabold text-mil-text">{companyLeaveTotals.base}</span>
+              <span className="text-center tabular-nums font-extrabold text-mil-olive">{companyLeaveTotals.home}</span>
+              <span className="text-center tabular-nums font-extrabold text-mil-text">{companyLeaveTotals.weekend}</span>
+            </div>
+          </div>
+          <Muted className="text-tiny mt-2 leading-snug">
+            מחלקה שקיבלה 6 ימי בית באמצע השבוע לא שווה למחלקה שקיבלה 4 ימי בית כולל שישי-שבת. ירוק = איזון טוב של סופי שבוע.
+          </Muted>
+        </Section>
 
         {/* Recommendations + state summary — Phase 7.3 visual layer.
             Shows operator-facing notes derived from the current state
