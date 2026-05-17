@@ -18,8 +18,7 @@ import { useApp } from '../context/AppContext';
 import { isPlatoonLeadership } from '../utils/permissions';
 import { alertsApi } from '../api';
 import { groupAlerts, type AlertGroup } from '../utils/alerts/grouping';
-import { formatRemaining } from '../utils/alerts/quietMode';
-import { useQuietMode } from '../hooks/useQuietMode';
+// QuietMode imports removed (§13)
 import type { Alert, AlertSeverity, AlertKind } from '../types';
 
 const SEV_LABEL: Record<AlertSeverity, string> = {
@@ -49,7 +48,7 @@ interface AlertsSheetProps {
 export default function AlertsSheet({ open, onClose }: AlertsSheetProps) {
   const navigate = useNavigate();
   const { currentUser, currentRole } = useApp();
-  const { isActive, remainingMinutes, deactivate } = useQuietMode();
+  // QuietMode REMOVED (§13) — no muting in operational system.
 
   const [alerts, setAlerts] = useState<Alert[] | null>(null);
   const loading = alerts === null && open;
@@ -85,13 +84,7 @@ export default function AlertsSheet({ open, onClose }: AlertsSheetProps) {
     () => groups.filter((g) => g.severity !== 'critical'),
     [groups],
   );
-  // When QuietMode is active, the non-critical alerts are "muted" — the
-  // operator sees them only when they explicitly open this sheet. The
-  // count is just len(non-critical).
-  const mutedCount = useMemo(
-    () => (isActive ? list.filter((a) => a.severity !== 'critical').length : 0),
-    [list, isActive],
-  );
+  // mutedCount removed — QuietMode removed (§13).
 
   const subtitle =
     list.length === 0
@@ -103,13 +96,7 @@ export default function AlertsSheet({ open, onClose }: AlertsSheetProps) {
   return (
     <Sheet open={open} onClose={onClose} title="מרכז התראות" subtitle={subtitle}>
       <div className="px-5 py-5 space-y-5">
-        {isActive && (
-          <QuietModeBanner
-            remaining={formatRemaining(remainingMinutes)}
-            mutedCount={mutedCount}
-            onCancel={deactivate}
-          />
-        )}
+        {/* QuietModeBanner removed (§13) */}
 
         {loading ? (
           <div className="space-y-2">
@@ -255,37 +242,4 @@ function GroupRow({
   );
 }
 
-function QuietModeBanner({
-  remaining,
-  mutedCount,
-  onCancel,
-}: {
-  remaining: string;
-  mutedCount: number;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl-soft bg-mil-info-bg border border-mil-info-border">
-      <span
-        className="w-2 h-2 rounded-full bg-mil-info flex-shrink-0"
-        aria-hidden
-      />
-      <div className="flex-1 min-w-0">
-        <Body className="font-semibold text-sm leading-tight">
-          מצב שקט פעיל · נותרו {remaining}
-        </Body>
-        <Hint className="block mt-0.5 text-mil-muted">
-          {mutedCount > 0
-            ? `${mutedCount} התראות לא קריטיות מושתקות`
-            : 'אין התראות לא קריטיות כרגע'}
-        </Hint>
-      </div>
-      <button
-        onClick={onCancel}
-        className="px-3 py-1.5 rounded-md bg-mil-card border border-mil-info-border text-mil-info text-tiny font-semibold whitespace-nowrap"
-      >
-        ביטול
-      </button>
-    </div>
-  );
-}
+// QuietModeBanner removed (§13)

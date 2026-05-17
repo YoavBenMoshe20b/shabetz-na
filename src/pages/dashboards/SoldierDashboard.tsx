@@ -37,7 +37,7 @@ import type {
 export default function SoldierDashboard() {
   const navigate = useNavigate();
   const {
-    soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest, updateSoldierStatus,
+    soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest,
     missions, dutyExclusions, assignments, slotOperationalState,
     platoonLeaveDays, announcements,
   } = useApp();
@@ -61,8 +61,8 @@ export default function SoldierDashboard() {
   const [showRoster,  setShowRoster]  = useState(false);
   const [leaveOpen,   setLeaveOpen]   = useState(false);
   const [leaveSaved,  setLeaveSaved]  = useState(false);
-  const [statusUpdateOpen, setStatusUpdateOpen] = useState(false);
-  const [statusToastMsg,   setStatusToastMsg]   = useState('');
+  // statusUpdateOpen removed — soldier cannot self-change status (§11).
+  // statusToastMsg removed — soldier can't change status anymore.
 
   const now = useMemo(() => new Date(), []);
   const todayStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
@@ -213,7 +213,7 @@ export default function SoldierDashboard() {
       <PageMain>
 
         {leaveSaved && <Toast tone="success">בקשת היציאה הוגשה למ״מ</Toast>}
-        {statusToastMsg && <Toast tone="olive">{statusToastMsg}</Toast>}
+        {/* statusToastMsg removed — see §11 self-status-toggle removal */}
 
         <div>
           <PageTitle>שלום, {currentUser?.name?.split(' ')[0]}</PageTitle>
@@ -238,7 +238,6 @@ export default function SoldierDashboard() {
               teammates,
             } : null}
             onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.slot.id, minutesBefore: mins, enabled: true })}
-            onOpenStatusUpdate={() => setStatusUpdateOpen(true)}
             onOpenMission={(missionId) => navigate(`/mission/${missionId}`)}
           />
         )}
@@ -365,22 +364,9 @@ export default function SoldierDashboard() {
         <LeaveRequestModal onClose={() => setLeaveOpen(false)} onSubmit={submitLeaveRequest} />
       )}
 
-      {statusUpdateOpen && myProfile && (
-        <StatusUpdateModal
-          soldier={myProfile}
-          onClose={() => setStatusUpdateOpen(false)}
-          onSubmit={(next, expectedUntil) => {
-            updateSoldierStatus({ soldierId: myProfile.id, next, expectedUntil });
-            setStatusUpdateOpen(false);
-            setStatusToastMsg(
-              next === 'home'    ? 'עדכנת: יצאת הביתה' :
-              next === 'in-base' ? 'עדכנת: חזרת לבסיס' :
-                                   'עדכנת: לא פעיל כרגע'
-            );
-            setTimeout(() => setStatusToastMsg(''), 3500);
-          }}
-        />
-      )}
+      {/* StatusUpdateModal mount REMOVED — soldier cannot self-change
+          status. State transitions happen via the commander / approved
+          leave flow only. (§11) */}
     </div>
   );
 }
@@ -512,13 +498,13 @@ interface NextShiftDisplay {
 }
 
 function OperationalStateCard({
-  soldier, leaves, nextShift, onSetReminder, onOpenStatusUpdate, onOpenMission,
+  soldier, leaves, nextShift, onSetReminder, onOpenMission,
 }: {
   soldier: Soldier;
   leaves: Leave[];
   nextShift: NextShiftDisplay | null;
   onSetReminder: (mins: 5 | 15 | 30 | 60) => void;
-  onOpenStatusUpdate: () => void;
+  // onOpenStatusUpdate removed — soldier can't toggle their own status.
   onOpenMission: (missionId: string) => void;
 }) {
   const status = soldier.currentStatus;
@@ -530,9 +516,9 @@ function OperationalStateCard({
     : null;
 
   const presentation = {
-    'in-base':       { label: 'אתה בבסיס',     accentClass: 'text-mil-success',  dotBg: 'bg-mil-success',  verb: 'יצאתי הביתה'    },
-    'home':          { label: 'אתה בבית',       accentClass: 'text-mil-sand',     dotBg: 'bg-mil-sand',     verb: 'חזרתי לבסיס'    },
-    'inactive-temp': { label: 'לא פעיל כרגע',   accentClass: 'text-mil-rest',     dotBg: 'bg-mil-rest',     verb: 'חזרתי לפעילות'  },
+    'in-base':       { label: 'אתה בבסיס',     accentClass: 'text-mil-success',  dotBg: 'bg-mil-success'  },
+    'home':          { label: 'אתה בבית',       accentClass: 'text-mil-sand',     dotBg: 'bg-mil-sand'     },
+    'inactive-temp': { label: 'לא פעיל כרגע',   accentClass: 'text-mil-rest',     dotBg: 'bg-mil-rest'     },
   }[status];
 
   const [activeReminder, setActiveReminder] = useState<5 | 15 | 30 | 60 | null>(null);
@@ -617,84 +603,16 @@ function OperationalStateCard({
           </div>
         )}
 
-        <button
-          onClick={onOpenStatusUpdate}
-          className="w-full bg-mil-bg-alt border border-mil-border hover:bg-mil-card hover:border-mil-olive text-mil-text font-semibold py-3 rounded-xl-soft text-sm transition-all duration-200 ease-out-soft active:scale-[0.985]"
-        >
-          {presentation.verb}
-        </button>
+        {/* Self-status toggle REMOVED — soldier cannot move themselves
+            home / back to base / inactive. State transitions happen
+            ONLY via approved leave requests + commander action.
+            (User spec §11.) */}
       </div>
     </section>
   );
 }
 
-// ─── StatusUpdateModal ──────────────────────────────────────────────────
-
-function StatusUpdateModal({
-  soldier, onClose, onSubmit,
-}: {
-  soldier: Soldier;
-  onClose: () => void;
-  onSubmit: (next: SoldierStatus, expectedUntil?: string) => void;
-}) {
-  const [returnDate, setReturnDate] = useState('');
-  const [returnTime, setReturnTime] = useState('08:00');
-
-  const goHome = () => {
-    const iso = returnDate ? `${returnDate}T${returnTime}:00` : undefined;
-    onSubmit('home', iso);
-  };
-
-  const headline = {
-    'in-base':       'יציאה הביתה',
-    'home':          'חזרה לבסיס',
-    'inactive-temp': 'חזרה לפעילות',
-  }[soldier.currentStatus];
-
-  return (
-    <Sheet open onClose={onClose} title={headline}>
-      <div className="px-5 py-5 space-y-4">
-        {soldier.currentStatus === 'in-base' && (
-          <>
-            <Body className="text-mil-muted">מתי אתה צפוי לחזור?</Body>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Hint className="mb-1.5 block">תאריך</Hint>
-                <input type="date" className={modalInp} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
-              </div>
-              <div>
-                <Hint className="mb-1.5 block">שעה</Hint>
-                <input type="time" className={modalInp} value={returnTime} onChange={(e) => setReturnTime(e.target.value)} />
-              </div>
-            </div>
-            <Button variant="primary" size="lg" fullWidth onClick={goHome} disabled={!returnDate}>
-              יצאתי הביתה
-            </Button>
-            <Hint className="text-center">המ״מ יראה מתי אתה צפוי לחזור.</Hint>
-          </>
-        )}
-
-        {soldier.currentStatus === 'home' && (
-          <>
-            <Body className="text-mil-muted">לאשר: אתה בבסיס מעכשיו?</Body>
-            <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
-              חזרתי לבסיס
-            </Button>
-          </>
-        )}
-
-        {soldier.currentStatus === 'inactive-temp' && (
-          <>
-            <Body className="text-mil-muted">לאשר: אתה פעיל ומוכן לשיבוץ?</Body>
-            <Button variant="primary" size="lg" fullWidth onClick={() => onSubmit('in-base')}>
-              חזרתי לפעילות
-            </Button>
-          </>
-        )}
-      </div>
-    </Sheet>
-  );
-}
+// StatusUpdateModal removed — soldier cannot self-change status. (§11)
 
 // ─── Operational temporal helpers ───────────────────────────────────────
 

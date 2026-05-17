@@ -15,7 +15,7 @@ import {
   Eyebrow, Section, PageMain, Body, Muted, Hint, Toast,
 } from '../components/ui';
 import TourOfDutyCard from '../components/TourOfDutyCard';
-import QuietModeToggle from '../components/QuietModeToggle';
+// QuietModeToggle import removed — see §13 quiet-mode removal.
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -211,9 +211,8 @@ export default function ProfilePage() {
         {/* Tour of duty (ימי קו) */}
         {myProfile && <TourOfDutyCard soldier={myProfile} />}
 
-        {/* QuietMode — suppress non-critical alerts for a bounded window.
-            Critical alerts always break through. */}
-        <QuietModeToggle />
+        {/* QuietMode REMOVED — operational system cannot let a soldier
+            mute critical alerts. (§13) */}
 
         {/* Equipment shortcut */}
         <button
