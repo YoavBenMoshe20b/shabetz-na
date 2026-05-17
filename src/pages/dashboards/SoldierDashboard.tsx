@@ -272,7 +272,8 @@ export default function SoldierDashboard() {
         {myProfile && <TourOfDutyMini soldier={myProfile} />}
         {myProfile && <SoldierCycleHint soldier={myProfile} />}
 
-        <AnnouncementsStrip isCommander={false} />
+        {/* §1 — cap to one preview; ראה הכל leads to /announcements. */}
+        <AnnouncementsStrip isCommander={false} limit={1} />
 
         {activeMissions.length > 0 && (
           <Section label="מי על שמירה כרגע">

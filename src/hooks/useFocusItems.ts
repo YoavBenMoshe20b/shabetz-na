@@ -19,7 +19,8 @@ import { useEngineContext } from './useEngineContext';
 import { buildFocusItems } from '../utils/engine/focus';
 import type { FocusItem, EscalationEvent, EquipmentGap } from '../types';
 
-const MS_PER_HOUR = 60 * 60 * 1000;
+// MS_PER_HOUR removed — equipment-gap blocking-soldier derivation
+// is no longer in this hook (§2 moved gaps to the alerts feed).
 
 /**
  * Build the Focus list for the current user + role.
@@ -30,7 +31,7 @@ const MS_PER_HOUR = 60 * 60 * 1000;
  *   • engine produced no items (everything is calm)
  */
 export function useFocusItems(): FocusItem[] {
-  const { currentUser, currentRole, escalationEvents, equipmentGaps, missions } = useApp();
+  const { currentUser, currentRole, escalationEvents } = useApp();
   const ctx = useEngineContext();
   const pendingLeaveRequests = useApprovableLeaveRequests();
 
@@ -42,41 +43,16 @@ export function useFocusItems(): FocusItem[] {
     );
   }, [escalationEvents, currentUser]);
 
-  // Gaps that BLOCK a near-term mission. Definition:
-  //   • status not resolved / dismissed
-  //   • either linked to a soldier in a mission starting in the next 24h
-  //   • OR kind === 'missing' — missing gear is higher-urgency by default
-  const blockingGaps = useMemo<EquipmentGap[]>(() => {
-    if (!currentUser?.companyId) return [];
-    const nowMs = Date.parse(ctx.computedAt);
-    const horizonMs = nowMs + 24 * MS_PER_HOUR;
-    const soldiersWithUpcomingMission = new Set<string>();
-    for (const m of missions) {
-      if (m.companyId !== currentUser.companyId) continue;
-      if (!m.startDate) continue;
-      const start = Date.parse(`${m.startDate}T00:00:00`);
-      if (start > nowMs && start <= horizonMs) {
-        // For now, treat all soldiers in the assigned platoons as
-        // "could be staffed" — the gap blocks them collectively.
-        const squadIds = new Set(
-          ctx.squads.filter((sq) => m.assignedPlatoonIds.includes(sq.platoonId)).map((sq) => sq.id),
-        );
-        for (const s of ctx.soldiers) {
-          if (s.squadId && squadIds.has(s.squadId)) {
-            soldiersWithUpcomingMission.add(s.id);
-          }
-        }
-      }
-    }
-    return equipmentGaps.filter((g) => {
-      if (g.companyId !== currentUser.companyId) return false;
-      if (g.status === 'resolved' || g.status === 'dismissed') return false;
-      // Missing gear is high-urgency — always qualifies.
-      if (g.kind === 'missing') return true;
-      // Otherwise — only when a soldier in a near-term mission.
-      return soldiersWithUpcomingMission.has(g.reportedBySoldierId);
-    });
-  }, [equipmentGaps, missions, ctx, currentUser]);
+  // §2 — equipment gaps NO LONGER surface as Focus items.
+  // "דורש החלטה" is reserved for genuine command decisions:
+  //   - approve / reject leave request
+  //   - respond to active escalation
+  //   - publish / re-publish the schedule
+  // Equipment shortages flow through the ALERTS layer (api/alerts.ts
+  // emits them with kind 'equipment-gap'). The bell icon + AlertsSheet
+  // is the right surface for logistics state; FocusSection stays focused
+  // on operational decisions.
+  const blockingGaps: EquipmentGap[] = [];
 
   return useMemo(() => {
     if (!currentUser) return [];
@@ -85,5 +61,5 @@ export function useFocusItems(): FocusItem[] {
       pendingLeaveRequests,
       blockingGaps,
     });
-  }, [currentUser, currentRole, ctx, activeEscalations, pendingLeaveRequests, blockingGaps]);
+  }, [currentUser, currentRole, ctx, activeEscalations, pendingLeaveRequests]);
 }

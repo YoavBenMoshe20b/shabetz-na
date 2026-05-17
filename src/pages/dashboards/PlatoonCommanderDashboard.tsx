@@ -347,7 +347,8 @@ export default function PlatoonCommanderDashboard() {
           </Section>
         )}
 
-        <AnnouncementsStrip isCommander={true} />
+        {/* §1 — limit to one preview card; ראה הכל leads to full page. */}
+        <AnnouncementsStrip isCommander={true} limit={1} />
 
         {/* יציאות מחלקה — upcoming home days for the PC's platoon.
             Read-only on the dashboard; the CC drives the rotation from

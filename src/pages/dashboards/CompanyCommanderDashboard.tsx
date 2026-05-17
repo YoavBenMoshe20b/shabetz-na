@@ -269,6 +269,10 @@ export default function CompanyCommanderDashboard() {
           </div>
         </Section>
 
+        {/* §1 — Announcements sit BELOW the platoon summary, capped to
+            1 preview card. The "ראה הכל" link leads to the full page. */}
+        <AnnouncementsStrip isCommander={true} limit={1} />
+
         <Section label="ב-12 השעות הקרובות">
           {events.length === 0 ? (
             <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card py-10 text-center">
@@ -309,8 +313,6 @@ export default function CompanyCommanderDashboard() {
             </div>
           </CollapsibleSection>
         )}
-
-        <AnnouncementsStrip isCommander={true} />
 
         {/* Quick-access tiles for CC's top-3 secondary surfaces. The full
             navigation (announcements, leave-cycle, missions, coverage,
