@@ -20,6 +20,8 @@ import { useApp, useMyCompany } from '../context/AppContext';
 import { isCompanyLeadership, isPlatoonLeadership, canEditMission } from '../utils/permissions';
 import { buildMissionSummary } from '../utils/missionSummary';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
+import { MISSION_ARCHETYPES } from '../utils/missionArchetypes';
+import type { MissionArchetypeKind } from '../types';
 import Header from '../components/Header';
 import StaffingSheet from '../components/StaffingSheet';
 import SlotOperationsSheet from '../components/SlotOperationsSheet';
@@ -193,7 +195,44 @@ export default function MissionDetailPage() {
                 <span>{mission.assignedPlatoonIds.map((pid) => platoons.find((p) => p.id === pid)?.name).filter(Boolean).join(' · ')}</span>
               </>
             )}
+            {(mission.archetypeKind && mission.archetypeKind !== 'custom') && (
+              <>
+                <span className="text-mil-ghost">·</span>
+                <span className="font-semibold text-mil-olive-dim">
+                  {MISSION_ARCHETYPES[mission.archetypeKind as MissionArchetypeKind].icon}
+                  {' '}
+                  {MISSION_ARCHETYPES[mission.archetypeKind as MissionArchetypeKind].label}
+                </span>
+              </>
+            )}
           </div>
+
+          {/* Archetype-specific operational fields. Each archetype
+              surfaces only what it declared support for in Step 1. */}
+          {(mission.rallyPoint || mission.routeDescription || mission.responseInstructions) && (
+            <div className="mt-4 pt-4 border-t border-mil-border space-y-2">
+              {mission.rallyPoint && (
+                <div className="flex items-baseline gap-2">
+                  <Hint className="font-bold tracking-wide uppercase text-mil-muted shrink-0">נקודת ריכוז</Hint>
+                  <Muted className="text-sm text-mil-text">{mission.rallyPoint}</Muted>
+                </div>
+              )}
+              {mission.routeDescription && (
+                <div className="flex items-baseline gap-2">
+                  <Hint className="font-bold tracking-wide uppercase text-mil-muted shrink-0">מסלול / סקטור</Hint>
+                  <Muted className="text-sm text-mil-text">{mission.routeDescription}</Muted>
+                </div>
+              )}
+              {mission.responseInstructions && (
+                <div className="mt-1">
+                  <Hint className="font-bold tracking-wide uppercase text-mil-muted block mb-1">הוראות תגובה בעת אירוע</Hint>
+                  <Muted className="text-sm text-mil-text leading-snug whitespace-pre-line">
+                    {mission.responseInstructions}
+                  </Muted>
+                </div>
+              )}
+            </div>
+          )}
 
           {canEdit && (
             <div className="mt-5 pt-5 border-t border-mil-border flex items-center justify-between gap-3 flex-wrap">
