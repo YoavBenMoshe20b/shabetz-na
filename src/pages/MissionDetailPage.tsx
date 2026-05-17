@@ -27,6 +27,7 @@ import Header from '../components/Header';
 import StaffingSheet from '../components/StaffingSheet';
 import SlotOperationsSheet from '../components/SlotOperationsSheet';
 import ChecklistRunSheet from '../components/ChecklistRunSheet';
+import MissionImportSheet from '../components/MissionImportSheet';
 import type { MissionNote, Platoon, UserRole, SelectorOutcomeRecord, Soldier } from '../types';
 import {
   Section, PageMain, PageTitle, Body, Muted, Hint, Button, StatusPill,
@@ -40,12 +41,14 @@ export default function MissionDetailPage() {
     missions, missionNotes, platoons, squads, soldiers, leaves, dutyExclusions,
     qualifications, equipmentItems, delegations,
     addMissionNote, editMissionNote, deleteMissionNote,
-    setMissionStatus, updateMission,
+    setMissionStatus, updateMission, addMission,
+    orders, platoonLeaveDays,
     assignments, setSlotAssignment,
     selectorOutcomes, recordSelectorOutcome,
     slotOperationalState,
     checklistTemplates, checklistRuns, createChecklistRun,
   } = useApp();
+  const [importOpen, setImportOpen] = useState(false);
   const myCompany = useMyCompany();
 
   // ── Hooks first; route gates after. ──────────────────────────────
@@ -242,6 +245,13 @@ export default function MissionDetailPage() {
                 <Muted className="text-tiny mt-1">שינויים יחולו מיד על השבצ״ק.</Muted>
               </div>
               <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={() => setImportOpen(true)}
+                >
+                  שכפל
+                </Button>
                 <Button
                   variant="secondary"
                   size="md"
@@ -628,6 +638,33 @@ export default function MissionDetailPage() {
         )}
 
       </PageMain>
+
+      {importOpen && (
+        <MissionImportSheet
+          open
+          onClose={() => setImportOpen(false)}
+          sourceMissions={[mission]}
+          targetOrder={mission.orderId ? orders.find((o) => o.id === mission.orderId) : undefined}
+          qualifications={qualifications}
+          equipmentItems={equipmentItems}
+          platoons={platoons}
+          platoonLeaveDays={platoonLeaveDays}
+          soldiers={soldiers}
+          assignments={assignments}
+          onConfirm={(payloads) => {
+            if (!myCompany || !currentUser) return;
+            const created = payloads.map((p) =>
+              addMission({
+                ...p,
+                companyId: myCompany.id,
+                createdByUserId: currentUser.id,
+              }),
+            );
+            setImportOpen(false);
+            if (created[0]) navigate(`/missions/${created[0].id}/assign`);
+          }}
+        />
+      )}
 
       {staffingSlot && (
         <StaffingSheet

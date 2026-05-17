@@ -12,6 +12,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useApp, useMyCompany } from '../context/AppContext';
 import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
+import MissionImportSheet from '../components/MissionImportSheet';
 import { buildMissionSummary } from '../utils/missionSummary';
 import { materializeWeek } from '../utils/materialize';
 import type {
@@ -27,6 +28,7 @@ export default function SchedulePage() {
     currentUser, currentRole, missions, orders,
     platoons, squads, soldiers, leaves, dutyExclusions, assignments,
     addOrder, setOrderStatus, setMissionStatus,
+    qualifications, equipmentItems, platoonLeaveDays, addMission,
   } = useApp();
 
   const isCC = isCompanyLeadership(currentRole);
@@ -52,6 +54,16 @@ export default function SchedulePage() {
   );
 
   const [addOrderOpen, setAddOrderOpen] = useState(false);
+  // Phase 7.3 — import flow. When set, the sheet shows the missions of
+  // a different order and lets the operator pull some/all into the
+  // CURRENTLY selected order.
+  const [importFromOrderId, setImportFromOrderId] = useState<string | null>(null);
+  const importSourceMissions = useMemo(
+    () => importFromOrderId
+      ? missions.filter((m) => m.orderId === importFromOrderId)
+      : [],
+    [importFromOrderId, missions],
+  );
 
   // For the "current owner" column we materialize the week once.
   const todayStart = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
@@ -127,13 +139,21 @@ export default function SchedulePage() {
         {selectedOrder && (
           <Section
             label={`משימות · ${selectedOrder.name}`}
-            action={(
-              <button
-                onClick={() => navigate(`/missions/new?orderId=${selectedOrder.id}`)}
-                className="text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
-              >
-                + הוסף משימה
-              </button>
+            action={isCC && (
+              <div className="flex gap-3 items-baseline">
+                <ImportFromOrderButton
+                  selectedOrderId={selectedOrder.id}
+                  orders={myOrders}
+                  missions={missions}
+                  onPick={(orderId) => setImportFromOrderId(orderId)}
+                />
+                <button
+                  onClick={() => navigate(`/missions/new?orderId=${selectedOrder.id}`)}
+                  className="text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
+                >
+                  + הוסף משימה
+                </button>
+              </div>
             )}
           >
             {orderMissions.length === 0 ? (
@@ -197,6 +217,81 @@ export default function SchedulePage() {
             setAddOrderOpen(false);
           }}
         />
+      )}
+
+      {importFromOrderId && selectedOrder && (
+        <MissionImportSheet
+          open
+          onClose={() => setImportFromOrderId(null)}
+          sourceMissions={importSourceMissions}
+          targetOrder={selectedOrder}
+          qualifications={qualifications}
+          equipmentItems={equipmentItems}
+          platoons={platoons}
+          platoonLeaveDays={platoonLeaveDays}
+          soldiers={soldiers}
+          assignments={assignments}
+          onConfirm={(payloads) => {
+            if (!myCompany || !currentUser) return;
+            for (const p of payloads) {
+              addMission({
+                ...p,
+                companyId: myCompany.id,
+                createdByUserId: currentUser.id,
+              });
+            }
+            setImportFromOrderId(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Import-from-order picker (CC only) ─────────────────────────────
+//
+// Tiny button + lightweight dropdown. Lists every OTHER order in the
+// company with mission counts so the operator can pick a source. The
+// picker delegates the actual import sheet to the parent — this
+// component only chooses the SOURCE.
+
+function ImportFromOrderButton({
+  selectedOrderId, orders, missions, onPick,
+}: {
+  selectedOrderId: string;
+  orders: OperationalOrder[];
+  missions: Mission[];
+  onPick: (orderId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const otherOrders = orders.filter((o) => o.id !== selectedOrderId);
+  if (otherOrders.length === 0) return null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
+      >
+        משוך מצו אחר ↓
+      </button>
+      {open && (
+        <div className="absolute end-0 mt-2 z-30 min-w-[240px] bg-mil-card border border-mil-border rounded-xl-soft shadow-pop py-1.5">
+          {otherOrders.map((o) => {
+            const count = missions.filter((m) => m.orderId === o.id).length;
+            return (
+              <button
+                key={o.id}
+                disabled={count === 0}
+                onClick={() => { onPick(o.id); setOpen(false); }}
+                className="w-full text-right px-4 py-2.5 hover:bg-mil-card-hover disabled:opacity-40 disabled:cursor-not-allowed flex items-baseline justify-between gap-3"
+              >
+                <span className="text-sm font-semibold text-mil-text">{o.name}</span>
+                <span className="text-tiny text-mil-muted tabular-nums">{count} משימות</span>
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
