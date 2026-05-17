@@ -27,6 +27,7 @@ import { newId } from '../utils/id';
 import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle, isRasap } from '../utils/permissions';
 import { USE_SUPABASE } from '../api/_supabase';
 import { usePersistedState } from '../utils/persistedState';
+import type { MissionTemplate } from '../utils/missionTemplates';
 
 // Seed version — bump when mockData shape changes in a way that should
 // invalidate everyone's localStorage. Old blobs at older versions are
@@ -55,6 +56,7 @@ import {
   mockOperationalOrders,
   mockAnnouncements, mockEscalationEvents, mockPlatoonLeaveCycles,
   mockLogisticsRotations,
+  mockMissionTemplates,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -252,6 +254,16 @@ interface AppContextType {
   removeCoverageRule:      (ruleId: string) => void;
   setSoldierLeaveOverride: (dateIso: string, soldierId: string, status: 'home' | 'in-base', reason?: string) => void;
   clearSoldierLeaveOverride: (dateIso: string, soldierId: string) => void;
+
+  // ── Mission Template Library (Phase 7.3) ─────────────────────────
+  missionTemplates:           MissionTemplate[];
+  addMissionTemplate:         (data: Omit<MissionTemplate, 'id' | 'createdAt' | 'usageCount'>) => MissionTemplate;
+  updateMissionTemplate:      (id: string, patch: Partial<Omit<MissionTemplate, 'id' | 'companyId' | 'createdAt'>>) => void;
+  hideMissionTemplate:        (id: string) => void;
+  toggleMissionTemplateFavorite: (id: string) => void;
+  /** Increments usageCount — call after addMission from a template
+   *  fires successfully. */
+  incrementTemplateUsage:     (id: string) => void;
 
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
@@ -952,6 +964,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const clearSoldierLeaveOverride = (dateIso: string, soldierId: string) => {
     setSoldierLeaveOverrides((prev) =>
       prev.filter((o) => !(o.dateIso === dateIso && o.soldierId === soldierId)),
+    );
+  };
+
+  // ── Mission Template Library (Phase 7.3) ──────────────────────────
+  const [missionTemplates, setMissionTemplates] = usePersistedState<MissionTemplate[]>(
+    'missionTemplates', mockMissionTemplates, SEED_VERSION,
+  );
+
+  const addMissionTemplate = (data: Omit<MissionTemplate, 'id' | 'createdAt' | 'usageCount'>) => {
+    const tpl: MissionTemplate = {
+      ...data,
+      id: newId('mt'),
+      createdAt: new Date().toISOString(),
+      usageCount: 0,
+    };
+    setMissionTemplates((prev) => [tpl, ...prev]);
+    return tpl;
+  };
+
+  const updateMissionTemplate = (
+    id: string,
+    patch: Partial<Omit<MissionTemplate, 'id' | 'companyId' | 'createdAt'>>,
+  ) => {
+    setMissionTemplates((prev) => prev.map((t) => t.id === id ? { ...t, ...patch } : t));
+  };
+
+  const hideMissionTemplate = (id: string) => {
+    setMissionTemplates((prev) => prev.map((t) => t.id === id ? { ...t, isHidden: true } : t));
+  };
+
+  const toggleMissionTemplateFavorite = (id: string) => {
+    setMissionTemplates((prev) =>
+      prev.map((t) => t.id === id ? { ...t, isFavorite: !t.isFavorite } : t),
+    );
+  };
+
+  const incrementTemplateUsage = (id: string) => {
+    setMissionTemplates((prev) =>
+      prev.map((t) => t.id === id ? { ...t, usageCount: t.usageCount + 1 } : t),
     );
   };
 
@@ -2249,6 +2300,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPlatoonLeaveDay, clearPlatoonLeaveDay, generatePlatoonRotation,
       updateCompanyLeavePolicy, upsertCoverageRule, removeCoverageRule,
       setSoldierLeaveOverride, clearSoldierLeaveOverride,
+      missionTemplates, addMissionTemplate, updateMissionTemplate,
+      hideMissionTemplate, toggleMissionTemplateFavorite, incrementTemplateUsage,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,

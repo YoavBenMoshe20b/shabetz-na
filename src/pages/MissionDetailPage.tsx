@@ -47,8 +47,10 @@ export default function MissionDetailPage() {
     selectorOutcomes, recordSelectorOutcome,
     slotOperationalState,
     checklistTemplates, checklistRuns, createChecklistRun,
+    addMissionTemplate,
   } = useApp();
   const [importOpen, setImportOpen] = useState(false);
+  const [savedAsTemplate, setSavedAsTemplate] = useState(false);
   const myCompany = useMyCompany();
 
   // ── Hooks first; route gates after. ──────────────────────────────
@@ -245,6 +247,52 @@ export default function MissionDetailPage() {
                 <Muted className="text-tiny mt-1">שינויים יחולו מיד על השבצ״ק.</Muted>
               </div>
               <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="ghost"
+                  size="md"
+                  disabled={savedAsTemplate}
+                  onClick={() => {
+                    if (!myCompany || !currentUser) return;
+                    addMissionTemplate({
+                      companyId: myCompany.id,
+                      name: mission.name,
+                      description: mission.description,
+                      category: archetypeToCategory(mission.archetypeKind ?? 'custom'),
+                      isFavorite: false,
+                      createdByUserId: currentUser.id,
+                      forkedFromMissionId: mission.id,
+                      payload: {
+                        archetypeKind:      mission.archetypeKind ?? 'custom',
+                        timeModel:          mission.timeModel,
+                        manpower:           mission.manpower,
+                        command:            mission.command,
+                        rotation:           mission.rotation,
+                        fatigue:            mission.fatigue,
+                        cycleProfile:       mission.cycleProfile,
+                        overlapPolicy:      mission.overlapPolicy,
+                        qualifications:    mission.qualifications,
+                        equipment:          mission.equipment,
+                        logisticsAlerts:   mission.logisticsAlerts,
+                        squadPolicy:        mission.squadPolicy,
+                        pairings:           mission.pairings,
+                        requiresDailyConfirmation: mission.requiresDailyConfirmation,
+                        difficulty:         mission.difficulty,
+                        fatigueOverride:    mission.fatigueOverride,
+                        dayNightProfile:    mission.dayNightProfile,
+                        allowPCOverride:    mission.allowPCOverride,
+                        shiftDurationLocked: mission.shiftDurationLocked,
+                        rallyPoint:         mission.rallyPoint,
+                        routeDescription:   mission.routeDescription,
+                        hasVehicle:         mission.hasVehicle,
+                        responseInstructions: mission.responseInstructions,
+                        responseTeams:      mission.responseTeams,
+                      },
+                    });
+                    setSavedAsTemplate(true);
+                  }}
+                >
+                  {savedAsTemplate ? '✓ נשמרה כתבנית' : 'שמור כתבנית'}
+                </Button>
                 <Button
                   variant="ghost"
                   size="md"
@@ -967,6 +1015,16 @@ function formatRelative(iso: string): string {
 
 // Keep Platoon type referenced for the platoonName lookup pattern.
 void (null as unknown as Platoon);
+
+function archetypeToCategory(kind: import('../types').MissionArchetypeKind): string {
+  switch (kind) {
+    case 'static-guard': return 'שמירות';
+    case 'patrol':       return 'סיורים';
+    case 'readiness':    return 'כוננויות';
+    case 'one-time-op':  return 'משימות מבצעיות';
+    default:             return 'אחר';
+  }
+}
 
 // ─── Archetype status panel (Phase 7.3) ─────────────────────────────
 //

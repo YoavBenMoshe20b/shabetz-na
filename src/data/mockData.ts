@@ -15,7 +15,9 @@ import type {
   OperationalOrder,
   Announcement, EscalationEvent, PlatoonLeaveCycle,
   LogisticsRotation,
+  CommandRank, RankPolicy,
 } from '../types';
+import type { MissionTemplate } from '../utils/missionTemplates';
 
 const noEquip: EquipmentRequirements = {
   fullUniform: false, kneePads: false, boots: false,
@@ -1795,3 +1797,225 @@ export const mockLogisticsRotations: LogisticsRotation[] = [
     createdAt:       SEED_CREATED,
   },
 ];
+
+// ─── Mission Template Library — seed entries (Phase 7.3) ────────────
+//
+// A starter library so a fresh demo isn't an empty picker. The
+// platoon's repertoire grows from here as the operator creates new
+// missions and saves them. Each entry sets archetypeKind + the
+// behavioral payload — picking a template applies all of it.
+
+const _tplPolicy = (commanders: CommandRank[]): Record<CommandRank, RankPolicy> => {
+  const all: CommandRank[] = ['soldier', 'mk', 'samal', 'mam', 'officer', 'custom'];
+  const out = {} as Record<CommandRank, RankPolicy>;
+  for (const r of all) {
+    if (commanders.includes(r))             out[r] = 'commander-only';
+    else if (r === 'soldier' || r === 'mk') out[r] = 'regular';
+    else                                    out[r] = 'excluded';
+  }
+  return out;
+};
+
+export const mockMissionTemplates: MissionTemplate[] = [
+  // ── שמירות ──────────────────────────────────────────────────────
+  {
+    id: 'mt-shg', companyId: 'co1',
+    name: 'שמירה בש״ג',
+    description: 'שער ראשי — שתי משמרות יום, שלוש לילה',
+    category: 'שמירות',
+    isFavorite: true,
+    usageCount: 12,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'static-guard',
+      timeModel: { kind: '24-7-continuous' },
+      manpower: {
+        kind: 'window-varies',
+        windows: [
+          { label: 'day',   from: '06:00', to: '22:00', spec: { kind: 'exact', count: 2 } },
+          { label: 'night', from: '22:00', to: '06:00', spec: { kind: 'exact', count: 3 } },
+        ],
+      },
+      command: { fieldCommandRequired: false, commandersPerSlot: 0, commanderCountsAsManpower: false, rankPolicy: _tplPolicy([]) },
+      rotation: { kind: 'rotate-platoons', period: 'weekly' },
+      fatigue:  { intensity: 'standing-guard', impactsSleep: false, minRestAfterHours: 6, fatigueWeight: 3 },
+      dayNightProfile: { dayStartTime: '06:00', nightStartTime: '22:00', dayShiftDurationMinutes: 120, nightShiftDurationMinutes: 180 },
+      allowPCOverride: true, shiftDurationLocked: false,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'mix' }, pairings: [], requiresDailyConfirmation: false,
+      rallyPoint: 'שער ראשי — ש״ג',
+    },
+  },
+  {
+    id: 'mt-static-guard-position', companyId: 'co1',
+    name: 'שמירה בעמדה',
+    description: 'עמדה היקפית — חייל אחד, משמרת רגילה',
+    category: 'שמירות',
+    isFavorite: false,
+    usageCount: 5,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'static-guard',
+      timeModel: { kind: '24-7-continuous' },
+      manpower: { kind: 'exact', count: 1 },
+      command:  { fieldCommandRequired: false, commandersPerSlot: 0, commanderCountsAsManpower: false, rankPolicy: _tplPolicy([]) },
+      rotation: { kind: 'rotate-platoons', period: 'daily' },
+      fatigue:  { intensity: 'standing-guard', impactsSleep: false, minRestAfterHours: 6, fatigueWeight: 3 },
+      dayNightProfile: { dayStartTime: '06:00', nightStartTime: '22:00', dayShiftDurationMinutes: 180, nightShiftDurationMinutes: 180 },
+      allowPCOverride: true, shiftDurationLocked: false,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'mix' }, pairings: [], requiresDailyConfirmation: false,
+      rallyPoint: 'עמדה היקפית',
+    },
+  },
+  // ── סיורים ──────────────────────────────────────────────────────
+  {
+    id: 'mt-night-patrol', companyId: 'co1',
+    name: 'סיור לילה',
+    description: 'סיור הולך-נע בגזרה — 22:00–04:00, רביעייה',
+    category: 'סיורים',
+    isFavorite: true,
+    usageCount: 8,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'patrol',
+      timeModel: { kind: 'fixed-hours', windows: [{ startTime: '22:00', endTime: '04:00', shiftDurationMinutes: 360, recurring: 'every-day' }] },
+      manpower: { kind: 'exact', count: 4 },
+      command:  { fieldCommandRequired: true, commandersPerSlot: 1, commanderCountsAsManpower: true, rankPolicy: _tplPolicy(['samal']) },
+      rotation: { kind: 'rotate-squads', period: 'daily' },
+      fatigue:  { intensity: 'active-patrol', impactsSleep: true, minRestAfterHours: 8, fatigueWeight: 7 },
+      overlapPolicy: { activeOverlap: [], restOverlap: [] },
+      allowPCOverride: true, shiftDurationLocked: true,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'no-mix' }, pairings: [], requiresDailyConfirmation: false,
+      routeDescription: 'ציר היקפי — נצפ״ה 4 → 7 → 9',
+    },
+  },
+  {
+    id: 'mt-vehicle-patrol', companyId: 'co1',
+    name: 'סיור רכוב',
+    description: 'סיור ברכב פלוגתי — 06:00–14:00 כל יום',
+    category: 'סיורים',
+    isFavorite: false,
+    usageCount: 3,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'patrol',
+      timeModel: { kind: 'fixed-hours', windows: [{ startTime: '06:00', endTime: '14:00', shiftDurationMinutes: 240, recurring: 'every-day' }] },
+      manpower: { kind: 'exact', count: 3 },
+      command:  { fieldCommandRequired: true, commandersPerSlot: 1, commanderCountsAsManpower: true, rankPolicy: _tplPolicy(['samal']) },
+      rotation: { kind: 'rotate-squads', period: 'daily' },
+      fatigue:  { intensity: 'active-patrol', impactsSleep: false, minRestAfterHours: 6, fatigueWeight: 6 },
+      overlapPolicy: { activeOverlap: [], restOverlap: [] },
+      allowPCOverride: true, shiftDurationLocked: false, hasVehicle: true,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'no-mix' }, pairings: [], requiresDailyConfirmation: false,
+      routeDescription: 'ציר מערב + ציר דרום',
+    },
+  },
+  // ── כוננויות ────────────────────────────────────────────────────
+  {
+    id: 'mt-carmel-a', companyId: 'co1',
+    name: 'כוננות כרמל א',
+    description: 'תגובה ראשונית — רביעייה + מ״כ, רחבת מטה',
+    category: 'כוננויות',
+    isFavorite: true,
+    usageCount: 6,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'readiness',
+      timeModel: { kind: '24-7-continuous' },
+      manpower: { kind: 'exact', count: 4 },
+      command:  { fieldCommandRequired: true, commandersPerSlot: 1, commanderCountsAsManpower: true, rankPolicy: _tplPolicy(['samal', 'mam']) },
+      rotation: { kind: 'rotate-platoons', period: 'daily' },
+      fatigue:  { intensity: 'readiness', impactsSleep: false, minRestAfterHours: 4, fatigueWeight: 2 },
+      overlapPolicy: { activeOverlap: ['standing-guard', 'admin', 'readiness'], restOverlap: ['standing-guard', 'admin', 'readiness', 'active-patrol'] },
+      allowPCOverride: true, shiftDurationLocked: false,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'no-mix' }, pairings: [], requiresDailyConfirmation: false,
+      rallyPoint: 'רחבת מטה הפלוגה',
+      responseInstructions: 'יציאה מהירה לרחבת מטה הפלוגה. מ״כ מוביל. נשק ואפוד אישי. דריכות מלאה — לקבל הוראות מהמ״פ בהגעה.',
+    },
+  },
+  {
+    id: 'mt-carmel-b', companyId: 'co1',
+    name: 'כוננות כרמל ב',
+    description: 'כוח גיבוי — 8 חיילים, מטה משני',
+    category: 'כוננויות',
+    isFavorite: false,
+    usageCount: 4,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'readiness',
+      timeModel: { kind: '24-7-continuous' },
+      manpower: { kind: 'exact', count: 8 },
+      command:  { fieldCommandRequired: true, commandersPerSlot: 1, commanderCountsAsManpower: true, rankPolicy: _tplPolicy(['samal', 'mam']) },
+      rotation: { kind: 'rotate-platoons', period: 'daily' },
+      fatigue:  { intensity: 'readiness', impactsSleep: false, minRestAfterHours: 4, fatigueWeight: 2 },
+      overlapPolicy: { activeOverlap: ['standing-guard', 'admin', 'readiness'], restOverlap: ['standing-guard', 'admin', 'readiness', 'active-patrol'] },
+      allowPCOverride: true, shiftDurationLocked: false,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'no-mix' }, pairings: [], requiresDailyConfirmation: false,
+      rallyPoint: 'מטה משני — בניין 7',
+      responseInstructions: 'יציאה ל-מטה משני בבניין 7. כוח גיבוי לרחבת המטה — ממתינים להוראות מהמ״פ.',
+    },
+  },
+  {
+    id: 'mt-rapid-response', companyId: 'co1',
+    name: 'כוננות הקפצה',
+    description: 'התראה מיידית — כל המחלקה, נקודת ריכוז שער',
+    category: 'כוננויות',
+    isFavorite: false,
+    usageCount: 2,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'readiness',
+      timeModel: { kind: '24-7-continuous' },
+      manpower: { kind: 'range', min: 6, max: 12 },
+      command:  { fieldCommandRequired: true, commandersPerSlot: 1, commanderCountsAsManpower: true, rankPolicy: _tplPolicy(['mam', 'officer']) },
+      rotation: { kind: 'whichever-strongest' },
+      fatigue:  { intensity: 'readiness', impactsSleep: false, minRestAfterHours: 4, fatigueWeight: 2 },
+      overlapPolicy: { activeOverlap: ['standing-guard', 'admin', 'readiness'], restOverlap: ['standing-guard', 'admin', 'readiness', 'active-patrol'] },
+      allowPCOverride: true, shiftDurationLocked: false,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'mix' }, pairings: [], requiresDailyConfirmation: false,
+      rallyPoint: 'שער ראשי',
+      responseInstructions: 'יציאה דחופה לשער. כל החיילים — אפודים ונשק. מקבלים תיק תגובה משם.',
+    },
+  },
+  // ── תורנויות ─────────────────────────────────────────────────────
+  {
+    id: 'mt-kitchen', companyId: 'co1',
+    name: 'תורנות מטבח',
+    description: 'בוקר וצהריים — שלושייה',
+    category: 'תורנויות',
+    isFavorite: false,
+    usageCount: 14,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'custom',
+      timeModel: { kind: 'fixed-hours', windows: [{ startTime: '05:30', endTime: '14:00', shiftDurationMinutes: 510, recurring: 'every-day' }] },
+      manpower: { kind: 'exact', count: 3 },
+      command:  { fieldCommandRequired: false, commandersPerSlot: 0, commanderCountsAsManpower: false, rankPolicy: _tplPolicy([]) },
+      rotation: { kind: 'rotate-platoons', period: 'daily' },
+      fatigue:  { intensity: 'admin', impactsSleep: false, minRestAfterHours: 6, fatigueWeight: 2 },
+      allowPCOverride: true, shiftDurationLocked: false,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'mix' }, pairings: [], requiresDailyConfirmation: false,
+    },
+  },
+  {
+    id: 'mt-chamal', companyId: 'co1',
+    name: 'תורנות חמ״ל',
+    description: 'משמרת חמ״ל פלוגתי — 12 שעות',
+    category: 'תורנויות',
+    isFavorite: false,
+    usageCount: 9,
+    createdAt: SEED_CREATED, createdByUserId: 'u1',
+    payload: {
+      archetypeKind: 'custom',
+      timeModel: { kind: '24-7-continuous' },
+      manpower: { kind: 'exact', count: 2 },
+      command:  { fieldCommandRequired: false, commandersPerSlot: 0, commanderCountsAsManpower: false, rankPolicy: _tplPolicy([]) },
+      rotation: { kind: 'rotate-platoons', period: 'weekly' },
+      fatigue:  { intensity: 'readiness', impactsSleep: false, minRestAfterHours: 6, fatigueWeight: 3 },
+      dayNightProfile: { dayStartTime: '08:00', nightStartTime: '20:00', dayShiftDurationMinutes: 720, nightShiftDurationMinutes: 720 },
+      allowPCOverride: true, shiftDurationLocked: false,
+      qualifications: [], equipment: [], squadPolicy: { mode: 'mix' }, pairings: [], requiresDailyConfirmation: false,
+      rallyPoint: 'חמ״ל פלוגתי',
+    },
+  },
+];
+

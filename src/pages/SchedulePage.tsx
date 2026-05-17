@@ -13,6 +13,7 @@ import { useApp, useMyCompany } from '../context/AppContext';
 import { isCompanyLeadership, isPlatoonLeadership } from '../utils/permissions';
 import Header from '../components/Header';
 import MissionImportSheet from '../components/MissionImportSheet';
+import MissionTemplateLibrarySheet from '../components/MissionTemplateLibrarySheet';
 import { buildMissionSummary } from '../utils/missionSummary';
 import { materializeWeek } from '../utils/materialize';
 import type {
@@ -29,6 +30,8 @@ export default function SchedulePage() {
     platoons, squads, soldiers, leaves, dutyExclusions, assignments,
     addOrder, setOrderStatus, setMissionStatus,
     qualifications, equipmentItems, platoonLeaveDays, addMission,
+    missionTemplates, toggleMissionTemplateFavorite, hideMissionTemplate,
+    incrementTemplateUsage,
   } = useApp();
 
   const isCC = isCompanyLeadership(currentRole);
@@ -54,9 +57,9 @@ export default function SchedulePage() {
   );
 
   const [addOrderOpen, setAddOrderOpen] = useState(false);
-  // Phase 7.3 — import flow. When set, the sheet shows the missions of
-  // a different order and lets the operator pull some/all into the
-  // CURRENTLY selected order.
+  // Phase 7.3 — Mission Template Library is the PRIMARY creation flow.
+  // Import-from-previous-order survives as a secondary option.
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [importFromOrderId, setImportFromOrderId] = useState<string | null>(null);
   const importSourceMissions = useMemo(
     () => importFromOrderId
@@ -140,19 +143,28 @@ export default function SchedulePage() {
           <Section
             label={`משימות · ${selectedOrder.name}`}
             action={isCC && (
-              <div className="flex gap-3 items-baseline">
+              <div className="flex gap-3 items-baseline flex-wrap justify-end">
+                {/* PRIMARY: open the template library */}
+                <button
+                  onClick={() => setLibraryOpen(true)}
+                  className="text-tiny font-bold text-mil-olive hover:text-mil-olive-dim"
+                >
+                  + בחר מתבנית
+                </button>
+                {/* SECONDARY: open the full wizard (custom mission) */}
+                <button
+                  onClick={() => navigate(`/missions/new?orderId=${selectedOrder.id}`)}
+                  className="text-tiny font-semibold text-mil-muted hover:text-mil-text"
+                >
+                  התחל מ-0
+                </button>
+                {/* TERTIARY: import from previous order */}
                 <ImportFromOrderButton
                   selectedOrderId={selectedOrder.id}
                   orders={myOrders}
                   missions={missions}
                   onPick={(orderId) => setImportFromOrderId(orderId)}
                 />
-                <button
-                  onClick={() => navigate(`/missions/new?orderId=${selectedOrder.id}`)}
-                  className="text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
-                >
-                  + הוסף משימה
-                </button>
               </div>
             )}
           >
@@ -216,6 +228,33 @@ export default function SchedulePage() {
             setSelectedOrderId(created.id);
             setAddOrderOpen(false);
           }}
+        />
+      )}
+
+      {libraryOpen && selectedOrder && (
+        <MissionTemplateLibrarySheet
+          open
+          onClose={() => setLibraryOpen(false)}
+          templates={missionTemplates.filter((t) => t.companyId === myCompany?.id)}
+          qualifications={qualifications}
+          equipmentItems={equipmentItems}
+          platoons={platoons.filter((p) => p.companyId === myCompany?.id)}
+          platoonLeaveDays={platoonLeaveDays}
+          defaultOrder={selectedOrder}
+          onCreate={(payload, fromTemplateId) => {
+            if (!myCompany || !currentUser) return undefined;
+            const created = addMission({
+              ...payload,
+              companyId: myCompany.id,
+              createdByUserId: currentUser.id,
+            });
+            incrementTemplateUsage(fromTemplateId);
+            setLibraryOpen(false);
+            navigate(`/missions/${created.id}/assign`);
+            return created.id;
+          }}
+          onToggleFavorite={toggleMissionTemplateFavorite}
+          onHide={hideMissionTemplate}
         />
       )}
 

@@ -5,11 +5,13 @@
 // the wizard. No filters, no bulk operations, no detail page yet —
 // those land in later slices.
 
+import { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useApp, useMyCompany } from '../context/AppContext';
 import { isCompanyLeadership } from '../utils/permissions';
 import { buildMissionSummary } from '../utils/missionSummary';
 import Header from '../components/Header';
+import MissionTemplateLibrarySheet from '../components/MissionTemplateLibrarySheet';
 import type { Mission, Platoon } from '../types';
 import {
   Button, Section, PageMain, Body, Muted, Hint,
@@ -17,8 +19,13 @@ import {
 
 export default function MissionsPage() {
   const navigate = useNavigate();
-  const { missions, platoons, qualifications, equipmentItems, currentRole } = useApp();
+  const {
+    missions, platoons, qualifications, equipmentItems, currentRole,
+    currentUser, addMission, missionTemplates, platoonLeaveDays,
+    toggleMissionTemplateFavorite, hideMissionTemplate, incrementTemplateUsage,
+  } = useApp();
   const myCompany = useMyCompany();
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   if (!isCompanyLeadership(currentRole)) {
     return <Navigate to="/home" replace />;
@@ -71,11 +78,45 @@ export default function MissionsPage() {
           )}
         </Section>
 
-        <Button variant="primary" size="lg" fullWidth onClick={() => navigate('/missions/new')}>
-          + משימה חדשה
-        </Button>
+        {/* Phase 7.3 — template library is the PRIMARY creation flow.
+            "התחל מ-0" stays as a secondary path for the rare case the
+            archetype + library don't fit. */}
+        <div className="space-y-2">
+          <Button variant="primary" size="lg" fullWidth onClick={() => setLibraryOpen(true)}>
+            + בחר מתבנית
+          </Button>
+          <Button variant="secondary" size="md" fullWidth onClick={() => navigate('/missions/new')}>
+            התחל מ-0
+          </Button>
+        </div>
 
       </PageMain>
+
+      {libraryOpen && myCompany && (
+        <MissionTemplateLibrarySheet
+          open
+          onClose={() => setLibraryOpen(false)}
+          templates={missionTemplates.filter((t) => t.companyId === myCompany.id)}
+          qualifications={qualifications}
+          equipmentItems={equipmentItems}
+          platoons={platoons.filter((p) => p.companyId === myCompany.id)}
+          platoonLeaveDays={platoonLeaveDays}
+          onCreate={(payload, fromTemplateId) => {
+            if (!currentUser) return undefined;
+            const created = addMission({
+              ...payload,
+              companyId: myCompany.id,
+              createdByUserId: currentUser.id,
+            });
+            incrementTemplateUsage(fromTemplateId);
+            setLibraryOpen(false);
+            navigate(`/missions/${created.id}/assign`);
+            return created.id;
+          }}
+          onToggleFavorite={toggleMissionTemplateFavorite}
+          onHide={hideMissionTemplate}
+        />
+      )}
     </div>
   );
 }
