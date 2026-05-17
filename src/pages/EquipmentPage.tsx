@@ -308,7 +308,7 @@ const STATUS_LABEL: Record<SignedEquipmentStatus, string> = {
 
 const GAP_KIND_LABEL: Record<EquipmentGapKind, string> = {
   missing:           'חסר',
-  damaged:           'שבור',
+  damaged:           'תקול',
   'logistics-issue': 'בעיה לוגיסטית',
 };
 

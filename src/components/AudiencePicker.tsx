@@ -20,7 +20,7 @@ import { useMemo, useState } from 'react';
 import type { Audience, OperationalRole, Platoon, Soldier, Squad } from '../types';
 
 const ALL_OPERATIONAL_ROLES: OperationalRole[] = [
-  'מ״פ', 'סמ״פ', 'מ״מ', 'קשר מ״מ', 'סמל', 'מ״כ',
+  'מ״פ', 'סמ״פ', 'מ״מ', 'קשר מ״מ', 'סמל', 'מ״כ', 'מפקד מפלג',
   'חובש', 'נגביסט', 'קלע', 'מאגיסט', 'רחפן',
   'רס״פ', 'שליש', 'מש״ק קשר',
 ];

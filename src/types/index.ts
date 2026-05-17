@@ -67,8 +67,14 @@ export interface Delegation {
 // the product surfaces live here — there are no generic "manager" /
 // "admin" / "מנהל" / "בעלים" concepts.
 export type OperationalRole =
-  // Command
+  // Command — combat platoon
   | 'מ״פ' | 'סמ״פ' | 'מ״מ' | 'קשר מ״מ' | 'סמל' | 'קשר סמל' | 'מ״כ'
+  // §15 — מפקד מפלג commands the logistics platoon (מפלג). DISTINCT
+  // from the מ״פ / סמ״פ who command the entire company. Don't conflate
+  // with "מפקד חפ״ק" — the מפקד מפלג is NOT the commander of CHAPAK.
+  // CHAPAK is the מ״פ's forward-command element; it's not a separate
+  // command line.
+  | 'מפקד מפלג'
   // Specialists — combat
   | 'חובש' | 'נגביסט' | 'נגביסט חוד' | 'קלע' | 'קלע חוד'
   | 'מאגיסט' | 'מטוליסט' | 'רובאי' | 'רחפן'
