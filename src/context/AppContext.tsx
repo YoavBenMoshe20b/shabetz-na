@@ -333,6 +333,13 @@ interface AppContextType {
     pantsSize?:    string;
     shoeSize?:     string;
     dateOfBirth?:  string;
+    // Phase 7.4 — operational logistics fields (§7)
+    weaponType?:    string;
+    weaponSerial?:  string;
+    shirtSizeB?:    string;
+    pantsSizeB?:    string;
+    shirtSizeCiv?:  string;
+    pantsSizeCiv?:  string;
   }) => void;
 
   // ── PC/PS soldier assignment updates ────────────────────────────────
@@ -1485,6 +1492,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dominantHand?: 'right' | 'left'; weaponSide?: 'right' | 'left';
     shirtSize?: string; pantsSize?: string; shoeSize?: string;
     dateOfBirth?: string;
+    weaponType?: string; weaponSerial?: string;
+    shirtSizeB?: string; pantsSizeB?: string;
+    shirtSizeCiv?: string; pantsSizeCiv?: string;
   }) => {
     setAllSoldiers((prev) => prev.map((s) => s.id === data.soldierId
       ? {
@@ -1495,6 +1505,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           pantsSize:    data.pantsSize    ?? s.pantsSize,
           shoeSize:     data.shoeSize     ?? s.shoeSize,
           dateOfBirth:  data.dateOfBirth  ?? s.dateOfBirth,
+          weaponType:    data.weaponType    ?? s.weaponType,
+          weaponSerial:  data.weaponSerial  ?? s.weaponSerial,
+          shirtSizeB:    data.shirtSizeB    ?? s.shirtSizeB,
+          pantsSizeB:    data.pantsSizeB    ?? s.pantsSizeB,
+          shirtSizeCiv:  data.shirtSizeCiv  ?? s.shirtSizeCiv,
+          pantsSizeCiv:  data.pantsSizeCiv  ?? s.pantsSizeCiv,
         }
       : s
     ));

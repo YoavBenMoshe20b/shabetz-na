@@ -255,6 +255,9 @@ function SoldierRow({ soldier, onClick }: { soldier: Soldier; onClick: () => voi
     'bg-mil-ghost';
   const initials = soldier.name.split(' ').map((p) => p[0]).slice(0, 2).join('');
 
+  // §12 — row now includes the operational basics: name + phone (call
+  // link) + PKAL/roles + squad/team + status. The "←" leads to the
+  // full soldier detail page.
   return (
     <button
       onClick={onClick}
@@ -268,13 +271,24 @@ function SoldierRow({ soldier, onClick }: { soldier: Soldier; onClick: () => voi
       </div>
       <div className="flex-1 min-w-0">
         <Body className="font-semibold truncate">{soldier.name}</Body>
-        {soldier.operationalRoles.length > 0 && (
-          <Hint className="block mt-0.5 truncate text-mil-muted">
-            {soldier.operationalRoles.join(' · ')}
-          </Hint>
-        )}
+        <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
+          {soldier.phone && (
+            <Hint className="text-tiny text-mil-muted tabular-nums font-mono">
+              {soldier.phone}
+            </Hint>
+          )}
+          {soldier.operationalRoles.length > 0 && (
+            <>
+              {soldier.phone && <Hint className="text-mil-ghost">·</Hint>}
+              <Hint className="text-tiny truncate text-mil-muted">
+                {soldier.operationalRoles.slice(0, 2).join(' · ')}
+                {soldier.operationalRoles.length > 2 && ` +${soldier.operationalRoles.length - 2}`}
+              </Hint>
+            </>
+          )}
+        </div>
       </div>
-      <span className="text-xxs font-semibold text-mil-muted">{STATUS_LABEL[soldier.currentStatus]}</span>
+      <span className="text-xxs font-semibold text-mil-muted whitespace-nowrap">{STATUS_LABEL[soldier.currentStatus]}</span>
       <span className="text-mil-ghost">←</span>
     </button>
   );

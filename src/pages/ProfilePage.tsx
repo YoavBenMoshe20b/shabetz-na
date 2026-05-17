@@ -56,6 +56,13 @@ export default function ProfilePage() {
     pantsSize:    myProfile?.pantsSize    ?? '',
     shoeSize:     myProfile?.shoeSize     ?? '',
     dateOfBirth:  myProfile?.dateOfBirth  ?? '',
+    // Phase 7.4 — operational logistics fields (§7).
+    weaponType:    myProfile?.weaponType    ?? '',
+    weaponSerial:  myProfile?.weaponSerial  ?? '',
+    shirtSizeB:    myProfile?.shirtSizeB    ?? '',
+    pantsSizeB:    myProfile?.pantsSizeB    ?? '',
+    shirtSizeCiv:  myProfile?.shirtSizeCiv  ?? '',
+    pantsSizeCiv:  myProfile?.pantsSizeCiv  ?? '',
   });
   const [saved, setSaved] = useState(false);
 
@@ -65,7 +72,13 @@ export default function ProfilePage() {
     edit.shirtSize    !== (myProfile?.shirtSize    ?? '') ||
     edit.pantsSize    !== (myProfile?.pantsSize    ?? '') ||
     edit.shoeSize     !== (myProfile?.shoeSize     ?? '') ||
-    edit.dateOfBirth  !== (myProfile?.dateOfBirth  ?? '');
+    edit.dateOfBirth  !== (myProfile?.dateOfBirth  ?? '') ||
+    edit.weaponType   !== (myProfile?.weaponType   ?? '') ||
+    edit.weaponSerial !== (myProfile?.weaponSerial ?? '') ||
+    edit.shirtSizeB   !== (myProfile?.shirtSizeB   ?? '') ||
+    edit.pantsSizeB   !== (myProfile?.pantsSizeB   ?? '') ||
+    edit.shirtSizeCiv !== (myProfile?.shirtSizeCiv ?? '') ||
+    edit.pantsSizeCiv !== (myProfile?.pantsSizeCiv ?? '');
 
   const save = () => {
     if (!myProfile) return;
@@ -77,6 +90,12 @@ export default function ProfilePage() {
       pantsSize:    edit.pantsSize     || undefined,
       shoeSize:     edit.shoeSize      || undefined,
       dateOfBirth:  edit.dateOfBirth   || undefined,
+      weaponType:    edit.weaponType    || undefined,
+      weaponSerial:  edit.weaponSerial  || undefined,
+      shirtSizeB:    edit.shirtSizeB    || undefined,
+      pantsSizeB:    edit.pantsSizeB    || undefined,
+      shirtSizeCiv:  edit.shirtSizeCiv  || undefined,
+      pantsSizeCiv:  edit.pantsSizeCiv  || undefined,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -160,6 +179,66 @@ export default function ProfilePage() {
 
             <FieldRow label="מידת נעל">
               <input type="text" value={edit.shoeSize} onChange={(e) => setEdit((s) => ({ ...s, shoeSize: e.target.value }))} placeholder="43" className={inputCls} />
+            </FieldRow>
+
+            {/* §7 — weapon assignment */}
+            <FieldRow label="סוג נשק">
+              <input
+                type="text"
+                value={edit.weaponType}
+                onChange={(e) => setEdit((s) => ({ ...s, weaponType: e.target.value }))}
+                placeholder="M4 / Tavor X95 / Negev / מ.א.ג / מטול / קלע M24"
+                className={inputCls}
+              />
+            </FieldRow>
+            <FieldRow label="מספר נשק">
+              <input
+                type="text"
+                value={edit.weaponSerial}
+                onChange={(e) => setEdit((s) => ({ ...s, weaponSerial: e.target.value }))}
+                placeholder="01-23456"
+                className={inputCls}
+              />
+            </FieldRow>
+
+            {/* §7 — Class-B (working uniform) sizes */}
+            <FieldRow label='חולצה ב"'>
+              <input
+                type="text"
+                value={edit.shirtSizeB}
+                onChange={(e) => setEdit((s) => ({ ...s, shirtSizeB: e.target.value }))}
+                placeholder="S / M / L / XL"
+                className={inputCls}
+              />
+            </FieldRow>
+            <FieldRow label='מכנס ב"'>
+              <input
+                type="text"
+                value={edit.pantsSizeB}
+                onChange={(e) => setEdit((s) => ({ ...s, pantsSizeB: e.target.value }))}
+                placeholder="34"
+                className={inputCls}
+              />
+            </FieldRow>
+
+            {/* §7 — Civilian sizes */}
+            <FieldRow label="חולצה אזרחית">
+              <input
+                type="text"
+                value={edit.shirtSizeCiv}
+                onChange={(e) => setEdit((s) => ({ ...s, shirtSizeCiv: e.target.value }))}
+                placeholder="M / L"
+                className={inputCls}
+              />
+            </FieldRow>
+            <FieldRow label="מכנס אזרחית">
+              <input
+                type="text"
+                value={edit.pantsSizeCiv}
+                onChange={(e) => setEdit((s) => ({ ...s, pantsSizeCiv: e.target.value }))}
+                placeholder="34"
+                className={inputCls}
+              />
             </FieldRow>
           </div>
 

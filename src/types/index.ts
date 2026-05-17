@@ -161,6 +161,23 @@ export interface Soldier {
   shirtSize?:     string;       // free-text: S/M/L/XL/2XL/...
   pantsSize?:     string;       // free-text: 30/32/.../48
   shoeSize?:      string;       // EU number as string ("42", "44.5")
+
+  // ── Phase 7.4 — extended logistics profile ───────────────────────
+  //
+  // Weapon assignment. Type is the model class (M4 / Tavor / Negev /
+  // קלע / מטול), `weaponSerial` is the rifle/equipment serial number.
+  // Both surface in roster + operational reports + equipment inventory.
+  weaponType?:    string;       // free-text: 'M4', 'Tavor X95', 'Negev', 'מאג', 'מטול', 'קלע M24'
+  weaponSerial?:  string;       // e.g. '01-23456'
+
+  // Military Class-B sizes (working uniform). Distinct from regular
+  // shirt/pants sizes which are formal-uniform.
+  shirtSizeB?:    string;       // חולצה ב'
+  pantsSizeB?:    string;       // מכנס ב'
+
+  // Civilian sizes — for jackets, t-shirts handed out, etc.
+  shirtSizeCiv?:  string;       // חולצה אזרחית
+  pantsSizeCiv?:  string;       // מכנס אזרחית
 }
 
 // ─── Equipment (signed-out gear) ─────────────────────────────────────────────
