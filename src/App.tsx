@@ -30,6 +30,7 @@ import { useApp } from './context/AppContext';
 import { AppProviders } from './providers/AppProviders';
 import { isShalish, isRasap } from './utils/permissions';
 import BottomNav from './components/BottomNav';
+import EmergencyFab from './components/EmergencyFab';
 import ProtectedRoute from './components/ProtectedRoute';
 import DelegationBanner from './components/DelegationBanner';
 
@@ -257,6 +258,11 @@ function AppRoutes() {
       </Suspense>
 
       {showNav && <BottomNav />}
+      {/* Phase 7.3 — global emergency affordance. Self-gates on
+          canDeclareEscalation, so only PC / CC (or delegates) see it.
+          Hidden during full-screen / unauthenticated states via the
+          same showNav guard. */}
+      {showNav && <EmergencyFab />}
     </>
   );
 }

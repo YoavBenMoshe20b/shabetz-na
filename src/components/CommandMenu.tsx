@@ -215,12 +215,22 @@ export default function CommandMenu({ open, onClose, user, currentRole, onLogout
           {personal.map((it) => <Row key={it.href} item={it} onClick={() => go(it.href)} />)}
         </Group>
 
-        <div className="pt-2 border-t border-mil-border">
+        <div className="pt-2 border-t border-mil-border space-y-2">
           <button
             onClick={() => { onClose(); onLogout(); }}
             className="w-full text-right text-tiny font-semibold text-mil-alert hover:bg-mil-alert-bg rounded-lg px-3 py-2.5 transition-colors"
           >
             יציאה מהמערכת
+          </button>
+          {/* Thumb-reach close button — bottom of the sheet content so
+              the operator can dismiss without stretching to the small
+              × in the sticky header. The backdrop already closes on
+              tap; this is the discoverable affordance. */}
+          <button
+            onClick={onClose}
+            className="w-full text-center text-sm font-bold text-mil-muted hover:text-mil-text bg-mil-bg-alt hover:bg-mil-card-hover rounded-xl-soft px-3 py-3 transition-colors border border-mil-border"
+          >
+            סגור תפריט
           </button>
         </div>
       </div>
