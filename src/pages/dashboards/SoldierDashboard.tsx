@@ -61,6 +61,7 @@ export default function SoldierDashboard() {
   const [showRoster,  setShowRoster]  = useState(false);
   const [leaveOpen,   setLeaveOpen]   = useState(false);
   const [leaveSaved,  setLeaveSaved]  = useState(false);
+  const [leaveBlockedMsg, setLeaveBlockedMsg] = useState<string | null>(null);
   // statusUpdateOpen removed — soldier cannot self-change status (§11).
   // statusToastMsg removed — soldier can't change status anymore.
 
@@ -190,7 +191,7 @@ export default function SoldierDashboard() {
 
   const submitLeaveRequest = (data: { startDate: string; startTime: string; endDate: string; endTime: string; reason: string }) => {
     if (!myProfile) return;
-    addLeaveRequest({
+    const result = addLeaveRequest({
       soldierId:           myProfile.id,
       soldierName:         myProfile.name,
       soldierTeamClass:    myProfile.teamClass,
@@ -202,6 +203,15 @@ export default function SoldierDashboard() {
       endTime:   data.endTime,
       reason:    data.reason,
     });
+    if (!result.ok) {
+      // §4-§5 — calendar locking propagates to leave. Tell the soldier
+      // which date fired the block so they can move their request.
+      const tag  = result.block.kindLabel ? `${result.block.kindLabel} · ` : '';
+      const date = result.block.on ? ` (${result.block.on})` : '';
+      setLeaveBlockedMsg(`לא ניתן להגיש: ${tag}תאריך חסום ע״י המ״פ${date}`);
+      setTimeout(() => setLeaveBlockedMsg(null), 5000);
+      return;
+    }
     setLeaveOpen(false);
     setLeaveSaved(true);
     setTimeout(() => setLeaveSaved(false), 3500);
@@ -213,6 +223,7 @@ export default function SoldierDashboard() {
       <PageMain>
 
         {leaveSaved && <Toast tone="success">בקשת היציאה הוגשה למ״מ</Toast>}
+        {leaveBlockedMsg && <Toast tone="warn">{leaveBlockedMsg}</Toast>}
         {/* statusToastMsg removed — see §11 self-status-toggle removal */}
 
         <div>

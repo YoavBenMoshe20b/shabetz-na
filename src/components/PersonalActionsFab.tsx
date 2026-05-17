@@ -123,13 +123,20 @@ export default function PersonalActionsFab() {
             <LeaveRequestForm
               onCancel={() => setSubSheet(null)}
               onSubmit={(data) => {
-                addLeaveRequest({
+                const result = addLeaveRequest({
                   soldierId:         myProfile.id,
                   soldierName:       myProfile.name,
                   soldierTeamClass:  myProfile.teamClass,
                   soldierSquadId:    myProfile.squadId,
                   ...data,
                 });
+                if (!result.ok) {
+                  // §4-§5 — calendar locking blocks leave. The form stays
+                  // open so the soldier can adjust dates without re-entering.
+                  const tag = result.block.kindLabel ? `${result.block.kindLabel} · ` : '';
+                  alert(`לא ניתן להגיש: ${tag}תאריך חסום ע״י המ״פ${result.block.on ? ` (${result.block.on})` : ''}`);
+                  return;
+                }
                 setSubSheet(null);
               }}
             />

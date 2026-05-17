@@ -29,6 +29,7 @@ import { newId } from '../utils/id';
 import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle, isRasap } from '../utils/permissions';
 import { USE_SUPABASE } from '../api/_supabase';
 import { usePersistedState } from '../utils/persistedState';
+import { isLeaveRangeBlocked } from '../utils/leaveBlocking';
 import type { MissionTemplate, TemplateFamily } from '../utils/missionTemplates';
 
 // Seed version — bump when mockData shape changes in a way that should
@@ -463,7 +464,8 @@ interface AppContextType {
   setReminder:    (r: ReminderSetting) => void;
   addLeave:       (leave: Omit<Leave, 'id'>) => void;
   removeLeave:    (id: string) => void;
-  addLeaveRequest:     (req: Omit<LeaveRequest, 'id' | 'status' | 'submittedAt'>) => void;
+  addLeaveRequest:     (req: Omit<LeaveRequest, 'id' | 'status' | 'submittedAt'>)
+    => { ok: true } | { ok: false; block: { on?: string; kindLabel?: string; reason?: string } };
   approveLeaveRequest: (id: string, reviewerId: string, reviewerName: string) => void;
   rejectLeaveRequest:  (id: string, reviewerId: string, reviewerName: string) => void;
 
@@ -2173,7 +2175,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const removeLeave = (id: string) =>
     setLeaves((prev) => prev.filter((l) => l.id !== id));
 
+  // §4-§5 — calendar locking ↔ leave module. Defensive boundary check:
+  // even if the UI forgot to pre-validate against blocked dates, we
+  // refuse to write a leave request that touches a date marked with
+  // blockLeaveRequests=true. Returns the block info for UI feedback.
   const addLeaveRequest = (req: Omit<LeaveRequest, 'id' | 'status' | 'submittedAt'>) => {
+    const block = isLeaveRangeBlocked(req.startDate, req.endDate, companyBlockedDates);
+    if (block.blocked) {
+      console.warn('[leave] rejected — date locked', block);
+      return { ok: false as const, block };
+    }
     setLeaveRequests((prev) => [...prev, {
       ...req,
       id: newId('lr'),
@@ -2193,6 +2204,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reason:    req.reason,
       }));
     }
+    return { ok: true as const };
   };
 
   // Authorization guard for leave-request decisions. The page also
