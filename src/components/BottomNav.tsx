@@ -5,7 +5,7 @@
 // quiet. Icons are simple geometric glyphs in a refined size.
 //
 //   SOLDIER         (3 tabs)   בית · לוח · פרופיל
-//   COMMANDER       (5 tabs)   בית · לוח · שבצ״ק · דוח 1 · חיילים
+//   COMMANDER       (5 tabs)   בית · לוח · משימות · דוח 1 · חיילים
 //   RASAP           (5 tabs)   בית · לוח · רס״פ · מלאי · פרופיל
 
 import { NavLink } from 'react-router-dom';
@@ -72,7 +72,7 @@ const SOLDIER_ITEMS: NavItem[] = [
 const COMMANDER_ITEMS: NavItem[] = [
   { to: '/home',     label: 'בית',    icon: ICON.home },
   { to: '/calendar', label: 'לוח',    icon: ICON.calendar },
-  { to: '/schedule', label: 'שבצ״ק',  icon: ICON.grid },
+  { to: '/schedule', label: 'משימות',  icon: ICON.grid },
   { to: '/report1',  label: 'דוח 1',  icon: ICON.report1 },
   { to: '/soldiers', label: 'חיילים', icon: ICON.users },
 ];

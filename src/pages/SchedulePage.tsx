@@ -67,17 +67,28 @@ export default function SchedulePage() {
 
   return (
     <div className="min-h-screen bg-mil-bg" dir="rtl">
-      <Header title="שבצ״ק" />
+      <Header title="משימות ושבצ״ק" />
       <PageMain>
 
         {/* ── Hero ─────────────────────────────────────────────────── */}
         <header>
           <Eyebrow>{myCompany?.unitName ?? ''} · {myCompany?.name ?? ''}</Eyebrow>
-          <PageTitle className="mt-1.5">שבצ״ק</PageTitle>
+          <PageTitle className="mt-1.5">משימות ושבצ״ק</PageTitle>
           <Muted className="mt-1.5">
             {myOrders.length === 0 ? 'אין צו פעיל — צור צו חדש כדי להתחיל' :
               `${myOrders.length} צווים · ${orderMissions.length} משימות בצו הנבחר`}
           </Muted>
+          {/* "פתח שבצ״ק מלא" — only PC has a per-platoon week grid; CC stays
+              on the missions table (the master view). */}
+          {isPC && (
+            <button
+              onClick={() => navigate('/platoon')}
+              className="mt-3 inline-flex items-baseline gap-2 px-3.5 py-2 rounded-xl-soft bg-mil-olive-bg/70 hover:bg-mil-olive-bg text-mil-olive-dim hover:text-mil-olive text-tiny font-bold transition-colors"
+            >
+              פתח שבצ״ק מלא (תצוגה שבועית)
+              <span aria-hidden>←</span>
+            </button>
+          )}
         </header>
 
         {/* ── Orders list ──────────────────────────────────────────── */}

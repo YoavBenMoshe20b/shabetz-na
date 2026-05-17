@@ -144,7 +144,7 @@ function buildItems(user: MockUser, role: UserRole): {
   // Operational surfaces — what does the role need to act on?
   const primary: MenuItem[] = [];
   if (pc || cc) {
-    primary.push({ label: 'שבצ״ק',       hint: 'משימות + שיבוץ השבוע', href: '/schedule', icon: 'schedule' });
+    primary.push({ label: 'משימות ושבצ״ק', hint: 'יצירה, שיוך ושיבוץ',   href: '/schedule', icon: 'schedule' });
   }
   if (pc || cc || shalish || rasap) {
     primary.push({ label: 'דוח 1',       hint: 'תמונת מצב מבצעית',     href: '/report1',  icon: 'report' });

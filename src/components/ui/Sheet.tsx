@@ -24,7 +24,16 @@ export function Sheet({
   const maxW = size === 'lg' ? 'max-w-2xl' : 'max-w-md';
   return (
     <div
+      // Top-safe-area padding so iOS notch / dynamic island doesn't clip
+      // the sheet header. 100dvh respects URL-bar collapse on mobile so
+      // the sheet body never gets pushed off-screen when the browser
+      // chrome shrinks. z-50 keeps us above the sticky page header
+      // (which is z-30).
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-mil-text/20 backdrop-blur-glass-strong animate-fade-in"
+      style={{
+        paddingTop: 'max(env(safe-area-inset-top), 12px)',
+        paddingBottom: 'max(env(safe-area-inset-bottom), 12px)',
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -38,7 +47,8 @@ export function Sheet({
       />
 
       <div
-        className={`relative w-full ${maxW} bg-mil-card border border-mil-border rounded-t-2xl-soft sm:rounded-2xl-soft shadow-pop max-h-[92vh] flex flex-col sm:mx-4 overflow-hidden animate-sheet-in`}
+        className={`relative w-full ${maxW} bg-mil-card border border-mil-border rounded-t-2xl-soft sm:rounded-2xl-soft shadow-pop flex flex-col sm:mx-4 overflow-hidden animate-sheet-in`}
+        style={{ maxHeight: '100%' }}
       >
         {/* Sticky sheet header — refined, not a coloured strip */}
         <header className="sticky top-0 z-10 bg-mil-card/95 backdrop-blur-glass border-b border-mil-border px-5 py-4 flex items-center gap-3">
