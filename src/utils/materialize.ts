@@ -26,6 +26,9 @@ import type {
   CommandRank, Soldier, Platoon, Squad, Leave, DutyExclusion,
   OperationalRole,
 } from '../types';
+import {
+  getArchetypeBehavior, splitDayNightWindows, type ArchetypeBehavior,
+} from './archetypeBehavior';
 
 // Local alias — the engine declares MissionManpowerSpec as a discriminated
 // union; this is the 'window-varies' variant.
@@ -48,6 +51,17 @@ export interface MaterializedSlot extends AssignmentSlot {
    *  staff this position continuously. Undefined for non-continuous
    *  missions and for continuous missions without a cycleProfile. */
   sustainedManpower?: number;
+
+  // ── Phase 7.3 — archetype runtime tags ─────────────────────────────
+  /** Which archetype produced this slot ('custom' for legacy). */
+  archetypeKind: import('../types').MissionArchetypeKind;
+  /** Day or night portion of the mission cycle. Used downstream for
+   *  fatigue weighting, tone, and label rendering. */
+  partOfDay: 'day' | 'night';
+  /** Effective fatigue weight for THIS slot — archetype's base weight
+   *  plus nightFatigueBoost when partOfDay='night' AND the day/night
+   *  profile says fatigueDiffersByPeriod. */
+  effectiveFatigueWeight: number;
 }
 
 interface MaterializeInput {
@@ -147,12 +161,40 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
       const ownerPlatoonId = resolveRotation(mission.rotation, day, input.platoons);
       const ownerPool      = soldiersInPlatoon(ownerPlatoonId, input.soldiers, input.squads);
 
+      // Phase 7.3 — archetype-driven behavior. ONE call per mission per
+      // day; every per-slot decision downstream reads off this object.
+      const behavior = getArchetypeBehavior(mission);
+
+      // Expand each base window into archetype-shaped segments. For
+      // static-guard with distinct day/night durations this multiplies
+      // a single 24h window into multiple per-period slots. For every
+      // other archetype it returns the window unchanged (tagged).
+      const expanded: Array<{ w: ConcreteWindow; wIdx: number; segIdx: number; partOfDay: 'day' | 'night' }> = [];
       windows.forEach((w, wIdx) => {
-        const required = manpowerForWindow(mission.manpower, w);
+        const segments = splitDayNightWindows(w.start, w.end, behavior);
+        segments.forEach((seg, segIdx) => {
+          expanded.push({
+            w: { start: seg.start, end: seg.end },
+            wIdx, segIdx, partOfDay: seg.partOfDay,
+          });
+        });
+      });
+
+      expanded.forEach(({ w, wIdx, segIdx, partOfDay }) => {
+        const required = effectiveRequiredCount(mission.manpower, w, behavior, partOfDay);
         const commanderRequired = mission.command.fieldCommandRequired;
         const commanderRanks    = commanderOnlyRanks(mission.command.rankPolicy);
 
-        const slotId = `mat-${mission.id}-${isoDate(day)}-${wIdx}`;
+        // Slot id stability: legacy single-window missions emit
+        // `mat-<id>-<iso>-<wIdx>` exactly as before. Day/night-split
+        // slots get a trailing segment index so persisted assignments
+        // for an unsplit mission keep working when archetypeKind is
+        // backfilled later. The discriminator is "is segIdx > 0 OR
+        // did the behavior decide to split", not the segment index
+        // alone — that preserves existing ids for the common case.
+        const slotId = behavior.splitsByDayNight
+          ? `mat-${mission.id}-${isoDate(day)}-${wIdx}-${segIdx}`
+          : `mat-${mission.id}-${isoDate(day)}-${wIdx}`;
         const persisted = assignmentsBySlot.get(slotId);
         const ops = opsBySlot.get(slotId);
 
@@ -230,6 +272,12 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
           }
         }
 
+        // Effective fatigue weight per slot — archetype baseline plus
+        // night boost when applicable. Used downstream for burden math
+        // and tone selection.
+        const effectiveFatigueWeight =
+          behavior.fatigueWeight + (partOfDay === 'night' ? behavior.nightFatigueBoost : 0);
+
         slots.push({
           id:                slotId,
           companyId:         mission.companyId,
@@ -253,6 +301,9 @@ export function materializeWeek(input: MaterializeInput): MaterializedSlot[] {
           missionName:        mission.name,
           missionIntensity:   mission.fatigue.intensity,
           sustainedManpower,
+          archetypeKind:      behavior.kind,
+          partOfDay,
+          effectiveFatigueWeight,
         });
       });
     }
@@ -324,6 +375,22 @@ function manpowerForWindow(m: MissionManpowerSpec, w: ConcreteWindow): number {
       // Pick the window whose HH:MM range contains the slot's start time.
       return manpowerForVarying(m, w.start);
   }
+}
+
+/**
+ * Required count for a slot, honoring archetype day/night overrides.
+ * Falls back to the manpower spec when the archetype doesn't carry a
+ * period-specific minimum.
+ */
+function effectiveRequiredCount(
+  m: MissionManpowerSpec,
+  w: ConcreteWindow,
+  behavior: ArchetypeBehavior,
+  partOfDay: 'day' | 'night',
+): number {
+  if (partOfDay === 'day'   && behavior.dayMinCount  !== undefined) return behavior.dayMinCount;
+  if (partOfDay === 'night' && behavior.nightMinCount !== undefined) return behavior.nightMinCount;
+  return manpowerForWindow(m, w);
 }
 
 function manpowerForVarying(m: WindowVariesManpower, atTime: Date): number {

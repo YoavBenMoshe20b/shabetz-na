@@ -21,6 +21,7 @@ import { isCompanyLeadership, isPlatoonLeadership, canEditMission } from '../uti
 import { buildMissionSummary } from '../utils/missionSummary';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import { MISSION_ARCHETYPES } from '../utils/missionArchetypes';
+import { getArchetypeBehavior, type ImplStatus } from '../utils/archetypeBehavior';
 import type { MissionArchetypeKind } from '../types';
 import Header from '../components/Header';
 import StaffingSheet from '../components/StaffingSheet';
@@ -259,6 +260,13 @@ export default function MissionDetailPage() {
             </div>
           )}
         </section>
+
+        {/* Phase 7.3 — archetype warnings + honest implementation status.
+            We surface BOTH so the operator knows what the engine is and
+            isn't enforcing. The warnings tell them about misconfig
+            (missing rally point, etc.). The status panel is the
+            "what's actually wired" disclosure the user asked for. */}
+        <ArchetypeStatusPanel mission={mission} canEdit={canEdit} />
 
         {/* Round 5 — staffing CTA when the mission has no staffing yet.
             This appears IMMEDIATELY below the hero, before any other
@@ -908,3 +916,85 @@ function formatRelative(iso: string): string {
 
 // Keep Platoon type referenced for the platoonName lookup pattern.
 void (null as unknown as Platoon);
+
+// ─── Archetype status panel (Phase 7.3) ─────────────────────────────
+//
+// Two halves:
+//   1. Warnings — misconfiguration the operator can fix (missing rally
+//      point on a readiness mission, etc.). Visible to everyone.
+//   2. Implementation status — honest map of which archetype behaviors
+//      the engine ACTUALLY enforces vs. which are still data-only.
+//      Visible only to commanders (who care about engine truth).
+//
+// The status panel exists because we explicitly promised the user we
+// would NOT pretend a behavior is wired when it isn't.
+
+function ArchetypeStatusPanel({
+  mission, canEdit,
+}: {
+  mission: Parameters<typeof getArchetypeBehavior>[0];
+  canEdit: boolean;
+}) {
+  const behavior = useMemo(() => getArchetypeBehavior(mission), [mission]);
+  if (behavior.kind === 'custom' && behavior.warnings.length === 0) return null;
+  return (
+    <Section label="התנהגות לפי תבנית">
+      <div className="space-y-2.5">
+        {behavior.warnings.length > 0 && (
+          <ul className="space-y-1.5">
+            {behavior.warnings.map((w) => (
+              <li
+                key={w.code}
+                className={`flex items-baseline gap-2 rounded-xl-soft px-3.5 py-2.5 border ${
+                  w.severity === 'error'
+                    ? 'bg-mil-alert-bg border-mil-alert text-mil-alert'
+                    : w.severity === 'warn'
+                      ? 'bg-mil-warn-bg border-mil-warn text-mil-warn'
+                      : 'bg-mil-info-bg border-mil-info-border text-mil-info'
+                }`}
+              >
+                <span className="text-tiny font-bold uppercase tracking-wide shrink-0">
+                  {w.severity === 'error' ? 'חסר קריטי' : w.severity === 'warn' ? 'אזהרה' : 'מידע'}
+                </span>
+                <span className="text-sm font-semibold leading-snug">{w.message}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {canEdit && (
+          <div className="bg-mil-card border border-mil-border rounded-xl-soft px-4 py-3">
+            <Hint className="font-bold tracking-wide uppercase block mb-2">מצב מימוש בפועל</Hint>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-tiny">
+              <StatusRow label="פיצול יום/לילה"      v={behavior.implementationStatus.slotSplitting} />
+              <StatusRow label="עייפות לפי תבנית"   v={behavior.implementationStatus.fatigueWeighting} />
+              <StatusRow label="חפיפות"             v={behavior.implementationStatus.overlapEnforcement} />
+              <StatusRow label="איוש מקבילי"        v={behavior.implementationStatus.parallelAllowance} />
+              <StatusRow label="חשיפה לחייל"        v={behavior.implementationStatus.responseSurface} />
+              <StatusRow label="אזהרות בזמן יצירה" v={behavior.implementationStatus.warningSurface} />
+            </div>
+            <Muted className="mt-2 text-tiny leading-snug">
+              ״ממומש״ = המנוע אוכף את ההתנהגות. ״חלקי״ = ערכים זורמים, אין כלל ייעודי. ״ממתין״ = עוד לא מומש — אל תסמוך על כך.
+            </Muted>
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+function StatusRow({ label, v }: { label: string; v: ImplStatus }) {
+  const tone =
+    v === 'wired'   ? 'text-mil-success font-bold' :
+    v === 'partial' ? 'text-mil-warn font-bold' :
+    'text-mil-alert font-bold';
+  const word =
+    v === 'wired'   ? 'ממומש' :
+    v === 'partial' ? 'חלקי' :
+    'ממתין';
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-mil-muted">{label}</span>
+      <span className={`tabular-nums ${tone}`}>{word}</span>
+    </div>
+  );
+}
