@@ -7,6 +7,7 @@ import type {
   Mission, Qualification, EquipmentItem, SoldierQualification, Assignment, SlotOperationalState,
   ChecklistTemplate, ChecklistRun, ChecklistInstance,
   PlatoonLeaveDay, CompanyLeavePolicy, CompanyCoverageRuleSet, SoldierLeaveOverride,
+  CompanyBlockedDate,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
   SignedEquipment,
@@ -858,7 +859,46 @@ export const mockCompanyLeavePolicy: CompanyLeavePolicy = {
   mode: 'one-at-a-time',
   updatedAt: '2026-05-15T08:00:00.000Z',
   updatedByUserId: 'u1',
+  // Phase 7.3 wizard extensions — pre-seeded defaults so the wizard
+  // has reasonable starting values for new companies.
+  bodySeparation: 'platoons-together',
+  rotationPattern: '8-7',
+  noWeekendTransition: true,
+  minConsecutiveBaseDays: 3,
+  minConsecutiveHomeDays: 3,
+  allowSplitByPlatoon: false,
 };
+
+// Phase 7.3 — Company blocked dates seed. Two examples covering the
+// most common operational shapes (line-up day + a drill).
+export const mockCompanyBlockedDates: CompanyBlockedDate[] = [
+  {
+    id: 'cbd-line-up',
+    companyId: 'co1',
+    dateIso: '2026-05-20',
+    kind: 'line-up',
+    reason: 'עליה לקו — תדריך פלוגתי, חתימת ציוד',
+    requireAllInBase: true,
+    addToCalendar: true,
+    blockLeaveRequests: true,
+    countsForBalance: false,
+    createdAt: '2026-05-10T08:00:00.000Z',
+    createdByUserId: 'u1',
+  },
+  {
+    id: 'cbd-drill',
+    companyId: 'co1',
+    dateIso: '2026-05-28',
+    kind: 'drill',
+    reason: 'תרגיל פלוגתי',
+    requireAllInBase: true,
+    addToCalendar: true,
+    blockLeaveRequests: true,
+    countsForBalance: true,
+    createdAt: '2026-05-10T08:00:00.000Z',
+    createdByUserId: 'u1',
+  },
+];
 
 // Coverage rules for non-rotating units (חפ״ק / מפלג). Seeded with
 // reasonable defaults — operator can edit/add via the page.

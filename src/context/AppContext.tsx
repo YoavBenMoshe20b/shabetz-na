@@ -10,6 +10,7 @@ import type {
   Mission, Assignment, SelectorOutcomeRecord, SlotOperationalState, SlotExcuse,
   ChecklistTemplate, ChecklistRun, ChecklistInstance, ChecklistRunScope,
   PlatoonLeaveDay, PlatoonLeaveDayStatus, CompanyLeavePolicy, CompanyCoverageRuleSet, CoverageRule, SoldierLeaveOverride,
+  CompanyBlockedDate,
   Qualification, EquipmentItem, SoldierQualification,
   LeaveRotationPolicy, LeaveBlock,
   CoverageEvent, DutyExclusion, LeaveRotationPlan,
@@ -57,6 +58,7 @@ import {
   mockAnnouncements, mockEscalationEvents, mockPlatoonLeaveCycles,
   mockLogisticsRotations,
   mockMissionTemplates, mockTemplateFamilies,
+  mockCompanyBlockedDates,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -254,6 +256,12 @@ interface AppContextType {
   removeCoverageRule:      (ruleId: string) => void;
   setSoldierLeaveOverride: (dateIso: string, soldierId: string, status: 'home' | 'in-base', reason?: string) => void;
   clearSoldierLeaveOverride: (dateIso: string, soldierId: string) => void;
+
+  // ── Phase 7.3 — Company blocked dates ────────────────────────────
+  companyBlockedDates:     CompanyBlockedDate[];
+  addCompanyBlockedDate:   (data: Omit<CompanyBlockedDate, 'id' | 'createdAt'>) => CompanyBlockedDate;
+  updateCompanyBlockedDate: (id: string, patch: Partial<Omit<CompanyBlockedDate, 'id' | 'companyId' | 'createdAt'>>) => void;
+  removeCompanyBlockedDate: (id: string) => void;
 
   // ── Mission Template Library (Phase 7.3) ─────────────────────────
   missionTemplates:           MissionTemplate[];
@@ -970,6 +978,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSoldierLeaveOverrides((prev) =>
       prev.filter((o) => !(o.dateIso === dateIso && o.soldierId === soldierId)),
     );
+  };
+
+  // ── Phase 7.3 — Company blocked dates ────────────────────────────
+  const [companyBlockedDates, setCompanyBlockedDates] = usePersistedState<CompanyBlockedDate[]>(
+    'companyBlockedDates', mockCompanyBlockedDates, SEED_VERSION,
+  );
+
+  const addCompanyBlockedDate = (data: Omit<CompanyBlockedDate, 'id' | 'createdAt'>) => {
+    const entry: CompanyBlockedDate = {
+      ...data,
+      id: newId('cbd'),
+      createdAt: new Date().toISOString(),
+    };
+    setCompanyBlockedDates((prev) => [...prev, entry]);
+    return entry;
+  };
+
+  const updateCompanyBlockedDate = (
+    id: string,
+    patch: Partial<Omit<CompanyBlockedDate, 'id' | 'companyId' | 'createdAt'>>,
+  ) => {
+    setCompanyBlockedDates((prev) => prev.map((d) => d.id === id ? { ...d, ...patch } : d));
+  };
+
+  const removeCompanyBlockedDate = (id: string) => {
+    setCompanyBlockedDates((prev) => prev.filter((d) => d.id !== id));
   };
 
   // ── Mission Template Library (Phase 7.3) ──────────────────────────
@@ -2334,6 +2368,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPlatoonLeaveDay, clearPlatoonLeaveDay, generatePlatoonRotation,
       updateCompanyLeavePolicy, upsertCoverageRule, removeCoverageRule,
       setSoldierLeaveOverride, clearSoldierLeaveOverride,
+      companyBlockedDates, addCompanyBlockedDate, updateCompanyBlockedDate, removeCompanyBlockedDate,
       missionTemplates, addMissionTemplate, updateMissionTemplate,
       hideMissionTemplate, toggleMissionTemplateFavorite, incrementTemplateUsage,
       templateFamilies, addTemplateFamily, updateTemplateFamily, archiveTemplateFamily,

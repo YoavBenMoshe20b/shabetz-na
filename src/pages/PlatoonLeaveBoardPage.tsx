@@ -269,6 +269,13 @@ export default function PlatoonLeaveBoardPage() {
           <Muted className="mt-1 text-tiny leading-relaxed">
             לוח 30 ימים קדימה. תא <strong>סגול</strong> = המחלקה בבית באותו יום. כשמחלקה בבית — המערכת לא תשבץ אותה למשימות (אלא אם תעשה override מודע).
           </Muted>
+          <button
+            onClick={() => navigate('/coverage/planning')}
+            className="mt-3 inline-flex items-baseline gap-2 px-3.5 py-2 rounded-xl-soft bg-mil-olive-bg/70 hover:bg-mil-olive-bg text-mil-olive-dim hover:text-mil-olive text-tiny font-bold transition-colors"
+          >
+            תכנון יציאות פלוגתיות (Wizard)
+            <span aria-hidden>←</span>
+          </button>
         </header>
 
         {/* Policy summary + actions */}

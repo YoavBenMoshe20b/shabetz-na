@@ -1501,6 +1501,84 @@ export interface CompanyLeavePolicy {
   mode: 'manual' | 'one-at-a-time' | 'two-at-a-time';
   updatedAt: string;
   updatedByUserId: string;
+
+  // ── Phase 7.3 — leave planning wizard extensions ────────────────
+  //
+  // These fields capture the operator's INTENT during planning. They
+  // are NOT yet consumed by an automatic rotation generator — the
+  // wizard surfaces them as recommendations + warnings. The
+  // materializer respects platoonLeaveDays as before.
+
+  /** How CHAPAK / MAFLAG relate to the platoon-level rotation:
+   *   - 'platoons-together'  — all bodies move with the platoon they sit in
+   *   - 'chpk-by-person'     — CHAPAK/MAFLAG soldiers rotate individually
+   *   - 'chpk-with-platoons' — CHAPAK follows its home platoon
+   *   - 'chpk-separate'      — CHAPAK runs its own rotation independent of platoons
+   * Optional; absent = the legacy "platoons-together" behavior. */
+  bodySeparation?: 'platoons-together' | 'chpk-by-person' | 'chpk-with-platoons' | 'chpk-separate';
+
+  /** Operator's preferred rotation rhythm — used by the wizard to
+   *  generate recommendations. Free-form preset key. */
+  rotationPattern?: 'weekly' | '10-5' | '8-7' | 'one-home' | 'two-home' | 'custom';
+
+  /** When true, the wizard's recommendations avoid scheduling
+   *  transitions (home/base toggles) on Friday + Saturday. */
+  noWeekendTransition?: boolean;
+
+  /** Minimum consecutive days a platoon must spend in base before its
+   *  next home stint can start (in addition to minBaseGapDays). */
+  minConsecutiveBaseDays?: number;
+  /** Minimum consecutive days a platoon must spend at home once it
+   *  starts a stint. */
+  minConsecutiveHomeDays?: number;
+
+  /** Whether the wizard may split a single platoon across days
+   *  (some at home, some in base on the same day). Defaults to
+   *  false — most ops want the platoon to move as a unit. */
+  allowSplitByPlatoon?: boolean;
+}
+
+// ─── Phase 7.3 — Company blocked dates ──────────────────────────────
+//
+// Specific dates the company is hard-locked into a particular posture:
+// "כל הפלוגה חייבת להיות בבסיס" (יום עליה לקו / ירידה מהקו / זיכוי /
+// תרגיל / ביקורת / אירוע מבצעי). Used by:
+//   • the leave-planning wizard, which won't propose home-stints
+//     overlapping these dates
+//   • the materializer, which can flag a mission as "blocked-day
+//     conflict" when the operator overrides
+//   • the soldier calendar, when addToCalendar = true
+//
+// Distinct from PlatoonLeaveDay: blocked dates apply to the WHOLE
+// company; PlatoonLeaveDay is per-platoon home/base toggling.
+
+export type CompanyBlockedDateKind =
+  | 'line-up'          // יום עליה לקו
+  | 'line-down'        // יום ירידה מהקו
+  | 'credit'           // זיכוי בסיס
+  | 'drill'            // תרגיל
+  | 'inspection'       // ביקורת
+  | 'op-event'         // אירוע מבצעי
+  | 'other';
+
+export interface CompanyBlockedDate {
+  id: string;
+  companyId: string;
+  dateIso: string;
+  kind: CompanyBlockedDateKind;
+  reason?: string;
+  /** When true, every platoon must be in base — overrides any
+   *  PlatoonLeaveDay home stint that overlaps this day. */
+  requireAllInBase: boolean;
+  /** When true, the blocked day appears on every soldier's calendar. */
+  addToCalendar: boolean;
+  /** When true, leave-request submissions are rejected for this date. */
+  blockLeaveRequests: boolean;
+  /** When false, this day does not count toward fairness/balance
+   *  metrics (line-up / line-down days are typically excluded). */
+  countsForBalance: boolean;
+  createdAt: string;
+  createdByUserId: string;
 }
 
 /** Operational coverage invariant. Evaluated PER DAY against the set of
