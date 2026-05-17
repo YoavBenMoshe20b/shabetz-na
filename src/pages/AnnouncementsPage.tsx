@@ -239,6 +239,9 @@ function AnnouncementSheet({
   const [audience,   setAudience]   = useState<Audience>(editing?.audience ?? { kind: 'company' });
   const [showOnCalendar, setShowOnCalendar] = useState(editing?.showOnCalendar ?? false);
   const [pinned,     setPinned]     = useState(editing?.pinned ?? false);
+  // §10 — requiresAck: critical announcements get a "אישור קבלה" CTA on
+  // every soldier row, and surface an unacked count on commander home.
+  const [requiresAck, setRequiresAck] = useState(editing?.requiresAck ?? false);
 
   // Kind defaults — schedule and operational both default to calendar
   // visibility on first selection. Operator can still uncheck.
@@ -260,7 +263,7 @@ function AnnouncementSheet({
         endDate:   endDate   || undefined,
         startTime: startTime || undefined,
         endTime:   endTime   || undefined,
-        audience, showOnCalendar, pinned,
+        audience, showOnCalendar, pinned, requiresAck,
       });
     } else {
       addAnnouncement({
@@ -270,7 +273,7 @@ function AnnouncementSheet({
         endDate:   endDate   || undefined,
         startTime: startTime || undefined,
         endTime:   endTime   || undefined,
-        audience, showOnCalendar, pinned,
+        audience, showOnCalendar, pinned, requiresAck,
       });
     }
     onClose();
@@ -362,6 +365,12 @@ function AnnouncementSheet({
             hint="ההודעה תקפוץ ראשונה ברצועת ההודעות בעמוד הבית."
             value={pinned}
             onChange={setPinned}
+          />
+          <Toggle
+            label="דורש אישור קבלה"
+            hint="כל חייל בקהל היעד יראה כפתור 'אישור קבלה' ויידרש ללחוץ עליו. תוצג למפקדים ספירת מי שעוד לא אישר."
+            value={requiresAck}
+            onChange={setRequiresAck}
           />
         </div>
 

@@ -7,7 +7,7 @@
 //   3. Escalation events (status-driven, can be a banner)
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import type { OverrideAlert, Announcement, EscalationEvent } from '../types';
+import type { OverrideAlert, Announcement, EscalationEvent, Acknowledgement } from '../types';
 import { useApp, useAlertsForCompany } from '../context/AppContext';
 import { useAuth } from './AuthProvider';
 
@@ -27,6 +27,10 @@ export interface AlertsApi {
   updateAnnouncement:     ReturnType<typeof useApp>['updateAnnouncement'];
   closeAnnouncement:      ReturnType<typeof useApp>['closeAnnouncement'];
   deleteAnnouncement:     ReturnType<typeof useApp>['deleteAnnouncement'];
+
+  /** §10 — acknowledgements (אישור קבלה) for critical announcements. */
+  acknowledgements:       Acknowledgement[];
+  acknowledgeAnnouncement: ReturnType<typeof useApp>['acknowledgeAnnouncement'];
 
   /** Escalation mutations. */
   declareEscalation: ReturnType<typeof useApp>['declareEscalation'];
@@ -62,6 +66,13 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
     [app.escalationEvents, companyId],
   );
 
+  const acknowledgements = useMemo(
+    () => companyId
+      ? app.acknowledgements.filter((a) => a.companyId === companyId)
+      : app.acknowledgements,
+    [app.acknowledgements, companyId],
+  );
+
   const value: AlertsApi = {
     overrideAlerts,
     announcements,
@@ -75,6 +86,8 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
     deleteAnnouncement: app.deleteAnnouncement,
     declareEscalation: app.declareEscalation,
     closeEscalation: app.closeEscalation,
+    acknowledgements,
+    acknowledgeAnnouncement: app.acknowledgeAnnouncement,
   };
 
   return <AlertsCtx.Provider value={value}>{children}</AlertsCtx.Provider>;

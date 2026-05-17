@@ -21,7 +21,7 @@ import type {
   CommandAuthority, OperationalRole, FunctionalRole,
   MissionNote,
   OperationalOrder, OperationalOrderStatus,
-  Announcement, AnnouncementStatus,
+  Announcement, AnnouncementStatus, Acknowledgement,
   EscalationEvent, PlatoonLeaveCycle, PlatoonLeaveCycleSegment,
   LogisticsRotation, LogisticsRotationStatus,
 } from '../types';
@@ -37,7 +37,8 @@ import type { MissionTemplate, TemplateFamily } from '../utils/missionTemplates'
 // ignored and the fresh seed wins.
 //   v1 = Phase 6.3.b initial persistence.
 //   v2 = Phase 7.5 Slice 9 — PKALs + PKAL quotas added.
-const SEED_VERSION = 2;
+//   v3 = Phase 7.5 Slice 11b — Acknowledgement entity + requiresAck flag.
+const SEED_VERSION = 3;
 import * as missionsApi      from '../api/missions';
 import * as announcementsApi from '../api/announcements';
 import * as equipmentApi     from '../api/equipment';
@@ -481,6 +482,12 @@ interface AppContextType {
   updateAnnouncement:   (id: string, patch: Partial<Omit<Announcement, 'id' | 'companyId' | 'createdAt' | 'createdByUserId' | 'createdByName'>>) => void;
   closeAnnouncement:    (id: string) => void;
   deleteAnnouncement:   (id: string) => void;
+
+  // §10 — Acknowledgements (אישור קבלה) for critical announcements.
+  // Append-only. The soldier UI shows a CTA on each requiresAck row;
+  // the commander dashboard surfaces unacknowledged counts.
+  acknowledgements:     Acknowledgement[];
+  acknowledgeAnnouncement: (announcementId: string) => void;
 
   // Escalation events / הקפצה
   escalationEvents:     EscalationEvent[];
@@ -2318,9 +2325,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!currentUser) return;
     if (!canCreateAnnouncement(currentUser, delegations)) return;
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    // §10 — deleting an announcement orphans its acks; sweep them too.
+    setAcknowledgements((prev) => prev.filter((a) => a.announcementId !== id));
     if (currentUser.companyId) {
       persist(() => announcementsApi.remove(id, currentUser.companyId!));
     }
+  };
+
+  // §10 — acknowledgements (אישור קבלה).
+  // Always seed empty; demo flow lets the user click "אישרתי" to fill in.
+  const [acknowledgements, setAcknowledgements] = usePersistedState<Acknowledgement[]>(
+    'acknowledgements', [], SEED_VERSION,
+  );
+
+  const acknowledgeAnnouncement = (announcementId: string) => {
+    if (!currentUser?.soldierProfileId) return;
+    // Idempotent — re-clicking is a no-op (the row already has an ack).
+    setAcknowledgements((prev) => {
+      const already = prev.some((a) =>
+        a.announcementId === announcementId &&
+        a.soldierId === currentUser.soldierProfileId,
+      );
+      if (already) return prev;
+      return [...prev, {
+        id:             newId('ack'),
+        companyId:      currentUser.companyId ?? '',
+        announcementId,
+        soldierId:      currentUser.soldierProfileId!,
+        ackAt:          new Date().toISOString(),
+      }];
+    });
   };
 
   // — Escalation events —
@@ -2525,6 +2559,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateSoldierStatusByCommander,
       // ── Round 4 ─────────────────────────────────────────────────────
       announcements, addAnnouncement, updateAnnouncement, closeAnnouncement, deleteAnnouncement,
+      acknowledgements, acknowledgeAnnouncement,
       escalationEvents, declareEscalation, closeEscalation, activeEscalationsForViewer,
       platoonLeaveCycles, addPlatoonLeaveCycle, updatePlatoonLeaveCycle,
       addLeaveCycleSegment, updateLeaveCycleSegment, removeLeaveCycleSegment, publishLeaveCycle,

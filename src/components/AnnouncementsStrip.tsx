@@ -17,7 +17,30 @@ import { useAlerts } from '../providers/AlertsProvider';
 import { visibleAnnouncementsFor } from '../utils/announcementProjection';
 import { describeAudience } from '../utils/audience';
 import { Section, Body, Muted } from './ui';
-import type { AnnouncementKind } from '../types';
+import { resolveAudienceToSoldierIds } from '../utils/audience';
+import type { Announcement, AnnouncementKind, Acknowledgement, Soldier, Platoon, Squad } from '../types';
+
+// §10 — count soldiers in the announcement's audience who have not
+// (yet) acknowledged. Active soldiers only — inactive roster rows
+// would inflate the gap forever.
+function countUnacked(
+  ann: Announcement,
+  acks: Acknowledgement[],
+  soldiers: Soldier[],
+  platoons: Platoon[],
+  squads: Squad[],
+): number {
+  const audienceIds = resolveAudienceToSoldierIds(ann.audience, { soldiers, platoons, squads });
+  const activeAudienceIds = new Set(
+    soldiers.filter((s) => audienceIds.has(s.id) && s.status === 'active').map((s) => s.id),
+  );
+  const ackedIds = new Set(
+    acks.filter((a) => a.announcementId === ann.id).map((a) => a.soldierId),
+  );
+  let count = 0;
+  for (const id of activeAudienceIds) if (!ackedIds.has(id)) count += 1;
+  return count;
+}
 
 const KIND_LABEL: Record<AnnouncementKind, string> = {
   message:     'הודעה',
@@ -46,7 +69,7 @@ export default function AnnouncementsStrip({ isCommander, limit = 4 }: Announcem
   const { currentUser } = useAuth();
   const { platoons, squads } = useOrg();
   const { soldiers } = useRoster();
-  const { announcements } = useAlerts();
+  const { announcements, acknowledgements, acknowledgeAnnouncement } = useAlerts();
 
   const visible = useMemo(() => {
     if (!currentUser?.companyId) return [];
@@ -81,6 +104,23 @@ export default function AnnouncementsStrip({ isCommander, limit = 4 }: Announcem
           const timeBit = a.startDate
             ? `${a.startDate}${a.startTime ? ` ${a.startTime}` : ''}`
             : null;
+
+          // §10 — acknowledgement state.
+          //   • Soldier: have I personally acked? if not + requiresAck, show CTA.
+          //   • Commander: how many in audience have NOT acked yet?
+          const ackedByMe = !!currentUser?.soldierProfileId &&
+            acknowledgements.some((x) =>
+              x.announcementId === a.id && x.soldierId === currentUser.soldierProfileId,
+            );
+          const unackedCount = !isCommander || !a.requiresAck
+            ? 0
+            : countUnacked(a, acknowledgements, soldiers, platoons, squads);
+
+          const handleAck = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            acknowledgeAnnouncement(a.id);
+          };
+
           return (
             <button
               key={a.id}
@@ -93,6 +133,11 @@ export default function AnnouncementsStrip({ isCommander, limit = 4 }: Announcem
                   {KIND_LABEL[a.kind]}
                 </span>
                 {a.pinned && <span className="text-xxs font-semibold text-mil-olive">⊕</span>}
+                {a.requiresAck && (
+                  <span className="inline-flex items-center text-xxs font-semibold px-1.5 py-0.5 rounded-md bg-mil-alert-bg text-mil-alert border border-mil-alert-border">
+                    דורש אישור
+                  </span>
+                )}
                 <Body className="font-semibold leading-tight flex-1 min-w-0 truncate">{a.title}</Body>
               </div>
               {a.body && <Muted className="mt-1.5 leading-relaxed line-clamp-2 text-tiny">{a.body}</Muted>}
@@ -101,6 +146,32 @@ export default function AnnouncementsStrip({ isCommander, limit = 4 }: Announcem
                 {timeBit && <span className="text-mil-ghost">·</span>}
                 <span>{audienceLabel}</span>
               </div>
+
+              {/* §10 — soldier ack CTA / commander unacked count */}
+              {a.requiresAck && !isCommander && currentUser?.soldierProfileId && (
+                <div className="mt-2.5 flex items-center gap-2">
+                  {ackedByMe ? (
+                    <span className="inline-flex items-center text-xxs font-semibold px-2 py-1 rounded-md bg-mil-success-bg text-mil-success border border-mil-success-border">
+                      ✓ אישרת קבלה
+                    </span>
+                  ) : (
+                    <span
+                      role="button"
+                      onClick={handleAck}
+                      className="inline-flex items-center text-xxs font-bold px-3 py-1.5 rounded-md bg-mil-olive text-white shadow-card hover:bg-mil-olive-dim transition-colors"
+                    >
+                      אישור קבלה
+                    </span>
+                  )}
+                </div>
+              )}
+              {a.requiresAck && isCommander && unackedCount > 0 && (
+                <div className="mt-2.5">
+                  <span className="inline-flex items-center text-xxs font-bold px-2 py-1 rounded-md bg-mil-alert-bg text-mil-alert border border-mil-alert-border">
+                    {unackedCount} לא אישרו
+                  </span>
+                </div>
+              )}
             </button>
           );
         })}

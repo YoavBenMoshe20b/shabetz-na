@@ -2424,6 +2424,12 @@ export interface Announcement {
   status: AnnouncementStatus;
   pinned?: boolean;                    // floats to top of the strip
 
+  /** §10 — when true, every soldier in the audience must explicitly
+   *  acknowledge ("אישור קבלה") and the unacknowledged count surfaces
+   *  on the commander dashboard. Read-receipts are recorded in the
+   *  separate Acknowledgement entity so this row stays append-only. */
+  requiresAck?: boolean;
+
   // Authorship + audit
   createdByUserId: string;
   createdByName:   string;
@@ -2431,6 +2437,20 @@ export interface Announcement {
   updatedAt?:      string;
   closedAt?:       string;
   closedByUserId?: string;
+}
+
+// §10 — Acknowledgement (אישור קבלה).
+//
+// Append-only per (announcement, soldier) pair. The commander sees the
+// raw count; soldiers see a "מאושר" badge on rows they have already
+// acknowledged. Deleting an announcement cascades to its acks at the
+// AppContext write boundary.
+export interface Acknowledgement {
+  id: string;
+  companyId: string;
+  announcementId: string;
+  soldierId: string;
+  ackAt: string;
 }
 
 // ╔══════════════════════════════════════════════════════════════════════════╗

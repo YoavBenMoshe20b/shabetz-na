@@ -1801,6 +1801,7 @@ export const mockAnnouncements: Announcement[] = [
     showOnCalendar:  true,
     status:          'active',
     pinned:          true,
+    requiresAck:     true,        // §10 — demo: every soldier needs to ack
     createdByUserId: 'u-cc',
     createdByName:   'מ״פ',
     createdAt:       SEED_CREATED,
