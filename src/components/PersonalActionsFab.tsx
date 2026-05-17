@@ -46,10 +46,14 @@ export default function PersonalActionsFab() {
 
   return (
     <>
-      {/* The FAB itself — bottom-left for RTL, above bottom nav */}
+      {/* The FAB itself — bottom-left for RTL, above bottom nav.
+          Same safe-area-aware bottom math as EmergencyFab so the two
+          FABs sit at the SAME visual offset across devices. z-30
+          (below EmergencyFab's z-35, above z-20 carousels). */}
       <button
         onClick={() => setHubOpen(true)}
-        className="fixed bottom-24 left-5 z-20 bg-mil-olive hover:bg-mil-olive-light active:bg-mil-olive-dim text-white font-semibold w-14 h-14 rounded-full shadow-pop flex items-center justify-center transition-all duration-200 ease-out-soft active:scale-95 hover:shadow-hero"
+        style={{ bottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}
+        className="fixed left-5 z-30 bg-mil-olive hover:bg-mil-olive-light active:bg-mil-olive-dim text-white font-semibold w-14 h-14 rounded-full shadow-pop flex items-center justify-center transition-all duration-200 ease-out-soft active:scale-95 hover:shadow-hero"
         aria-label="פעולות אישיות"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
