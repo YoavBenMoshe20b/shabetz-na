@@ -23,9 +23,33 @@ import SignOutSheet from '../components/SignOutSheet';
 import ReturnEquipmentSheet from '../components/ReturnEquipmentSheet';
 import CsvImportSheet from '../components/CsvImportSheet';
 import {
-  Eyebrow, Section, PageMain, Body, Muted, Hint, Button, Segment, EmptyState,
+  Eyebrow, PageMain, Body, Muted, Hint, Button, Segment, EmptyState,
 } from '../components/ui';
-import type { SignedEquipment, EquipmentItem, SignedEquipmentStatus } from '../types';
+import { CollapsibleSection } from '../components/ui/Section';
+import type {
+  SignedEquipment, EquipmentItem, SignedEquipmentStatus, SignedEquipmentCategory,
+} from '../types';
+
+// §8-§9 — canonical category buckets used for the signed list. Hebrew
+// labels keep the surface readable for operators; misc catches anything
+// that doesn't fit a canonical bucket.
+const SIGNED_CATEGORY_LABEL: Record<SignedEquipmentCategory, string> = {
+  weapon:     'נשק',
+  optic:      'אופטיקה',
+  comms:      'תקשורת',
+  protection: 'הגנה',
+  navigation: 'ניווט',
+  medical:    'רפואה',
+  misc:       'ציוד נוסף',
+};
+
+// Canonical category ordering. We render in this order regardless of
+// data, so the operator always finds the same bucket in the same place.
+const SIGNED_CATEGORY_ORDER: SignedEquipmentCategory[] = [
+  'weapon', 'optic', 'comms', 'protection', 'navigation', 'medical', 'misc',
+];
+
+const UNCATEGORIZED = 'ללא קטגוריה';
 
 const STATUS_LABEL: Record<SignedEquipmentStatus, string> = {
   active:      'חתום',
@@ -58,6 +82,12 @@ export default function EquipmentInventoryPage() {
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [returnItem, setReturnItem] = useState<SignedEquipment | null>(null);
   const [csvOpen, setCsvOpen] = useState(false);
+  // §8-§9 — accordion state per tab. Empty = all collapsed.
+  // We track explicit open keys (not a "closed" set) because the default
+  // is collapsed; expanding ~7 categories at once would defeat the point
+  // of the accordion (scanability).
+  const [catalogOpen, setCatalogOpen] = useState<Set<string>>(new Set());
+  const [signedOpen,  setSignedOpen]  = useState<Set<string>>(new Set());
 
   const items = useMemo(() => {
     const q = search.trim();
@@ -81,6 +111,53 @@ export default function EquipmentInventoryPage() {
       })
       .sort((a, b) => b.signedAt.localeCompare(a.signedAt));
   }, [signedEquipment, myCompany, statusFilter, search, soldiers]);
+
+  // §8-§9 — group catalog by free-text category (the field operators
+  // actually typed in). Items with no category fall into UNCATEGORIZED.
+  const catalogGroups = useMemo(() => {
+    const groups = new Map<string, EquipmentItem[]>();
+    for (const i of items) {
+      const key = (i.category ?? '').trim() || UNCATEGORIZED;
+      const arr = groups.get(key) ?? [];
+      arr.push(i);
+      groups.set(key, arr);
+    }
+    // Stable alpha order; UNCATEGORIZED always last.
+    return [...groups.entries()].sort((a, b) => {
+      if (a[0] === UNCATEGORIZED) return 1;
+      if (b[0] === UNCATEGORIZED) return -1;
+      return a[0].localeCompare(b[0], 'he');
+    });
+  }, [items]);
+
+  // §8-§9 — group signed list by canonical SignedEquipmentCategory enum.
+  const signedGroups = useMemo(() => {
+    const groups: Record<SignedEquipmentCategory, SignedEquipment[]> = {
+      weapon: [], optic: [], comms: [], protection: [],
+      navigation: [], medical: [], misc: [],
+    };
+    for (const s of signed) groups[s.category].push(s);
+    return SIGNED_CATEGORY_ORDER
+      .map((k) => [k, groups[k]] as const)
+      .filter(([, arr]) => arr.length > 0);
+  }, [signed]);
+
+  // When the operator has typed a search query, force every group open
+  // so results aren't hidden behind collapsed headers. The toggle state
+  // is preserved for when search clears.
+  const searchActive = search.trim().length > 0;
+  const isCatalogOpen = (key: string) => searchActive || catalogOpen.has(key);
+  const isSignedOpen  = (key: string) => searchActive || signedOpen.has(key);
+  const toggleCatalog = (key: string) => setCatalogOpen((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  const toggleSigned = (key: string) => setSignedOpen((prev) => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
 
   if (!currentUser) return <Navigate to="/login" replace />;
   if (!canViewInventory(currentUser, delegations)) return <Navigate to="/home" replace />;
@@ -154,42 +231,53 @@ export default function EquipmentInventoryPage() {
               hint={search ? 'נקה את החיפוש' : canManage ? 'ייבא CSV או צור פריטים בעת החתמה' : ''}
             />
           ) : (
-            <Section label={`${items.length} פריטים בקטלוג`}>
-              <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
-                {items.map((i) => {
-                  const deployed = signedEquipment.filter((s) =>
-                    s.companyId === myCompany?.id && s.equipmentItemId === i.id && s.status === 'active',
-                  ).length;
-                  return (
-                    <div key={i.id} className="px-5 py-3.5 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <Body className="font-semibold truncate">{i.name}</Body>
-                        <Hint className="text-mil-muted text-tiny mt-0.5">
-                          {i.category && <>{i.category} · </>}
-                          {i.defaultLocation ?? 'מחסן רס״פ'}
-                        </Hint>
-                      </div>
-                      <div className="text-left">
-                        <Hint className="text-xxs uppercase tracking-wide text-mil-muted">חתום</Hint>
-                        <p className="text-base font-bold tabular-nums text-mil-text">
-                          <span className="text-mil-olive">{deployed}</span>
-                          <span className="text-mil-ghost">/{i.unitCount}</span>
-                        </p>
-                      </div>
-                      {canManage && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => { setSignOutFor(i); setSignOutOpen(true); }}
-                        >
-                          החתם
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Section>
+            // §8-§9 — accordion by category. Header shows count;
+            // body renders rows. Operator scans bucket → expands → acts.
+            <div className="space-y-2">
+              {catalogGroups.map(([cat, group]) => (
+                <CollapsibleSection
+                  key={cat}
+                  label={cat}
+                  count={group.length}
+                  open={isCatalogOpen(cat)}
+                  onToggle={() => toggleCatalog(cat)}
+                >
+                  <div className="bg-mil-card border border-mil-border rounded-2xl shadow-card divide-y divide-mil-border overflow-hidden">
+                    {group.map((i) => {
+                      const deployed = signedEquipment.filter((s) =>
+                        s.companyId === myCompany?.id && s.equipmentItemId === i.id && s.status === 'active',
+                      ).length;
+                      return (
+                        <div key={i.id} className="px-5 py-3.5 flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <Body className="font-semibold truncate">{i.name}</Body>
+                            <Hint className="text-mil-muted text-tiny mt-0.5">
+                              {i.defaultLocation ?? 'מחסן רס״פ'}
+                            </Hint>
+                          </div>
+                          <div className="text-left">
+                            <Hint className="text-xxs uppercase tracking-wide text-mil-muted">חתום</Hint>
+                            <p className="text-base font-bold tabular-nums text-mil-text">
+                              <span className="text-mil-olive">{deployed}</span>
+                              <span className="text-mil-ghost">/{i.unitCount}</span>
+                            </p>
+                          </div>
+                          {canManage && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => { setSignOutFor(i); setSignOutOpen(true); }}
+                            >
+                              החתם
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CollapsibleSection>
+              ))}
+            </div>
           )
         ) : signed.length === 0 ? (
           <EmptyState
@@ -197,19 +285,32 @@ export default function EquipmentInventoryPage() {
             hint="נסה לשנות את סינון הסטטוס או החיפוש"
           />
         ) : (
-          <Section label={`${signed.length} פריטים חתומים`}>
-            <div className="space-y-2">
-              {signed.map((se) => (
-                <SignedItemCard
-                  key={se.id}
-                  item={se}
-                  soldierName={soldiers.find((s) => s.id === se.soldierId)?.name ?? '—'}
-                  onReturn={() => setReturnItem(se)}
-                  canManage={canManage}
-                />
-              ))}
-            </div>
-          </Section>
+          // §8-§9 — canonical category accordions. A 2000-row flat list
+          // is unreadable; bucketed it tells the operator which class of
+          // equipment is sitting where without forcing a scroll-hunt.
+          <div className="space-y-2">
+            {signedGroups.map(([cat, group]) => (
+              <CollapsibleSection
+                key={cat}
+                label={SIGNED_CATEGORY_LABEL[cat]}
+                count={group.length}
+                open={isSignedOpen(cat)}
+                onToggle={() => toggleSigned(cat)}
+              >
+                <div className="space-y-2">
+                  {group.map((se) => (
+                    <SignedItemCard
+                      key={se.id}
+                      item={se}
+                      soldierName={soldiers.find((s) => s.id === se.soldierId)?.name ?? '—'}
+                      onReturn={() => setReturnItem(se)}
+                      canManage={canManage}
+                    />
+                  ))}
+                </div>
+              </CollapsibleSection>
+            ))}
+          </div>
         )}
 
       </PageMain>
