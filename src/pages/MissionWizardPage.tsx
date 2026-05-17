@@ -337,7 +337,7 @@ export default function MissionWizardPage() {
       <main className="flex-1 px-5 pb-32 max-w-xl mx-auto w-full pt-2">
         {step === 1 && (
           <Step1Identity
-            draft={draft} patch={patch} myPlatoons={platoonsPickable}
+            draft={draft} patch={patch}
             onPickArchetype={applyArchetype}
           />
         )}
@@ -388,11 +388,10 @@ export default function MissionWizardPage() {
 // else is editable — name and platoons appear only after the choice.
 
 function Step1Identity({
-  draft, patch, myPlatoons, onPickArchetype,
+  draft, patch, onPickArchetype,
 }: {
   draft: WizardDraft;
   patch: (p: Partial<WizardDraft>) => void;
-  myPlatoons: ReturnType<typeof useMyPlatoons>;
   onPickArchetype: (k: MissionArchetypeKind) => void;
 }) {
   const archetype = draft.archetypeKind
@@ -470,28 +469,12 @@ function Step1Identity({
             />
           </div>
 
-          <div>
-            <Hint className="mb-2 block tracking-wide">מחלקות באחריות</Hint>
-            <div className="flex flex-wrap gap-2">
-              {myPlatoons.map((p) => {
-                const on = draft.assignedPlatoonIds.includes(p.id);
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => patch({
-                      assignedPlatoonIds: on
-                        ? draft.assignedPlatoonIds.filter((x) => x !== p.id)
-                        : [...draft.assignedPlatoonIds, p.id],
-                    })}
-                    className={chipCls(on)}
-                  >
-                    {p.name}
-                  </button>
-                );
-              })}
-            </div>
-            <Muted className="mt-2 text-tiny">השיוך הסופי נקבע במסך השיוך אחרי יצירת המשימה.</Muted>
-          </div>
+          {/* Platoon picker REMOVED from Step 1 — assignment is a
+              separate flow that runs after the mission is created.
+              The mission's assignedPlatoonIds is initially empty and
+              gets populated on /missions/:id/assign, where the
+              conflict-resolution flow can also run against the leave
+              board. Creation ≠ Assignment. */}
 
           {/* Archetype-specific lightweight fields. */}
           {archetype.supportsRallyPoint && (
@@ -1411,9 +1394,10 @@ function Step6Review({
 function isStepValid(d: WizardDraft, step: WizardStep): boolean {
   switch (step) {
     case 1:
+      // Step 1 only validates IDENTITY now (archetype + name). Platoon
+      // assignment moved to /missions/:id/assign.
       return !!d.archetypeKind
-        && d.name.trim().length > 0
-        && d.assignedPlatoonIds.length > 0;
+        && d.name.trim().length > 0;
     case 2: return !!d.fatigue;
     case 3: return !!d.timeModel && !!d.manpower;
     case 4: {
@@ -1432,9 +1416,8 @@ function isStepValid(d: WizardDraft, step: WizardStep): boolean {
 function stepValidHint(d: WizardDraft, step: WizardStep): string {
   switch (step) {
     case 1:
-      if (!d.archetypeKind)                  return 'בחר סוג משימה';
-      if (!d.name.trim())                    return 'הזן שם למשימה';
-      if (d.assignedPlatoonIds.length === 0) return 'בחר לפחות מחלקה אחת';
+      if (!d.archetypeKind) return 'בחר סוג משימה';
+      if (!d.name.trim())   return 'הזן שם למשימה';
       return '';
     case 2: return 'בחר את אופי המשימה';
     case 3:

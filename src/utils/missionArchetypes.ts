@@ -206,10 +206,13 @@ export const MISSION_ARCHETYPES: Record<MissionArchetypeKind, MissionArchetype> 
     hint:  'שער / מגדל / נצפ״ה — עמדה קבועה, חופף יום/לילה',
     icon:  '👁',
 
-    // Static guard tells us its character (standing guard), its time
-    // model (24/7), and its rotation default — we only ASK about
-    // command (who commands at the level) and quals/equipment.
-    hiddenSteps: [2, 3],
+    // Only HIDE the character step (fatigue intensity — archetype
+    // already knows it's 'standing-guard'). The operator still MUST
+    // configure timing (when, day/night hours, shift duration),
+    // manpower (how many per shift), command (who leads), and
+    // rotation (how it's divided). Defaults are populated; questions
+    // are NOT skipped.
+    hiddenSteps: [2],
 
     isMovementBased:              false,
     isEventDriven:                false,
@@ -273,10 +276,11 @@ export const MISSION_ARCHETYPES: Record<MissionArchetypeKind, MissionArchetype> 
     hint:  'תגובה לאירוע — נקודת ריכוז, הוראות תגובה, מקבילי',
     icon:  '🛡',
 
-    // Readiness is the simplest from the questionnaire side — we know
-    // character, timing, rotation. We only ask about command (who
-    // leads the response) and quals/equipment.
-    hiddenSteps: [2, 3, 5],
+    // Hide only the character step (archetype = 'readiness' fatigue
+    // is fixed). Operator still configures timing (when), manpower
+    // (how many on readiness at any moment), command (who leads),
+    // rotation (how the watch rotates).
+    hiddenSteps: [2],
 
     isMovementBased:              false,
     isEventDriven:                true,
