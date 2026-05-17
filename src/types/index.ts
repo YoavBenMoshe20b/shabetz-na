@@ -1219,6 +1219,36 @@ export interface Mission {
   /** Free-text response instructions shown to soldiers on event
    *  activation — readiness archetype only. */
   responseInstructions?: string;
+
+  /** Split-team plan for readiness archetypes. Each team carries WHO
+   *  jumps WHERE and (optionally) per-team rally / instructions. When
+   *  populated, the soldier-facing readiness card shows the team the
+   *  soldier belongs to; otherwise the mission-level rally + response
+   *  instructions are shown to all assigned soldiers. */
+  responseTeams?: ReadinessResponseTeam[];
+}
+
+/**
+ * Sub-team in a readiness mission's response plan. "צוות א — שער צפון,
+ * 4 חיילים, אפרת לוי + …". Selection mode tells the soldier display
+ * how to surface membership: by hand-picked soldiers, by squad
+ * membership, or by operational role.
+ */
+export interface ReadinessResponseTeam {
+  id: string;
+  name: string;
+  rallyPoint?: string;
+  targetCount: number;
+  selectionMode: 'soldiers' | 'squad' | 'role';
+  /** Populated when selectionMode === 'soldiers'. */
+  soldierIds?: string[];
+  /** Populated when selectionMode === 'squad'. */
+  squadId?: string;
+  /** Populated when selectionMode === 'role'. */
+  operationalRole?: OperationalRole;
+  /** Optional per-team instruction override; falls back to mission's
+   *  responseInstructions when absent. */
+  instructions?: string;
 }
 
 // ─── Phase 7.3 — Archetype + day/night types (re-exported aliases) ──
@@ -3291,6 +3321,24 @@ export interface OperationalModeProfile {
 // ║  This is the key separation that makes the engine portable.              ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
+/**
+ * Slim slot snapshot the engine consumes. The materializer produces a
+ * richer `MaterializedSlot` — this interface declares the SUBSET the
+ * engine needs (overlap enforcement, burden math, rest-window scoring).
+ * Inlining the shape here avoids a types → utils circular import while
+ * letting MaterializedSlot satisfy it structurally.
+ */
+export interface EngineSlotSnapshot {
+  id: string;
+  missionId: string;
+  start: string;
+  end: string;
+  assignedSoldierIds: string[];
+  commanderSoldierId?: string;
+  effectiveFatigueWeight: number;
+  partOfDay: 'day' | 'night';
+}
+
 export interface EngineContext {
   /** ISO timestamp of "now" for this evaluation. PASSED IN, never read
    *  from Date.now() inside the engine. Allows replay/test. */
@@ -3329,5 +3377,14 @@ export interface EngineContext {
    *  engine applies a +15 SOFT bonus to a candidate's score when the
    *  pin's scope matches. Never breaks hard filters. */
   priorityPins?: SoldierPriorityPin[];
+
+  /** All materialized slots in the current scheduling window. Required
+   *  for:
+   *  - cross-slot time-conflict enforcement (hardFilters.hasTimeConflict)
+   *  - rest-window scoring (scoring.computeFatigue last-shift lookup)
+   *  - burden's hard-hour accounting via effectiveFatigueWeight
+   *  Optional for backward compatibility — engines fall back to legacy
+   *  behavior when absent. */
+  allSlots?: EngineSlotSnapshot[];
 }
 

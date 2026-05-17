@@ -133,12 +133,16 @@ export function useEngineContext(options: UseEngineContextOptions = {}): EngineC
     fatiguePolicy,
     burdenWeights: DEFAULT_BURDEN_WEIGHTS,
     burdens,
+    // Phase 7.3 — engine now receives the full slot snapshot so cross-
+    // slot overlap, rest windows, and effectiveFatigueWeight all work.
+    // MaterializedSlot structurally satisfies EngineSlotSnapshot.
+    allSlots,
   }), [
     computedAt, modeProfile,
     app.soldiers, app.platoons, app.squads, app.missions, app.leaves,
     app.dutyExclusions, app.soldierStatusEvents, app.signedEquipment,
     app.soldierQualifications, app.logisticsRotations,
-    fatiguePolicy, burdens,
+    fatiguePolicy, burdens, allSlots,
   ]);
 }
 

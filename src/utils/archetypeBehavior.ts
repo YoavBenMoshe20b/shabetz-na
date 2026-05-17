@@ -150,34 +150,36 @@ function computeWarnings(mission: Mission, kind: MissionArchetypeKind): Archetyp
  *  ENGINE GAINS BEHAVIOR. Lying here is what we explicitly promised
  *  the user we wouldn't do. */
 function computeStatus(kind: MissionArchetypeKind): ImplementationStatus {
-  // Defaults: 'partial' (values flow through but no rule-level branching).
+  // Defaults — Phase 7.3 second pass: fatigueWeighting, overlap, and
+  // parallel allowance all now have RULE-LEVEL enforcement in the
+  // engine (burden reads slot.effectiveFatigueWeight + night boost;
+  // hardFilters.hasTimeConflict reads ctx.allSlots + archetype overlap
+  // policy; readiness's isEventDriven flag flows into the symmetrical
+  // overlap permission).
   const base: ImplementationStatus = {
     slotSplitting:      'todo',
-    fatigueWeighting:   'partial',
-    overlapEnforcement: 'partial',
-    parallelAllowance:  'todo',
+    fatigueWeighting:   'wired',
+    overlapEnforcement: 'wired',
+    parallelAllowance:  'wired',
     responseSurface:    'partial',
     warningSurface:     'wired',
   };
 
   switch (kind) {
     case 'static-guard':
-      // Day/night splitting IS wired below (see splitDayNightWindows).
-      return { ...base, slotSplitting: 'wired' };
+      // Day/night splitting IS wired (see splitDayNightWindows).
+      // ResponseSurface n/a for static guard.
+      return { ...base, slotSplitting: 'wired', responseSurface: 'wired' };
     case 'patrol':
-      // Overlap policy populated from defaults — engine respects it
-      // through MissionOverlapPolicy → consumer of activeOverlap/
-      // restOverlap. No archetype-specific rule yet.
-      return { ...base };
-    case 'readiness':
-      // Parallel-assignment IS the whole point of readiness, but the
-      // engine doesn't yet branch on `isEventDriven` to relax conflict
-      // rules. Be honest.
       return { ...base, responseSurface: 'wired' };
+    case 'readiness':
+      // Response model (rally point + instructions + split teams) is
+      // wired on the mission detail; per-soldier surface still partial
+      // (CC sees teams, soldier still uses fallback mission-level view).
+      return { ...base, responseSurface: 'partial' };
     case 'one-time-op':
-      return { ...base };
+      return { ...base, responseSurface: 'wired' };
     case 'custom':
-      // 'custom' makes no archetype promises, so nothing to enforce.
       return {
         slotSplitting:      'wired',
         fatigueWeighting:   'wired',

@@ -135,13 +135,29 @@ function computeSignals(
     )
     .sort((a, b) => a.start.localeCompare(b.start));
 
+  // Phase 7.3 — burden now uses the slot's effectiveFatigueWeight
+  // (archetype-driven, day/night-aware) instead of mission.difficulty
+  // alone. Static guard accumulates light burden, patrol heavy, ambush
+  // heavier still; readiness — which is mostly idle standby — barely
+  // accumulates anything. Night slots add a 20% boost to duration when
+  // the archetype declared fatigue varies by period.
+  const HARD_FATIGUE_THRESHOLD = 6;
   for (const slot of soldierSlots) {
-    const durationHours = (Date.parse(slot.end) - Date.parse(slot.start)) / MS_PER_HOUR;
+    const rawDurationHours = (Date.parse(slot.end) - Date.parse(slot.start)) / MS_PER_HOUR;
+    // Night boost — applied only when slot was tagged as night by the
+    // archetype splitter. partOfDay is always set by the materializer
+    // (defaults to 'day' for legacy slots whose midpoint is in the day).
+    const periodMult = slot.partOfDay === 'night' ? 1.2 : 1.0;
+    const durationHours = rawDurationHours * periodMult;
     totalShiftHours += durationHours;
 
     const mission = ctx.missions.find((m) => m.id === slot.missionId);
     if (mission) {
-      const isHard = mission.difficulty === 'hard' || mission.difficulty === 'critical';
+      const fatigueWeight = slot.effectiveFatigueWeight ?? mission.fatigue.fatigueWeight;
+      const isHard =
+        fatigueWeight >= HARD_FATIGUE_THRESHOLD
+        || mission.difficulty === 'hard'
+        || mission.difficulty === 'critical';
       if (isHard) {
         hardShiftHours += durationHours;
         if (prevWasHard) consecutiveHardShifts++;

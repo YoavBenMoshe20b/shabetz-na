@@ -40,7 +40,7 @@ export default function MissionDetailPage() {
     missions, missionNotes, platoons, squads, soldiers, leaves, dutyExclusions,
     qualifications, equipmentItems, delegations,
     addMissionNote, editMissionNote, deleteMissionNote,
-    setMissionStatus,
+    setMissionStatus, updateMission,
     assignments, setSlotAssignment,
     selectorOutcomes, recordSelectorOutcome,
     slotOperationalState,
@@ -267,6 +267,20 @@ export default function MissionDetailPage() {
             (missing rally point, etc.). The status panel is the
             "what's actually wired" disclosure the user asked for. */}
         <ArchetypeStatusPanel mission={mission} canEdit={canEdit} />
+
+        {/* Readiness response teams — visible whenever the mission has
+            teams, editable by anyone who can edit the mission. The
+            viewer's own team is highlighted ("הצוות שלך"). */}
+        {mission.archetypeKind === 'readiness' && (
+          <ResponseTeamsSection
+            mission={mission}
+            viewer={currentUser}
+            squads={squads}
+            soldiers={soldiers}
+            canEdit={canEdit}
+            onSave={(teams) => updateMission(mission.id, { responseTeams: teams })}
+          />
+        )}
 
         {/* Round 5 — staffing CTA when the mission has no staffing yet.
             This appears IMMEDIATELY below the hero, before any other
@@ -995,6 +1009,337 @@ function StatusRow({ label, v }: { label: string; v: ImplStatus }) {
     <div className="flex items-baseline justify-between gap-2">
       <span className="text-mil-muted">{label}</span>
       <span className={`tabular-nums ${tone}`}>{word}</span>
+    </div>
+  );
+}
+
+// ─── Response teams (readiness archetype) ───────────────────────────
+//
+// READ view: list every team with its name / rally / count / WHO /
+// instructions. The viewer's own team gets a tinted highlight + the
+// label "הצוות שלך" so a soldier opening the page sees the answer
+// to "where do I go" immediately.
+//
+// EDIT view: a CC-only inline editor lets them add/remove/edit teams
+// without leaving the page. Tiny — three modes: by-soldiers / by-
+// squad / by-role. Per-team rally + instructions are optional and
+// fall back to the mission-level values when blank.
+
+import type { ReadinessResponseTeam } from '../types';
+
+function ResponseTeamsSection({
+  mission, viewer, squads, soldiers, canEdit, onSave,
+}: {
+  mission: import('../types').Mission;
+  viewer: { id: string } | null;
+  squads: import('../types').Squad[];
+  soldiers: Soldier[];
+  canEdit: boolean;
+  onSave: (teams: ReadinessResponseTeam[]) => void;
+}) {
+  const teams = mission.responseTeams ?? [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<ReadinessResponseTeam[]>(teams);
+
+  // Find the team the current viewer belongs to (if any). Membership
+  // resolves in priority order: explicit soldierIds → squad → role.
+  const viewerSoldier = soldiers.find((s) => s.id === viewer?.id);
+  const viewerTeamId = teams.find((t) => {
+    if (t.selectionMode === 'soldiers') return t.soldierIds?.includes(viewer?.id ?? '');
+    if (t.selectionMode === 'squad')    return t.squadId && viewerSoldier?.squadId === t.squadId;
+    if (t.selectionMode === 'role')
+      return t.operationalRole
+        && Array.isArray(viewerSoldier?.operationalRoles)
+        && viewerSoldier!.operationalRoles.includes(t.operationalRole);
+    return false;
+  })?.id;
+
+  if (teams.length === 0 && !canEdit) return null;
+
+  return (
+    <Section
+      label="צוותי תגובה"
+      action={canEdit ? (
+        <button
+          onClick={() => { setDraft(teams); setEditing(true); }}
+          className="text-tiny font-bold text-mil-olive-dim hover:text-mil-olive"
+        >
+          {teams.length === 0 ? '+ הגדר צוותים' : 'ערוך'}
+        </button>
+      ) : undefined}
+    >
+      {teams.length === 0 ? (
+        <Muted className="text-tiny">לא הוגדרו צוותי תגובה. בלי צוותים, כל החיילים מקבלים את הוראת התגובה של המשימה.</Muted>
+      ) : (
+        <div className="space-y-2">
+          {teams.map((t) => (
+            <TeamCard
+              key={t.id}
+              team={t}
+              mission={mission}
+              squads={squads}
+              soldiers={soldiers}
+              isYours={t.id === viewerTeamId}
+            />
+          ))}
+        </div>
+      )}
+      {editing && (
+        <ResponseTeamsEditor
+          draft={draft}
+          squads={squads}
+          soldiers={soldiers}
+          platoonIds={mission.assignedPlatoonIds}
+          onClose={() => setEditing(false)}
+          onSave={(t) => { onSave(t); setEditing(false); }}
+        />
+      )}
+    </Section>
+  );
+}
+
+function TeamCard({
+  team, mission, squads, soldiers, isYours,
+}: {
+  team: ReadinessResponseTeam;
+  mission: import('../types').Mission;
+  squads: import('../types').Squad[];
+  soldiers: Soldier[];
+  isYours: boolean;
+}) {
+  const whoLabel = (() => {
+    if (team.selectionMode === 'soldiers') {
+      const names = (team.soldierIds ?? [])
+        .map((id) => soldiers.find((s) => s.id === id)?.name)
+        .filter(Boolean);
+      return names.length > 0 ? names.join(' · ') : '—';
+    }
+    if (team.selectionMode === 'squad') {
+      return squads.find((sq) => sq.id === team.squadId)?.name ?? '—';
+    }
+    if (team.selectionMode === 'role') {
+      return team.operationalRole ?? '—';
+    }
+    return '—';
+  })();
+  const rally = team.rallyPoint || mission.rallyPoint || '—';
+  const instructions = team.instructions || mission.responseInstructions || '';
+
+  return (
+    <div
+      className={`rounded-2xl border px-4 py-3.5 ${
+        isYours
+          ? 'bg-mil-olive-bg/70 border-mil-olive ring-2 ring-mil-olive/30'
+          : 'bg-mil-card border-mil-border'
+      }`}
+    >
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <Body className="font-semibold">{team.name}</Body>
+        {isYours && (
+          <span className="text-xxs font-bold uppercase tracking-wide text-mil-olive bg-mil-card px-2 py-0.5 rounded-full">
+            הצוות שלך
+          </span>
+        )}
+        <Hint className="mr-auto tabular-nums">{team.targetCount} חיילים</Hint>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-tiny">
+        <div>
+          <Hint>נקודת ריכוז</Hint>
+          <Body className="text-sm leading-tight">{rally}</Body>
+        </div>
+        <div>
+          <Hint>{team.selectionMode === 'soldiers' ? 'חיילים' : team.selectionMode === 'squad' ? 'כיתה' : 'תפקיד'}</Hint>
+          <Body className="text-sm leading-tight">{whoLabel}</Body>
+        </div>
+      </div>
+      {instructions && (
+        <Muted className="mt-2 text-tiny leading-snug whitespace-pre-line border-t border-mil-border pt-2">
+          {instructions}
+        </Muted>
+      )}
+    </div>
+  );
+}
+
+function ResponseTeamsEditor({
+  draft, squads, soldiers, platoonIds, onClose, onSave,
+}: {
+  draft: ReadinessResponseTeam[];
+  squads: import('../types').Squad[];
+  soldiers: Soldier[];
+  platoonIds: string[];
+  onClose: () => void;
+  onSave: (t: ReadinessResponseTeam[]) => void;
+}) {
+  const [teams, setTeams] = useState<ReadinessResponseTeam[]>(draft);
+
+  const platoonSquads = squads.filter((sq) => platoonIds.includes(sq.platoonId));
+  const platoonSoldiers = soldiers.filter((s) =>
+    s.squadId && platoonSquads.some((sq) => sq.id === s.squadId),
+  );
+
+  const addTeam = () => {
+    setTeams((prev) => [...prev, {
+      id: `team-${Date.now()}-${prev.length}`,
+      name: `צוות ${String.fromCharCode(0x05D0 + prev.length)}`,  // א/ב/ג…
+      targetCount: 2,
+      selectionMode: 'squad',
+      squadId: platoonSquads[0]?.id,
+    }]);
+  };
+
+  const updateTeam = (id: string, patch: Partial<ReadinessResponseTeam>) => {
+    setTeams((prev) => prev.map((t) => t.id === id ? { ...t, ...patch } : t));
+  };
+
+  const removeTeam = (id: string) => {
+    setTeams((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-mil-text/20 backdrop-blur-glass-strong"
+      style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)', paddingBottom: 'max(env(safe-area-inset-bottom), 12px)' }}
+      role="dialog"
+      aria-modal="true"
+      dir="rtl"
+    >
+      <button onClick={onClose} className="absolute inset-0 cursor-default" aria-label="סגור" tabIndex={-1} />
+      <div
+        className="relative w-full max-w-xl bg-mil-card border border-mil-border rounded-t-2xl-soft sm:rounded-2xl-soft shadow-pop flex flex-col sm:mx-4 overflow-hidden"
+        style={{ maxHeight: '100%' }}
+      >
+        <header className="sticky top-0 z-10 bg-mil-card/95 backdrop-blur-glass border-b border-mil-border px-5 py-4 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-bold text-mil-text leading-tight tracking-tightish">צוותי תגובה</h2>
+            <p className="text-tiny text-mil-muted leading-snug mt-0.5">{teams.length} צוותים מוגדרים</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg text-mil-muted hover:text-mil-text hover:bg-mil-bg-alt" aria-label="סגור חלונית">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 3 L11 11 M11 3 L3 11" />
+            </svg>
+          </button>
+        </header>
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+          {teams.map((t) => (
+            <div key={t.id} className="bg-mil-bg-alt border border-mil-border rounded-xl-soft px-3.5 py-3 space-y-2">
+              <div className="flex items-baseline gap-2">
+                <input
+                  value={t.name}
+                  onChange={(e) => updateTeam(t.id, { name: e.target.value })}
+                  className="flex-1 bg-mil-card border border-mil-border rounded-lg px-2.5 py-1.5 text-sm font-bold text-mil-text"
+                />
+                <button
+                  onClick={() => removeTeam(t.id)}
+                  className="text-tiny font-bold text-mil-alert hover:text-mil-text"
+                >
+                  הסר
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-tiny">
+                  <Hint className="block mb-1">כמות</Hint>
+                  <input
+                    type="number"
+                    min={1}
+                    value={t.targetCount}
+                    onChange={(e) => updateTeam(t.id, { targetCount: Math.max(1, Number(e.target.value)) })}
+                    className="w-full bg-mil-card border border-mil-border rounded-lg px-2.5 py-1.5 text-sm tabular-nums"
+                  />
+                </label>
+                <label className="text-tiny">
+                  <Hint className="block mb-1">נקודת ריכוז</Hint>
+                  <input
+                    value={t.rallyPoint ?? ''}
+                    onChange={(e) => updateTeam(t.id, { rallyPoint: e.target.value })}
+                    placeholder="ברירת מחדל = של המשימה"
+                    className="w-full bg-mil-card border border-mil-border rounded-lg px-2.5 py-1.5 text-sm"
+                  />
+                </label>
+              </div>
+              <div>
+                <Hint className="block mb-1">חלוקה לפי</Hint>
+                <div className="flex gap-1.5">
+                  {(['squad', 'soldiers', 'role'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => updateTeam(t.id, { selectionMode: m })}
+                      className={`px-2.5 py-1 rounded-lg text-tiny font-bold ${
+                        t.selectionMode === m
+                          ? 'bg-mil-olive text-white'
+                          : 'bg-mil-card border border-mil-border text-mil-muted'
+                      }`}
+                    >
+                      {m === 'squad' ? 'כיתה' : m === 'soldiers' ? 'חיילים' : 'תפקיד'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {t.selectionMode === 'squad' && (
+                <select
+                  value={t.squadId ?? ''}
+                  onChange={(e) => updateTeam(t.id, { squadId: e.target.value })}
+                  className="w-full bg-mil-card border border-mil-border rounded-lg px-2.5 py-1.5 text-sm"
+                >
+                  <option value="">— בחר כיתה —</option>
+                  {platoonSquads.map((sq) => (
+                    <option key={sq.id} value={sq.id}>{sq.name}</option>
+                  ))}
+                </select>
+              )}
+              {t.selectionMode === 'soldiers' && (
+                <div className="flex flex-wrap gap-1">
+                  {platoonSoldiers.map((s) => {
+                    const on = (t.soldierIds ?? []).includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => updateTeam(t.id, {
+                          soldierIds: on
+                            ? (t.soldierIds ?? []).filter((x) => x !== s.id)
+                            : [...(t.soldierIds ?? []), s.id],
+                        })}
+                        className={`px-2 py-1 rounded text-tiny font-semibold ${
+                          on
+                            ? 'bg-mil-olive text-white'
+                            : 'bg-mil-card border border-mil-border text-mil-muted'
+                        }`}
+                      >
+                        {s.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {t.selectionMode === 'role' && (
+                <input
+                  value={t.operationalRole ?? ''}
+                  onChange={(e) => updateTeam(t.id, { operationalRole: e.target.value as import('../types').OperationalRole })}
+                  placeholder="לדוגמה: קלע / נגב / קשר"
+                  className="w-full bg-mil-card border border-mil-border rounded-lg px-2.5 py-1.5 text-sm"
+                />
+              )}
+              <textarea
+                value={t.instructions ?? ''}
+                onChange={(e) => updateTeam(t.id, { instructions: e.target.value })}
+                placeholder="הוראות תגובה לצוות (ברירת מחדל = של המשימה)"
+                rows={2}
+                className="w-full bg-mil-card border border-mil-border rounded-lg px-2.5 py-1.5 text-sm resize-none"
+              />
+            </div>
+          ))}
+          <button
+            onClick={addTeam}
+            className="w-full py-2.5 rounded-xl-soft border border-dashed border-mil-border text-mil-muted hover:text-mil-text text-tiny font-bold"
+          >
+            + הוסף צוות
+          </button>
+        </div>
+        <footer className="px-5 py-3 border-t border-mil-border flex gap-2">
+          <Button variant="primary" size="md" fullWidth onClick={() => onSave(teams)}>שמור</Button>
+          <Button variant="ghost" size="md" onClick={onClose}>ביטול</Button>
+        </footer>
+      </div>
     </div>
   );
 }

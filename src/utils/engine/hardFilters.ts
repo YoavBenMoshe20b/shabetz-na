@@ -15,6 +15,7 @@ import type {
   Leave, EquipmentRequirement,
 } from '../../types';
 import type { MaterializedSlot } from '../materialize';
+import { getArchetypeBehavior } from '../archetypeBehavior';
 
 /**
  * Evaluate all hard filters for one soldier on one slot. Returns the
@@ -166,17 +167,67 @@ function checkSquadPolicy(
 
 function hasTimeConflict(
   soldierId: string,
-  _slot: MaterializedSlot,
+  slot: MaterializedSlot,
   ctx: EngineContext,
 ): boolean {
-  // The materializer is the source of slot truth; we ask: is the
-  // soldier already assigned to ANOTHER slot that overlaps in time?
-  // The `alreadyPickedForSlot` set covers same-slot duplicates; for
-  // cross-slot conflicts we'd need the materialized world. Phase 6.1.1
-  // will inject `allSlots: MaterializedSlot[]` for this check.
-  void _slot;
+  // Same-slot duplicate guard — cheapest check first.
   if ((ctx.alreadyPickedForSlot ?? []).includes(soldierId)) return true;
+
+  // Cross-slot conflict: real enforcement now that ctx.allSlots is
+  // populated. The soldier is in conflict if they're assigned to ANY
+  // other slot whose time window overlaps with this one AND archetype
+  // policy does not permit the overlap.
+  const allSlots = ctx.allSlots;
+  if (!allSlots || allSlots.length === 0) return false;
+
+  const slotStartMs = Date.parse(slot.start);
+  const slotEndMs   = Date.parse(slot.end);
+  if (Number.isNaN(slotStartMs) || Number.isNaN(slotEndMs)) return false;
+
+  const thisMission = ctx.missions.find((m) => m.id === slot.missionId);
+
+  for (const other of allSlots) {
+    if (other.id === slot.id) continue;
+    const isAssigned =
+      other.assignedSoldierIds.includes(soldierId)
+      || other.commanderSoldierId === soldierId;
+    if (!isAssigned) continue;
+
+    const otherStartMs = Date.parse(other.start);
+    const otherEndMs   = Date.parse(other.end);
+    if (otherStartMs >= slotEndMs || otherEndMs <= slotStartMs) continue;
+
+    // Overlapping commitment. Both archetypes must EXPLICITLY consent
+    // to overlap (symmetrical policy). When either side forbids, the
+    // soldier is in conflict.
+    const otherMission = ctx.missions.find((m) => m.id === other.missionId);
+    if (!thisMission || !otherMission) return true;
+    if (!isOverlapPermitted(thisMission, otherMission)) return true;
+  }
   return false;
+}
+
+/**
+ * Symmetrical archetype-aware overlap check. The active soldier is on
+ * mission A and a candidate slot belongs to mission B (or vice versa).
+ * Overlap is permitted ONLY when both missions' effective overlap
+ * policy includes the OTHER's intensity in their activeOverlap list.
+ *
+ * The clean-engine invariant: this is the ONE place the engine looks
+ * at archetype behavior for overlap. Anything else stays through the
+ * existing MissionOverlapPolicy values the wizard wrote.
+ */
+function isOverlapPermitted(a: Mission, b: Mission): boolean {
+  const aBehavior = getArchetypeBehavior(a);
+  const bBehavior = getArchetypeBehavior(b);
+  // Patrol forbids EVERYTHING — short-circuit before even checking
+  // the activeOverlap list (movement-based archetype invariant).
+  if (aBehavior.forbidsParallelAssignment) return false;
+  if (bBehavior.forbidsParallelAssignment) return false;
+  const aPolicy = aBehavior.effectiveOverlapPolicy;
+  const bPolicy = bBehavior.effectiveOverlapPolicy;
+  return aPolicy.activeOverlap.includes(b.fatigue.intensity)
+      && bPolicy.activeOverlap.includes(a.fatigue.intensity);
 }
 
 function hasCriticalEquipmentGap(

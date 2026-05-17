@@ -112,12 +112,10 @@ function computeLoad(soldier: Soldier, ctx: EngineContext): CandidateScoreDimens
 }
 
 function computeFatigue(
-  _soldier: Soldier,
+  soldier: Soldier,
   slot: MaterializedSlot,
   ctx: EngineContext,
 ): CandidateScoreDimension {
-  // soldier reserved for future per-soldier fatigue lookup (last shift)
-  void _soldier;
   const slotLengthHours = (Date.parse(slot.end) - Date.parse(slot.start)) / MS_PER_HOUR;
   const requiredRest = resolveRequiredRestHours(
     ctx.fatiguePolicy,
@@ -125,11 +123,25 @@ function computeFatigue(
     ctx.modeProfile.fatigueRestMultiplier,
   );
 
-  // Find the soldier's most recent slot end before this slot starts.
-  // We need allSlots here — for now, conservatively check soldier's
-  // statusSetAt as a proxy. Phase 6.1.1 will add allSlots to context.
+  // Phase 7.3 — real rest lookup from ctx.allSlots: the most recent
+  // slot END before this slot's START where this soldier was assigned.
+  // Falls back to the pessimistic 24h-back stub when allSlots is absent
+  // (preserves prior behavior for tests/replay contexts).
   const slotStartMs = Date.parse(slot.start);
-  const lastShiftEndMs = slotStartMs - 24 * MS_PER_HOUR; // pessimistic stub
+  let lastShiftEndMs = slotStartMs - 24 * MS_PER_HOUR;     // fallback
+  if (ctx.allSlots && ctx.allSlots.length > 0) {
+    let best = -Infinity;
+    for (const s of ctx.allSlots) {
+      if (s.id === slot.id) continue;
+      const isAssigned =
+        s.assignedSoldierIds.includes(soldier.id)
+        || s.commanderSoldierId === soldier.id;
+      if (!isAssigned) continue;
+      const endMs = Date.parse(s.end);
+      if (endMs <= slotStartMs && endMs > best) best = endMs;
+    }
+    if (best > -Infinity) lastShiftEndMs = best;
+  }
   const hoursSince = (slotStartMs - lastShiftEndMs) / MS_PER_HOUR;
 
   let value: number;
