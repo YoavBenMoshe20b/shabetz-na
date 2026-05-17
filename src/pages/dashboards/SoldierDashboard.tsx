@@ -16,7 +16,11 @@ import { useApp } from '../../context/AppContext';
 import { resolveMySoldier } from '../../utils/resolveSoldier';
 import { activeSegmentForSoldier } from '../../utils/leaveCycleProjection';
 import { materializeWeek } from '../../utils/materialize';
+import {
+  deriveTimelineEvents, selectTimelineFor,
+} from '../../utils/operationalTimeline';
 import Header from '../../components/Header';
+import OperationalTimelineStrip from '../../components/OperationalTimelineStrip';
 import AnnouncementsStrip from '../../components/AnnouncementsStrip';
 import { TourOfDutyMini } from '../../components/TourOfDutyCard';
 import {
@@ -33,6 +37,7 @@ export default function SoldierDashboard() {
   const {
     soldiers, leaves, currentUser, platoons, squads, setReminder, addLeaveRequest, updateSoldierStatus,
     missions, dutyExclusions, assignments, slotOperationalState,
+    platoonLeaveDays, announcements,
   } = useApp();
   const myPlatoon = platoons.find((p) => p.id === currentUser?.platoonId);
 
@@ -118,6 +123,28 @@ export default function SoldierDashboard() {
     [mySlots],
   );
 
+  // Phase 7.3 — soldier-scoped operational timeline. Soldier sees ONLY
+  // events that name them (next-shift, shift-end, readiness-on for
+  // their slots). No platoon noise, no company noise. Limit 4.
+  const personalTimeline = useMemo(() => {
+    if (!myProfile || !myPlatoon) return [];
+    const all = deriveTimelineEvents({
+      nowIso: now.toISOString(),
+      horizonHours: 36,
+      slots: materializedSlots,
+      missions, platoons, soldiers, platoonLeaveDays, announcements,
+      companyId: myPlatoon.companyId,
+    });
+    return selectTimelineFor({
+      events: all,
+      viewerSoldierId: myProfile.id,
+      // intentionally NOT passing viewerPlatoonId — soldier home keeps
+      // platoon-scoped noise (e.g. "מחלקה יוצאת") off the page unless
+      // the event also names the soldier directly via soldier-scope.
+      limit: 4,
+    });
+  }, [myProfile, myPlatoon, now, materializedSlots, missions, platoons, soldiers, platoonLeaveDays, announcements]);
+
   const submitLeaveRequest = (data: { startDate: string; startTime: string; endDate: string; endTime: string; reason: string }) => {
     if (!myProfile) return;
     addLeaveRequest({
@@ -170,6 +197,19 @@ export default function SoldierDashboard() {
             onSetReminder={(mins) => myNextShift && setReminder({ timeSlotId: myNextShift.slot.id, minutesBefore: mins, enabled: true })}
             onOpenStatusUpdate={() => setStatusUpdateOpen(true)}
             onOpenMission={(missionId) => navigate(`/mission/${missionId}`)}
+          />
+        )}
+
+        {/* Phase 7.3 — personal operational timeline. Soldier-scoped only:
+            shifts that name them, shift endings, readiness slots they're
+            assigned to. Platoon-scoped events (yes-this-week-my-machlaka-
+            goes-home) do NOT appear here unless the engine emitted a
+            soldier-scope for this specific viewer. */}
+        {myProfile && personalTimeline.length > 0 && (
+          <OperationalTimelineStrip
+            events={personalTimeline}
+            label="הציר שלך"
+            compact
           />
         )}
 

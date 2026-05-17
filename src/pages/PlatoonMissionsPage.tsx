@@ -21,6 +21,10 @@ import StaffingSheet from '../components/StaffingSheet';
 import SquadDistributionSheet, {
   filterPoolByDistribution, type SquadDistributionMode,
 } from '../components/SquadDistributionSheet';
+import OperationalTimelineStrip from '../components/OperationalTimelineStrip';
+import {
+  deriveTimelineEvents, selectTimelineFor,
+} from '../utils/operationalTimeline';
 import { materializeWeek, type MaterializedSlot } from '../utils/materialize';
 import type { Mission, Soldier, Platoon } from '../types';
 import {
@@ -36,7 +40,7 @@ export default function PlatoonMissionsPage() {
     missions, platoons, squads, soldiers, leaves, dutyExclusions,
     assignments, setSlotAssignment, recordSelectorOutcome,
     announcements, addAnnouncement, selectorOutcomes,
-    slotOperationalState,
+    slotOperationalState, platoonLeaveDays,
   } = useApp();
 
   const myPlatoon = useMemo(
@@ -152,6 +156,27 @@ export default function PlatoonMissionsPage() {
     setPendingSlot(null);
   };
 
+  // Phase 7.3 — platoon-scoped operational timeline. PC sees their
+  // platoon's pressure: handovers, publish-deadline staleness,
+  // staffing-pressure on slots, readiness incoming, leave-conflict
+  // imminent. Limited to 6 — anything more is "noise in a glance" and
+  // belongs in /alerts or the mission detail page.
+  const platoonTimeline = useMemo(() => {
+    if (!myPlatoon) return [];
+    const all = deriveTimelineEvents({
+      nowIso: new Date().toISOString(),
+      horizonHours: 36,
+      slots: weekSlots,
+      missions, platoons, soldiers, platoonLeaveDays, announcements,
+      companyId: myPlatoon.companyId,
+    });
+    return selectTimelineFor({
+      events: all,
+      viewerPlatoonId: myPlatoon.id,
+      limit: 6,
+    });
+  }, [myPlatoon, weekSlots, missions, platoons, soldiers, platoonLeaveDays, announcements]);
+
   const candidatePool = useMemo(() => {
     if (!myPlatoon) return [];
     const sqIds = new Set(squads.filter((sq) => sq.platoonId === myPlatoon.id).map((sq) => sq.id));
@@ -244,6 +269,17 @@ export default function PlatoonMissionsPage() {
             <Hint className="text-mil-muted">פורסם {formatRelative(lastPublishAt)}</Hint>
           )}
         </div>
+
+        {/* Phase 7.3 — platoon operational timeline. Strictly
+            platoon-scoped: handovers, publish-deadline, staffing-
+            pressure, readiness-on, leave-conflict-imminent. Other
+            platoons' transitions DO NOT appear here. */}
+        {platoonTimeline.length > 0 && (
+          <OperationalTimelineStrip
+            events={platoonTimeline}
+            label="ציר זמן פלוגתי"
+          />
+        )}
 
         {/* Missions list */}
         {missionsWithStats.length === 0 ? (
