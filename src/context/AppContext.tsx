@@ -2377,10 +2377,12 @@ export function useApp() {
   return ctx;
 }
 
-export function useActivePeriod() {
-  const { periods } = useApp();
-  return periods.find((p) => p.status === 'published') ?? periods[0] ?? null;
-}
+// useActivePeriod removed — Phase 7.3 stabilization. The legacy
+// SchedulePeriod model has been superseded by OperationalOrder (צו),
+// and no surface still reads "the active period". The persisted
+// `periods` slice + addPeriod/updatePeriod mutations remain for
+// back-compat with any in-flight localStorage payloads; they may be
+// retired in a future seed-version bump.
 
 // The company the current user belongs to (if any).
 // company commander → his commanded company
