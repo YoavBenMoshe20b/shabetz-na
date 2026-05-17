@@ -201,13 +201,22 @@ export default function MissionDetailPage() {
                 <Hint className="font-semibold tracking-wide uppercase text-mil-muted">עריכה מבצעית</Hint>
                 <Muted className="text-tiny mt-1">שינויים יחולו מיד על השבצ״ק.</Muted>
               </div>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => navigate(`/missions/new?missionId=${mission.id}`)}
-              >
-                ערוך משימה
-              </Button>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => navigate(`/missions/${mission.id}/assign`)}
+                >
+                  שיוך מחלקות
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => navigate(`/missions/new?missionId=${mission.id}`)}
+                >
+                  ערוך משימה
+                </Button>
+              </div>
             </div>
           )}
         </section>

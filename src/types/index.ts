@@ -1179,6 +1179,12 @@ export interface Mission {
   /** Per-mission override of fatigue rules. When absent, the engine
    *  falls back to company.settings.fatigue → GLOBAL_DEFAULTS. */
   fatigueOverride?: FatiguePolicy;
+
+  /** When true, the PC cannot split or alter the per-slot shift
+   *  duration during staffing — only the CC who authored the mission
+   *  can. Surfaced in the StaffingSheet as a locked indicator on the
+   *  duration controls. Default: false. */
+  shiftDurationLocked?: boolean;
 }
 
 /**

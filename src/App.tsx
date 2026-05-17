@@ -49,6 +49,7 @@ const ProfilePage        = lazy(() => import('./pages/ProfilePage'));
 const CalendarPage       = lazy(() => import('./pages/CalendarPage'));
 const MissionsPage       = lazy(() => import('./pages/MissionsPage'));
 const MissionWizardPage  = lazy(() => import('./pages/MissionWizardPage'));
+const MissionAssignPage  = lazy(() => import('./pages/MissionAssignPage'));
 const MissionDetailPage  = lazy(() => import('./pages/MissionDetailPage'));
 const CoveragePage       = lazy(() => import('./pages/CoveragePage'));
 const PlatoonWeekPage    = lazy(() => import('./pages/PlatoonWeekPage'));
@@ -176,6 +177,9 @@ function AppRoutes() {
         } />
         <Route path="/missions/new" element={
           <ProtectedRoute minRole="platoonCommander"><MissionWizardPage /></ProtectedRoute>
+        } />
+        <Route path="/missions/:id/assign" element={
+          <ProtectedRoute minRole="platoonCommander"><MissionAssignPage /></ProtectedRoute>
         } />
         <Route path="/mission/:id" element={currentUser ? <MissionDetailPage /> : auth} />
         <Route path="/coverage"     element={

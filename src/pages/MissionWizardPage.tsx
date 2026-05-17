@@ -228,10 +228,15 @@ export default function MissionWizardPage() {
       });
     }
     sessionStorage.removeItem(SESSION_KEY);
-    // Send the operator straight to the mission detail page so they can
-    // decide whether to staff now. The page surfaces a clear staffing CTA
-    // when status === 'active-unstaffed'.
-    navigate(`/mission/${created.id}`);
+    // Phase 7.3: After CREATION, drop into the ASSIGN step so the
+    // operator confirms WHICH platoons own the mission (with leave-day
+    // conflict warnings). Drafts skip the assign step — they're not
+    // operationally live yet.
+    if (intent === 'draft') {
+      navigate(`/mission/${created.id}`);
+    } else {
+      navigate(`/missions/${created.id}/assign`);
+    }
   };
 
   return (
