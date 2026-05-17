@@ -27,7 +27,7 @@ import { newId } from '../utils/id';
 import { canApproveLeaveFor, canCreateAnnouncement, canDeclareEscalation, canEditLeaveCycle, isRasap } from '../utils/permissions';
 import { USE_SUPABASE } from '../api/_supabase';
 import { usePersistedState } from '../utils/persistedState';
-import type { MissionTemplate } from '../utils/missionTemplates';
+import type { MissionTemplate, TemplateFamily } from '../utils/missionTemplates';
 
 // Seed version — bump when mockData shape changes in a way that should
 // invalidate everyone's localStorage. Old blobs at older versions are
@@ -56,7 +56,7 @@ import {
   mockOperationalOrders,
   mockAnnouncements, mockEscalationEvents, mockPlatoonLeaveCycles,
   mockLogisticsRotations,
-  mockMissionTemplates,
+  mockMissionTemplates, mockTemplateFamilies,
 } from '../data/mockData';
 
 // ─── Company-first flow shapes ───────────────────────────────────────────────
@@ -261,9 +261,14 @@ interface AppContextType {
   updateMissionTemplate:      (id: string, patch: Partial<Omit<MissionTemplate, 'id' | 'companyId' | 'createdAt'>>) => void;
   hideMissionTemplate:        (id: string) => void;
   toggleMissionTemplateFavorite: (id: string) => void;
-  /** Increments usageCount — call after addMission from a template
-   *  fires successfully. */
+  /** Increments usageCount AND updates lastUsedAt — call after
+   *  addMission from a template fires successfully. */
   incrementTemplateUsage:     (id: string) => void;
+  // ── Doctrine families ────────────────────────────────────────────
+  templateFamilies:           TemplateFamily[];
+  addTemplateFamily:          (data: Omit<TemplateFamily, 'id' | 'createdAt'>) => TemplateFamily;
+  updateTemplateFamily:       (id: string, patch: Partial<Omit<TemplateFamily, 'id' | 'companyId' | 'createdAt'>>) => void;
+  archiveTemplateFamily:      (id: string) => void;
 
   // ── Operational orders (צווים) ──────────────────────────────────────
   orders:                 OperationalOrder[];
@@ -1001,9 +1006,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const incrementTemplateUsage = (id: string) => {
+    const now = new Date().toISOString();
     setMissionTemplates((prev) =>
-      prev.map((t) => t.id === id ? { ...t, usageCount: t.usageCount + 1 } : t),
+      prev.map((t) => t.id === id
+        ? { ...t, usageCount: t.usageCount + 1, lastUsedAt: now }
+        : t),
     );
+  };
+
+  // ── Doctrine families ─────────────────────────────────────────────
+  const [templateFamilies, setTemplateFamilies] = usePersistedState<TemplateFamily[]>(
+    'templateFamilies', mockTemplateFamilies, SEED_VERSION,
+  );
+
+  const addTemplateFamily = (data: Omit<TemplateFamily, 'id' | 'createdAt'>) => {
+    const fam: TemplateFamily = {
+      ...data,
+      id: newId('tf'),
+      createdAt: new Date().toISOString(),
+    };
+    setTemplateFamilies((prev) => [...prev, fam]);
+    return fam;
+  };
+
+  const updateTemplateFamily = (
+    id: string,
+    patch: Partial<Omit<TemplateFamily, 'id' | 'companyId' | 'createdAt'>>,
+  ) => {
+    setTemplateFamilies((prev) => prev.map((f) => f.id === id ? { ...f, ...patch } : f));
+  };
+
+  const archiveTemplateFamily = (id: string) => {
+    setTemplateFamilies((prev) => prev.map((f) => f.id === id ? { ...f, isArchived: true } : f));
   };
 
   const completeChecklistRun = (runId: string) => {
@@ -2302,6 +2336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSoldierLeaveOverride, clearSoldierLeaveOverride,
       missionTemplates, addMissionTemplate, updateMissionTemplate,
       hideMissionTemplate, toggleMissionTemplateFavorite, incrementTemplateUsage,
+      templateFamilies, addTemplateFamily, updateTemplateFamily, archiveTemplateFamily,
       orders, addOrder, setOrderStatus,
       missionNotes, addMissionNote, editMissionNote, deleteMissionNote,
       qualifications, equipmentItems, addEquipmentItem, soldierQualifications,

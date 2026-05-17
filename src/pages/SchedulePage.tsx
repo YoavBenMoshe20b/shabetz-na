@@ -30,7 +30,7 @@ export default function SchedulePage() {
     platoons, squads, soldiers, leaves, dutyExclusions, assignments,
     addOrder, setOrderStatus, setMissionStatus,
     qualifications, equipmentItems, platoonLeaveDays, addMission,
-    missionTemplates, toggleMissionTemplateFavorite, hideMissionTemplate,
+    missionTemplates, templateFamilies, toggleMissionTemplateFavorite, hideMissionTemplate,
     incrementTemplateUsage,
   } = useApp();
 
@@ -236,6 +236,7 @@ export default function SchedulePage() {
           open
           onClose={() => setLibraryOpen(false)}
           templates={missionTemplates.filter((t) => t.companyId === myCompany?.id)}
+          families={templateFamilies.filter((f) => f.companyId === myCompany?.id)}
           qualifications={qualifications}
           equipmentItems={equipmentItems}
           platoons={platoons.filter((p) => p.companyId === myCompany?.id)}

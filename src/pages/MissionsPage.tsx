@@ -21,7 +21,7 @@ export default function MissionsPage() {
   const navigate = useNavigate();
   const {
     missions, platoons, qualifications, equipmentItems, currentRole,
-    currentUser, addMission, missionTemplates, platoonLeaveDays,
+    currentUser, addMission, missionTemplates, templateFamilies, platoonLeaveDays,
     toggleMissionTemplateFavorite, hideMissionTemplate, incrementTemplateUsage,
   } = useApp();
   const myCompany = useMyCompany();
@@ -97,6 +97,7 @@ export default function MissionsPage() {
           open
           onClose={() => setLibraryOpen(false)}
           templates={missionTemplates.filter((t) => t.companyId === myCompany.id)}
+          families={templateFamilies.filter((f) => f.companyId === myCompany.id)}
           qualifications={qualifications}
           equipmentItems={equipmentItems}
           platoons={platoons.filter((p) => p.companyId === myCompany.id)}

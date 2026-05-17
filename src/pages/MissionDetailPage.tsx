@@ -47,7 +47,7 @@ export default function MissionDetailPage() {
     selectorOutcomes, recordSelectorOutcome,
     slotOperationalState,
     checklistTemplates, checklistRuns, createChecklistRun,
-    addMissionTemplate,
+    addMissionTemplate, templateFamilies,
   } = useApp();
   const [importOpen, setImportOpen] = useState(false);
   const [savedAsTemplate, setSavedAsTemplate] = useState(false);
@@ -253,10 +253,15 @@ export default function MissionDetailPage() {
                   disabled={savedAsTemplate}
                   onClick={() => {
                     if (!myCompany || !currentUser) return;
+                    const familyKey = archetypeToFamilyKey(mission.archetypeKind ?? 'custom');
+                    const family = templateFamilies.find((f) =>
+                      f.companyId === myCompany.id && f.key === familyKey,
+                    );
                     addMissionTemplate({
                       companyId: myCompany.id,
                       name: mission.name,
                       description: mission.description,
+                      familyId: family?.id,
                       category: archetypeToCategory(mission.archetypeKind ?? 'custom'),
                       isFavorite: false,
                       createdByUserId: currentUser.id,
@@ -1023,6 +1028,20 @@ function archetypeToCategory(kind: import('../types').MissionArchetypeKind): str
     case 'readiness':    return 'כוננויות';
     case 'one-time-op':  return 'משימות מבצעיות';
     default:             return 'אחר';
+  }
+}
+
+/** Maps an archetype to the seed family.key likely to fit. Used by the
+ *  "שמור כתבנית" path when the operator hasn't picked a family
+ *  explicitly. Lookup by key (not id) because the company may have
+ *  renamed/reordered families. */
+function archetypeToFamilyKey(kind: import('../types').MissionArchetypeKind): string {
+  switch (kind) {
+    case 'static-guard': return 'guard-line';
+    case 'patrol':       return 'night-patrol';
+    case 'readiness':    return 'readiness';
+    case 'one-time-op':  return 'one-time-op';
+    default:             return 'duties';
   }
 }
 

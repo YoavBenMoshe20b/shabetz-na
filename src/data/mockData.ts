@@ -17,7 +17,7 @@ import type {
   LogisticsRotation,
   CommandRank, RankPolicy,
 } from '../types';
-import type { MissionTemplate } from '../utils/missionTemplates';
+import type { MissionTemplate, TemplateFamily } from '../utils/missionTemplates';
 
 const noEquip: EquipmentRequirements = {
   fullUniform: false, kneePads: false, boots: false,
@@ -1816,10 +1816,31 @@ const _tplPolicy = (commanders: CommandRank[]): Record<CommandRank, RankPolicy> 
   return out;
 };
 
+// ─── Doctrine families — operational groupings ──────────────────────
+//
+// First-class persisted entities so the library can group, filter, and
+// later bundle into Mission Packages without re-keying. The seed below
+// is the platoon's STARTER doctrine — operator may rename/archive/
+// reorder via the library UI.
+
+export const mockTemplateFamilies: TemplateFamily[] = [
+  { id: 'tf-guard-line',    companyId: 'co1', key: 'guard-line',    label: 'קווי שמירה',         icon: '👁',  color: 'olive', order: 10, description: 'שערים, עמדות, מגדלים — שמירה רציפה', createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-night-patrol',  companyId: 'co1', key: 'night-patrol',  label: 'סיורי לילה',          icon: '🌙',  color: 'info',  order: 20, description: 'סיור הולך-נע בגזרה, שעות החושך',     createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-vehicle-patrol', companyId: 'co1', key: 'vehicle-patrol', label: 'סיורים רכובים',      icon: '🚗',  color: 'info',  order: 30, description: 'סיור ברכב פלוגתי',                   createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-readiness',     companyId: 'co1', key: 'readiness',     label: 'כוננויות',             icon: '🛡',  color: 'warn',  order: 40, description: 'תגובה לאירוע — נקודת ריכוז, צוותי תגובה', createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-chamal',        companyId: 'co1', key: 'chamal',        label: 'חמ״ל',                 icon: '📻',  color: 'muted', order: 50, description: 'משמרות חמ״ל פלוגתי / קשר',           createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-chpk',          companyId: 'co1', key: 'chpk',          label: 'חפ״ק',                 icon: '🎯',  color: 'muted', order: 60, description: 'חמ״ל מבצעי — הרכב חפ״ק',              createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-logistics',     companyId: 'co1', key: 'logistics',     label: 'לוגיסטיקה',            icon: '📦',  color: 'muted', order: 70, description: 'סבבי לוגיסטיקה ושינוע',              createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-duties',        companyId: 'co1', key: 'duties',        label: 'תורנויות',             icon: '🧹',  color: 'muted', order: 80, description: 'מטבח, ניקיון, חמ״ל, שמירה פלוגתית', createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-emergency',     companyId: 'co1', key: 'emergency',     label: 'אירועי חירום',         icon: '⚠',  color: 'alert', order: 90, description: 'נוהלי תגובה לאירועים חריגים',        createdAt: SEED_CREATED, createdByUserId: 'u1' },
+  { id: 'tf-one-time-op',   companyId: 'co1', key: 'one-time-op',   label: 'מבצעים חד פעמיים',    icon: '🎯',  color: 'alert', order: 100, description: 'משימות עם חלון זמן ספציפי',         createdAt: SEED_CREATED, createdByUserId: 'u1' },
+];
+
 export const mockMissionTemplates: MissionTemplate[] = [
   // ── שמירות ──────────────────────────────────────────────────────
   {
     id: 'mt-shg', companyId: 'co1',
+    familyId: 'tf-guard-line',
     name: 'שמירה בש״ג',
     description: 'שער ראשי — שתי משמרות יום, שלוש לילה',
     category: 'שמירות',
@@ -1847,6 +1868,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   },
   {
     id: 'mt-static-guard-position', companyId: 'co1',
+    familyId: 'tf-guard-line',
     name: 'שמירה בעמדה',
     description: 'עמדה היקפית — חייל אחד, משמרת רגילה',
     category: 'שמירות',
@@ -1869,6 +1891,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   // ── סיורים ──────────────────────────────────────────────────────
   {
     id: 'mt-night-patrol', companyId: 'co1',
+    familyId: 'tf-night-patrol',
     name: 'סיור לילה',
     description: 'סיור הולך-נע בגזרה — 22:00–04:00, רביעייה',
     category: 'סיורים',
@@ -1890,6 +1913,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   },
   {
     id: 'mt-vehicle-patrol', companyId: 'co1',
+    familyId: 'tf-vehicle-patrol',
     name: 'סיור רכוב',
     description: 'סיור ברכב פלוגתי — 06:00–14:00 כל יום',
     category: 'סיורים',
@@ -1912,6 +1936,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   // ── כוננויות ────────────────────────────────────────────────────
   {
     id: 'mt-carmel-a', companyId: 'co1',
+    familyId: 'tf-readiness',
     name: 'כוננות כרמל א',
     description: 'תגובה ראשונית — רביעייה + מ״כ, רחבת מטה',
     category: 'כוננויות',
@@ -1934,6 +1959,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   },
   {
     id: 'mt-carmel-b', companyId: 'co1',
+    familyId: 'tf-readiness',
     name: 'כוננות כרמל ב',
     description: 'כוח גיבוי — 8 חיילים, מטה משני',
     category: 'כוננויות',
@@ -1956,6 +1982,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   },
   {
     id: 'mt-rapid-response', companyId: 'co1',
+    familyId: 'tf-emergency',
     name: 'כוננות הקפצה',
     description: 'התראה מיידית — כל המחלקה, נקודת ריכוז שער',
     category: 'כוננויות',
@@ -1979,6 +2006,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   // ── תורנויות ─────────────────────────────────────────────────────
   {
     id: 'mt-kitchen', companyId: 'co1',
+    familyId: 'tf-duties',
     name: 'תורנות מטבח',
     description: 'בוקר וצהריים — שלושייה',
     category: 'תורנויות',
@@ -1998,6 +2026,7 @@ export const mockMissionTemplates: MissionTemplate[] = [
   },
   {
     id: 'mt-chamal', companyId: 'co1',
+    familyId: 'tf-chamal',
     name: 'תורנות חמ״ל',
     description: 'משמרת חמ״ל פלוגתי — 12 שעות',
     category: 'תורנויות',

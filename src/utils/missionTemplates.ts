@@ -28,13 +28,9 @@ import type {
   Qualification, EquipmentItem, Platoon, PlatoonLeaveDay,
 } from '../types';
 
-// ─── Categories ─────────────────────────────────────────────────────
-
-/**
- * Categories are FREE-FORM but we suggest a default set so the library
- * stays orderly. Stored as a string on each template — UI filters /
- * groups by exact match.
- */
+// ─── Categories (legacy) ────────────────────────────────────────────
+// Kept for back-compat with templates created before families landed.
+// New templates set `familyId`; legacy ones still carry `category`.
 export const TEMPLATE_CATEGORIES = [
   'שמירות',
   'סיורים',
@@ -45,6 +41,41 @@ export const TEMPLATE_CATEGORIES = [
   'אחר',
 ] as const;
 export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
+
+// ─── Template families — doctrine layer ─────────────────────────────
+//
+// A FAMILY is an operational grouping of templates that share doctrine
+// (קווי שמירה / סיורי לילה / כוננויות). It's a first-class persisted
+// entity, not just a string tag — so the company can rename, reorder,
+// archive, and (later) bundle into Mission Packages without losing the
+// reference graph.
+//
+// Why this matters for the future:
+//   • Mission Package = ordered list of templates from N families
+//     ("שבוע מלחמה" = guard line + night patrol + readiness pack).
+//   • The Package layer reads familyId, so families MUST be stable
+//     ids, not display strings.
+
+export interface TemplateFamily {
+  id: string;
+  companyId: string;
+  /** Stable code used by seed/back-compat lookup (e.g. 'guard-line'). */
+  key: string;
+  /** Display label — operator can rename. */
+  label: string;
+  description?: string;
+  /** Single-glyph icon for the family chip + section header. */
+  icon?: string;
+  /** Mil-palette token: 'olive' (default), 'warn', 'info', 'alert', 'muted'. */
+  color?: 'olive' | 'warn' | 'info' | 'alert' | 'muted';
+  /** Sort order in the library — lower first. */
+  order?: number;
+  /** Soft-archived families don't show in the picker but keep their
+   *  templates pointing to them (for audit + restoration). */
+  isArchived?: boolean;
+  createdAt: string;
+  createdByUserId: string;
+}
 
 // ─── Template shape ─────────────────────────────────────────────────
 
@@ -60,7 +91,11 @@ export interface MissionTemplate {
   // ── Identity ─────────────────────────────────────────────────────
   name: string;
   description?: string;
-  /** Free-form category for grouping. Defaults to "אחר". */
+  /** Doctrine grouping — references TemplateFamily.id. The PRIMARY
+   *  organizational axis for the library. */
+  familyId?: string;
+  /** Legacy free-form category, kept for back-compat with templates
+   *  created before families landed. New templates set familyId. */
   category?: TemplateCategory | string;
   /** Soft favorite marker — UI sorts/pins favorites. */
   isFavorite?: boolean;
@@ -70,6 +105,8 @@ export interface MissionTemplate {
   /** Usage count — incremented when a mission is created from this
    *  template. Drives "most used" ordering. */
   usageCount: number;
+  /** ISO of the last successful instantiation — drives "recent" sort. */
+  lastUsedAt?: string;
   createdAt: string;
   createdByUserId: string;
   /** When the template was saved from an existing mission, track the
@@ -293,4 +330,79 @@ export function reviewTemplateInstantiation(args: {
   }
 
   return out;
+}
+
+// ─── Library queries ────────────────────────────────────────────────
+
+/**
+ * Pick up to N templates that are operationally related to `template`.
+ * Resolution order:
+ *   1. Same family (other templates in the same doctrine group).
+ *   2. Same archetypeKind (related shape — e.g. all patrol templates).
+ *   3. Top-used templates in the company (operator's favorites).
+ * Already-hidden templates are excluded. The source template itself
+ * is excluded.
+ */
+export function findRelatedTemplates(
+  template: MissionTemplate,
+  all: MissionTemplate[],
+  max: number = 4,
+): MissionTemplate[] {
+  const pool = all.filter((t) => !t.isHidden && t.id !== template.id && t.companyId === template.companyId);
+  const seen = new Set<string>();
+  const out: MissionTemplate[] = [];
+
+  const push = (t: MissionTemplate) => {
+    if (seen.has(t.id) || out.length >= max) return;
+    seen.add(t.id);
+    out.push(t);
+  };
+
+  // 1. Same family
+  if (template.familyId) {
+    for (const t of pool) {
+      if (t.familyId === template.familyId) push(t);
+    }
+  }
+  // 2. Same archetypeKind
+  for (const t of pool) {
+    if (t.payload.archetypeKind === template.payload.archetypeKind) push(t);
+  }
+  // 3. Top-used as fallback
+  const byUsage = [...pool].sort((a, b) => b.usageCount - a.usageCount);
+  for (const t of byUsage) push(t);
+
+  return out;
+}
+
+// ─── Multi-axis filter ──────────────────────────────────────────────
+
+export interface LibraryFilter {
+  query?: string;
+  familyIds?: string[];
+  archetypes?: import('../types').MissionArchetypeKind[];
+  /** Match templates whose payload carries an explicit day/night profile. */
+  dayNightOnly?: boolean;
+  /** Match templates whose timeModel is 'fixed-hours' or '24-7-continuous'
+   *  (recurring) vs 'one-time'. */
+  recurringOnly?: boolean;
+  /** Match templates with hasVehicle === true. */
+  vehicleOnly?: boolean;
+  /** Match favorites only. */
+  favoritesOnly?: boolean;
+}
+
+export function applyLibraryFilter(templates: MissionTemplate[], f: LibraryFilter): MissionTemplate[] {
+  const q = f.query?.trim().toLowerCase() ?? '';
+  return templates.filter((t) => {
+    if (t.isHidden) return false;
+    if (q && !`${t.name} ${t.description ?? ''}`.toLowerCase().includes(q)) return false;
+    if (f.favoritesOnly && !t.isFavorite) return false;
+    if (f.familyIds?.length && !(t.familyId && f.familyIds.includes(t.familyId))) return false;
+    if (f.archetypes?.length && !f.archetypes.includes(t.payload.archetypeKind)) return false;
+    if (f.dayNightOnly && !t.payload.dayNightProfile) return false;
+    if (f.recurringOnly && t.payload.timeModel.kind === 'one-time') return false;
+    if (f.vehicleOnly && !t.payload.hasVehicle) return false;
+    return true;
+  });
 }
