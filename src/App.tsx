@@ -279,14 +279,22 @@ function AppRoutes() {
       </Suspense>
 
       {showNav && <BottomNav />}
-      {/* Phase 7.3 — global emergency affordance. Self-gates on
-          canDeclareEscalation, so only PC / CC (or delegates) see it.
-          Hidden during full-screen / unauthenticated states via the
-          same showNav guard. */}
-      {showNav && <EmergencyFab />}
+      {/* Phase 7.5b — emergency affordance HIDDEN.
+          Product decision: "הקפצה" is operationally critical; a half-baked
+          version is worse than none. The FAB is feature-flagged off until
+          the surface is fully designed (declare flow + audience + impact
+          on the company + non-overlap with content). Code paths
+          (EmergencyFab, DeclareEmergencySheet, AppContext.declareEscalation,
+          escalationEvents state) are intact so re-enabling is a one-line
+          flip — set FEATURE_EMERGENCY_FAB=true. */}
+      {showNav && FEATURE_EMERGENCY_FAB && <EmergencyFab />}
     </>
   );
 }
+
+// Feature flag — see comment above. Hidden by default until the
+// escalation UX is product-ready.
+const FEATURE_EMERGENCY_FAB = false;
 
 export default function App() {
   return (
